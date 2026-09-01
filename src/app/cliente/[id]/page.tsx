@@ -1,12 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import AccionesFlotantes from "@/components/AccionesFlotantes";
 import BotonAnular from "@/components/BotonAnular";
-import {
-  listarCandidatos,
-  obtenerCliente,
-  type MovimientoConItems,
-} from "@/lib/consultas";
+import { obtenerCliente, type MovimientoConItems } from "@/lib/consultas";
 import { fechaLarga } from "@/lib/fechas";
 import { formatearCentavos } from "@/lib/plata";
 
@@ -27,7 +22,6 @@ export default async function Ficha({ params }: PageProps<"/cliente/[id]">) {
   if (!ficha) notFound();
 
   const { cliente, movimientos, saldoCentavos } = ficha;
-  const candidatos = await listarCandidatos();
 
   return (
     <div className="space-y-6">
@@ -145,11 +139,6 @@ export default async function Ficha({ params }: PageProps<"/cliente/[id]">) {
           </ul>
         )}
       </section>
-
-      <AccionesFlotantes
-        clientes={candidatos}
-        clienteFijo={{ id: cliente.id, nombre: cliente.nombre }}
-      />
     </div>
   );
 }

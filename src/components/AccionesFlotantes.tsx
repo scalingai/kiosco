@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import BarraNav from "@/components/BarraNav";
 import { guardarMovimientos } from "@/app/acciones";
 import EditorItems from "@/components/EditorItems";
 import FormMovimiento from "@/components/FormMovimiento";
@@ -88,24 +89,6 @@ function aBorrador(p: Propuesta): Borrador {
   };
 }
 
-function IconoMicrofono() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      className="h-7 w-7"
-      aria-hidden="true"
-    >
-      <rect x="9" y="2.5" width="6" height="11" rx="3" />
-      <path d="M5.5 11a6.5 6.5 0 0 0 13 0" />
-      <path d="M12 17.5V21" />
-    </svg>
-  );
-}
-
 /** Lo que se va a anotar de verdad, para mostrarlo antes de confirmar. */
 function totalEfectivo(b: Borrador): { centavos: number; declarado: boolean } {
   if (b.total.trim()) {
@@ -120,17 +103,24 @@ function totalEfectivo(b: Borrador): { centavos: number; declarado: boolean } {
 
 export default function AccionesFlotantes({
   clientes,
-  clienteFijo,
 }: {
   clientes: Candidato[];
-  /** En la ficha de un cliente, la carga a mano ya viene apuntada a esa persona. */
-  clienteFijo?: Candidato;
 }) {
   const router = useRouter();
+  const ruta = usePathname();
+
+  // Si estás parado en la ficha de alguien, la carga a mano ya viene apuntada
+  // a esa persona. Sale de la URL para que esto pueda vivir en el layout.
+  const idEnRuta = ruta.startsWith("/cliente/") ? ruta.split("/")[2] : null;
+  const clienteFijo = idEnRuta
+    ? clientes.find((c) => c.id === idEnRuta)
+    : undefined;
+
   const [estado, setEstado] = useState<Estado>("quieto");
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [transcripcion, setTranscripcion] = useState("");
+  const [notaId, setNotaId] = useState<string | null>(null);
   const [borradores, setBorradores] = useState<Borrador[]>([]);
   const [segundos, setSegundos] = useState(0);
   const [manualAbierto, setManualAbierto] = useState(false);
@@ -176,6 +166,7 @@ export default function AccionesFlotantes({
       }
 
       setTranscripcion(datos.transcripcion ?? "");
+      setNotaId(datos.notaId ?? null);
       const propuestas: Propuesta[] = datos.propuestas ?? [];
       if (!propuestas.length) {
         setError(
@@ -276,6 +267,7 @@ export default function AccionesFlotantes({
   function cerrarRevision() {
     setBorradores([]);
     setTranscripcion("");
+    setNotaId(null);
     setEstado("quieto");
   }
 
@@ -328,7 +320,7 @@ export default function AccionesFlotantes({
         nota: b.nota,
         fecha: hoyLocal(),
         origen: "audio",
-        transcripcion,
+        notaId,
       });
     }
 
@@ -358,7 +350,7 @@ export default function AccionesFlotantes({
     <>
       {/* Los cartelitos van sobre los botones, no adentro de la hoja: se ven
           aunque la hoja ya se haya cerrado. */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center pl-4 pr-24 sm:pr-28">
+      <div className="pointer-events-none fixed inset-x-0 bottom-24 z-40 flex justify-center px-4">
         {error && (
           <p
             role="alert"
@@ -378,42 +370,14 @@ export default function AccionesFlotantes({
         )}
       </div>
 
-      <div className="fixed bottom-5 right-4 z-40 flex flex-col items-center gap-3 sm:bottom-7 sm:right-7">
-        <button
-          type="button"
-          onClick={() => setManualAbierto(true)}
-          aria-label="Cargar a mano"
-          title="Cargar a mano"
-          className="flex h-12 w-12 items-center justify-center rounded-full border border-linea bg-papel text-2xl leading-none text-tinta shadow-lg transition-transform active:scale-95"
-        >
-          +
-        </button>
-
-        <button
-          type="button"
-          onClick={grabando ? parar : arrancar}
-          disabled={procesando}
-          aria-label={grabando ? "Frenar la grabación" : "Grabar un audio"}
-          title={grabando ? "Frenar" : "Grabar"}
-          className={
-            "relative flex h-16 w-16 items-center justify-center rounded-full text-white shadow-xl transition-transform active:scale-95 disabled:opacity-70 " +
-            (grabando ? "bg-deuda" : "bg-acento")
-          }
-        >
-          {procesando ? (
-            <span className="grabando text-xs font-medium">…</span>
-          ) : grabando ? (
-            <span className="grabando block h-5 w-5 rounded-sm bg-white" />
-          ) : (
-            <IconoMicrofono />
-          )}
-          {grabando && (
-            <span className="cifra absolute -top-1 -right-1 rounded-full bg-tinta px-2 py-0.5 text-[0.7rem] leading-none">
-              {segundos}s
-            </span>
-          )}
-        </button>
-      </div>
+      <BarraNav
+        grabando={grabando}
+        procesando={procesando}
+        segundos={segundos}
+        onGrabar={arrancar}
+        onFrenar={parar}
+        onCargarAMano={() => setManualAbierto(true)}
+      />
 
       <Hoja
         abierta={estado === "revisando" || estado === "guardando"}

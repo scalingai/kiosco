@@ -1,4 +1,3 @@
-import AccionesFlotantes from "@/components/AccionesFlotantes";
 import TablaDeudores from "@/components/TablaDeudores";
 import { listarClientes } from "@/lib/consultas";
 import { formatearCentavos } from "@/lib/plata";
@@ -7,7 +6,6 @@ export const dynamic = "force-dynamic";
 
 export default async function Inicio() {
   const filas = await listarClientes();
-  const candidatos = filas.map((f) => ({ id: f.id, nombre: f.nombre }));
 
   const totalFiado = filas.reduce(
     (total, f) => total + Math.max(f.saldoCentavos, 0),
@@ -34,8 +32,6 @@ export default async function Inicio() {
       </section>
 
       <TablaDeudores filas={filas} />
-
-      <AccionesFlotantes clientes={candidatos} />
     </div>
   );
 }

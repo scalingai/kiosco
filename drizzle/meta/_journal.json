@@ -15,6 +15,13 @@
       "when": 1788305792570,
       "tag": "0001_descripcion-opcional",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788306325213,
+      "tag": "0002_notas-de-voz",
+      "breakpoints": true
     }
   ]
 }

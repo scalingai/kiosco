@@ -21,6 +21,22 @@ import {
 export const tipoMovimiento = pgEnum("tipo_movimiento", ["fiado", "pago"]);
 export const origenMovimiento = pgEnum("origen_movimiento", ["audio", "manual"]);
 
+/**
+ * Cada audio deja su nota, se confirme o no. Si dictaste algo y después
+ * descartaste la propuesta, lo que dijiste sigue estando: es el papelito del
+ * mostrador, y perderlo es perder la única prueba de qué se anotó.
+ */
+export const notas = pgTable("notas", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** lo que devolvió Whisper, crudo */
+  transcripcion: text("transcripcion").notNull(),
+  /** quedó en true cuando de esa nota salió al menos un movimiento */
+  aplicada: boolean("aplicada").notNull().default(false),
+  creadoEn: timestamp("creado_en", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const clientes = pgTable(
   "clientes",
   {
@@ -61,7 +77,12 @@ export const movimientos = pgTable(
     nota: text("nota"),
     fecha: date("fecha").notNull(),
     origen: origenMovimiento("origen").notNull().default("manual"),
-    /** transcripción cruda del audio que originó el movimiento, si vino de audio */
+    /** la nota de voz de la que salió este movimiento */
+    notaId: uuid("nota_id").references(() => notas.id, { onDelete: "set null" }),
+    /**
+     * @deprecated La transcripción vive en `notas`. Esta columna queda por los
+     * movimientos cargados antes de que existiera esa tabla; no se escribe más.
+     */
     transcripcion: text("transcripcion"),
     anuladoEn: timestamp("anulado_en", { withTimezone: true }),
     creadoEn: timestamp("creado_en", { withTimezone: true })
@@ -71,6 +92,7 @@ export const movimientos = pgTable(
   (t) => [
     index("movimientos_cliente_idx").on(t.clienteId),
     index("movimientos_fecha_idx").on(t.fecha),
+    index("movimientos_nota_idx").on(t.notaId),
   ],
 );
 
@@ -101,6 +123,7 @@ export const items = pgTable(
   (t) => [index("items_movimiento_idx").on(t.movimientoId)],
 );
 
+export type Nota = typeof notas.$inferSelect;
 export type Cliente = typeof clientes.$inferSelect;
 export type Movimiento = typeof movimientos.$inferSelect;
 export type NuevoMovimiento = typeof movimientos.$inferInsert;

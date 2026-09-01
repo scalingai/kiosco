@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listarCandidatos } from "@/lib/consultas";
+import { guardarNota, listarCandidatos } from "@/lib/consultas";
 import { FaltaLaClave, interpretar, transcribir } from "@/lib/voz";
 
 export const runtime = "nodejs";
@@ -70,9 +70,15 @@ export async function POST(request: Request) {
     if (!transcripcion) {
       return NextResponse.json({ transcripcion: "", propuestas: [] });
     }
+
+    // La nota se guarda ACÁ, antes de interpretar y antes de que nadie
+    // confirme. Si el modelo falla o se descarta la propuesta, lo que dijiste
+    // igual queda anotado y se recupera desde el historial.
+    const nota = await guardarNota(transcripcion);
+
     const candidatos = await listarCandidatos();
     const propuestas = await interpretar(transcripcion, candidatos);
-    return NextResponse.json({ transcripcion, propuestas });
+    return NextResponse.json({ notaId: nota.id, transcripcion, propuestas });
   } catch (error) {
     if (error instanceof FaltaLaClave) {
       return NextResponse.json({ error: error.message }, { status: 503 });

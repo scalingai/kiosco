@@ -2,8 +2,10 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import Image from "next/image";
 import Link from "next/link";
+import AccionesFlotantes from "@/components/AccionesFlotantes";
 import BotonSalir from "@/components/BotonSalir";
 import RegistrarSW from "@/components/RegistrarSW";
+import { listarCandidatos } from "@/lib/consultas";
 import { pinConfigurado } from "@/lib/sesion";
 import "./globals.css";
 
@@ -37,7 +39,16 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // Si la base no contesta, el portón y la pantalla de sin conexión tienen que
+  // seguir dibujándose igual.
+  let candidatos: { id: string; nombre: string }[] = [];
+  try {
+    candidatos = await listarCandidatos();
+  } catch {
+    candidatos = [];
+  }
+
   return (
     <html
       lang="es-AR"
@@ -72,10 +83,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         </header>
 
         {/* El padding de abajo deja libre la columna de botones flotantes. */}
-        <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-40 pt-6 sm:px-6 sm:pb-32">
+        {/* El padding de abajo deja libre la barra de navegación. */}
+        <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-32 pt-6 sm:px-6">
           {children}
         </main>
 
+        <AccionesFlotantes clientes={candidatos} />
         <RegistrarSW />
       </body>
     </html>

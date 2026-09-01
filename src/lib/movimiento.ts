@@ -20,7 +20,8 @@ export type MovimientoAGuardar = {
   nota?: string | null;
   fecha: string;
   origen: "audio" | "manual";
-  transcripcion?: string | null;
+  /** la nota de voz de la que salió, si vino de un audio */
+  notaId?: string | null;
 };
 
 /** Suma de los ítems que sí tienen precio. Los que no, valen cero acá. */

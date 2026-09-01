@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb, type DB } from "@/db/client";
-import { clientes, items, movimientos, type Item } from "@/db/schema";
+import { clientes, items, movimientos, notas, type Item } from "@/db/schema";
 import {
   sumarItems,
   type ItemAGuardar,
@@ -240,7 +240,7 @@ export async function registrarMovimientos(porGuardar: MovimientoAGuardar[]) {
           nota: entrada.nota?.trim() || null,
           fecha: entrada.fecha,
           origen: entrada.origen,
-          transcripcion: entrada.transcripcion ?? null,
+          notaId: entrada.notaId ?? null,
         })
         .returning();
 
@@ -259,8 +259,144 @@ export async function registrarMovimientos(porGuardar: MovimientoAGuardar[]) {
       guardados.push(fila);
     }
 
+    // Las notas que produjeron algo quedan marcadas: las que no, se ven aparte
+    // en el historial, que es donde uno va a buscar "qué dije que no cargué".
+    const usadas = [
+      ...new Set(porGuardar.map((m) => m.notaId).filter(Boolean) as string[]),
+    ];
+    if (usadas.length) {
+      await tx
+        .update(notas)
+        .set({ aplicada: true })
+        .where(inArray(notas.id, usadas));
+    }
+
     return guardados;
   });
+}
+
+/**
+ * Guarda lo que se escuchó, antes de que nadie confirme nada. Si después se
+ * descarta la propuesta, la nota igual queda: dijiste algo y tiene que poder
+ * recuperarse.
+ */
+export async function guardarNota(transcripcion: string) {
+  const db = await getDb();
+  const [fila] = await db
+    .insert(notas)
+    .values({ transcripcion: transcripcion.trim() })
+    .returning();
+  return fila;
+}
+
+export type EntradaHistorial =
+  | {
+      clase: "nota";
+      id: string;
+      cuando: Date;
+      transcripcion: string;
+      movimientos: {
+        id: string;
+        cliente: string;
+        clienteId: string;
+        tipo: "fiado" | "pago";
+        montoCentavos: number;
+        anulado: boolean;
+      }[];
+    }
+  | {
+      clase: "manual";
+      id: string;
+      cuando: Date;
+      cliente: string;
+      clienteId: string;
+      tipo: "fiado" | "pago";
+      montoCentavos: number;
+      nota: string | null;
+      anulado: boolean;
+    };
+
+/** Todo lo que pasó, lo más nuevo arriba: notas dictadas y cargas a mano. */
+export async function listarHistorial(limite = 60): Promise<EntradaHistorial[]> {
+  const db = await getDb();
+
+  const [dictadas, aMano] = await Promise.all([
+    db.select().from(notas).orderBy(desc(notas.creadoEn)).limit(limite),
+    db
+      .select({
+        id: movimientos.id,
+        cuando: movimientos.creadoEn,
+        cliente: clientes.nombre,
+        clienteId: clientes.id,
+        tipo: movimientos.tipo,
+        montoCentavos: movimientos.montoCentavos,
+        nota: movimientos.nota,
+        anuladoEn: movimientos.anuladoEn,
+      })
+      .from(movimientos)
+      .innerJoin(clientes, eq(clientes.id, movimientos.clienteId))
+      .where(isNull(movimientos.notaId))
+      .orderBy(desc(movimientos.creadoEn))
+      .limit(limite),
+  ]);
+
+  const porNota = new Map<string, EntradaHistorial & { clase: "nota" }>();
+  for (const n of dictadas) {
+    porNota.set(n.id, {
+      clase: "nota",
+      id: n.id,
+      cuando: n.creadoEn,
+      transcripcion: n.transcripcion,
+      movimientos: [],
+    });
+  }
+
+  if (porNota.size) {
+    const hijos = await db
+      .select({
+        id: movimientos.id,
+        notaId: movimientos.notaId,
+        cliente: clientes.nombre,
+        clienteId: clientes.id,
+        tipo: movimientos.tipo,
+        montoCentavos: movimientos.montoCentavos,
+        anuladoEn: movimientos.anuladoEn,
+      })
+      .from(movimientos)
+      .innerJoin(clientes, eq(clientes.id, movimientos.clienteId))
+      .where(inArray(movimientos.notaId, [...porNota.keys()]))
+      .orderBy(asc(movimientos.creadoEn));
+
+    for (const h of hijos) {
+      porNota.get(h.notaId!)?.movimientos.push({
+        id: h.id,
+        cliente: h.cliente,
+        clienteId: h.clienteId,
+        tipo: h.tipo,
+        montoCentavos: h.montoCentavos,
+        anulado: Boolean(h.anuladoEn),
+      });
+    }
+  }
+
+  const entradas: EntradaHistorial[] = [
+    ...porNota.values(),
+    ...aMano.map((m) => ({
+      clase: "manual" as const,
+      id: m.id,
+      cuando: m.cuando,
+      cliente: m.cliente,
+      clienteId: m.clienteId,
+      tipo: m.tipo,
+      montoCentavos: m.montoCentavos,
+      nota: m.nota,
+      anulado: Boolean(m.anuladoEn),
+    })),
+  ];
+
+  return entradas
+    .sort((a, b) => b.cuando.getTime() - a.cuando.getTime())
+    .slice(0, limite);
 }
 
 /**
