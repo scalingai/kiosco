@@ -6,6 +6,7 @@ import { guardarMovimientos } from "@/app/acciones";
 import EditorItems from "@/components/EditorItems";
 import FormMovimiento from "@/components/FormMovimiento";
 import Hoja from "@/components/Hoja";
+import { AVISO_TARDANZA, conLimiteDeTiempo } from "@/lib/espera";
 import { hoyLocal } from "@/lib/fechas";
 import {
   aItemsAGuardar,
@@ -332,7 +333,13 @@ export default function AccionesFlotantes({
     }
 
     setEstado("guardando");
-    const resultado = await guardarMovimientos(porGuardar);
+    const espera = await conLimiteDeTiempo(guardarMovimientos(porGuardar));
+    if (espera.venció) {
+      setError(AVISO_TARDANZA);
+      setEstado("revisando");
+      return;
+    }
+    const resultado = espera.valor;
     if (!resultado.ok) {
       setError(resultado.error);
       setEstado("revisando");

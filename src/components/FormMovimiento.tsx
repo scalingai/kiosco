@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { guardarMovimientos } from "@/app/acciones";
 import EditorItems from "@/components/EditorItems";
+import { AVISO_TARDANZA, conLimiteDeTiempo } from "@/lib/espera";
 import { hoyLocal } from "@/lib/fechas";
 import {
   aItemsAGuardar,
@@ -99,7 +100,8 @@ export default function FormMovimiento({
     );
 
     setGuardando(true);
-    const resultado = await guardarMovimientos([
+    const espera = await conLimiteDeTiempo(
+      guardarMovimientos([
       {
         clienteId: clienteFijo?.id ?? coincide?.id,
         nombreCliente: clienteFijo || coincide ? undefined : nombre.trim(),
@@ -110,9 +112,15 @@ export default function FormMovimiento({
         fecha,
         origen: "manual",
       },
-    ]);
+      ]),
+    );
     setGuardando(false);
 
+    if (espera.venció) {
+      setError(AVISO_TARDANZA);
+      return;
+    }
+    const resultado = espera.valor;
     if (!resultado.ok) {
       setError(resultado.error);
       return;

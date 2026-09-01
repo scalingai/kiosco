@@ -1,7 +1,7 @@
 import "server-only";
 
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { getDb } from "@/db/client";
+import { getDb, type DB } from "@/db/client";
 import { clientes, items, movimientos, type Item } from "@/db/schema";
 import {
   sumarItems,
@@ -141,12 +141,14 @@ export type MovimientoConItems = NonNullable<
   Awaited<ReturnType<typeof obtenerCliente>>
 >["movimientos"][number];
 
+/** El mismo handle sirve para la base o para una transacción abierta. */
+type Ejecutor = Pick<DB, "select" | "insert" | "update">;
+
 /**
  * Busca por nombre normalizado y crea si no existe. El índice único sobre
  * `nombre_normalizado` evita que dos cargas simultáneas dupliquen al cliente.
  */
-export async function buscarOCrearCliente(nombre: string) {
-  const db = await getDb();
+async function buscarOCrearClienteCon(db: Ejecutor, nombre: string) {
   const limpio = nombre.trim();
   if (!limpio) throw new Error("El nombre del cliente no puede estar vacío");
   const normalizado = normalizarNombre(limpio);
@@ -173,6 +175,11 @@ export async function buscarOCrearCliente(nombre: string) {
   return ganadorDeLaCarrera;
 }
 
+export async function buscarOCrearCliente(nombre: string) {
+  const db = await getDb();
+  return buscarOCrearClienteCon(db, nombre);
+}
+
 export async function listarCandidatos() {
   const db = await getDb();
   return db
@@ -183,71 +190,77 @@ export async function listarCandidatos() {
 
 export async function registrarMovimientos(porGuardar: MovimientoAGuardar[]) {
   const db = await getDb();
-  const guardados = [];
 
-  for (const entrada of porGuardar) {
-    // Misma regla que la pantalla: cuenta el renglón con nombre o con precio.
-    const lista = (entrada.items ?? []).filter(
-      (i) => i.descripcion?.trim() || i.precioUnitarioCentavos != null,
-    );
+  // Todo o nada. Un audio puede traer tres movimientos: si el tercero falla, no
+  // pueden quedar los dos primeros anotados y el resto en el aire, porque nadie
+  // se va a acordar de cuál se guardó.
+  return db.transaction(async (tx) => {
+    const guardados = [];
 
-    const totalDeclarado = entrada.montoCentavos != null;
-    const montoCentavos = totalDeclarado
-      ? entrada.montoCentavos!
-      : sumarItems(lista);
-
-    if (montoCentavos < 0) {
-      throw new Error("El monto no puede ser negativo");
-    }
-    if (montoCentavos === 0 && !lista.length) {
-      throw new Error("El movimiento no tiene ni monto ni ítems");
-    }
-    if (entrada.tipo === "pago" && montoCentavos <= 0) {
-      throw new Error("Un pago tiene que tener un monto mayor a cero");
-    }
-
-    let clienteId = entrada.clienteId;
-    if (clienteId && !UUID.test(clienteId)) {
-      throw new Error("Cliente inválido");
-    }
-    if (!clienteId) {
-      if (!entrada.nombreCliente) {
-        throw new Error("Falta el cliente del movimiento");
-      }
-      const cliente = await buscarOCrearCliente(entrada.nombreCliente);
-      clienteId = cliente.id;
-    }
-
-    const [fila] = await db
-      .insert(movimientos)
-      .values({
-        clienteId,
-        tipo: entrada.tipo,
-        montoCentavos,
-        totalDeclarado,
-        nota: entrada.nota?.trim() || null,
-        fecha: entrada.fecha,
-        origen: entrada.origen,
-        transcripcion: entrada.transcripcion ?? null,
-      })
-      .returning();
-
-    if (lista.length) {
-      await db.insert(items).values(
-        lista.map((item, posicion) => ({
-          movimientoId: fila.id,
-          descripcion: item.descripcion?.trim() || null,
-          cantidad: Math.max(1, Math.round(item.cantidad || 1)),
-          precioUnitarioCentavos: item.precioUnitarioCentavos,
-          posicion,
-        })),
+    for (const entrada of porGuardar) {
+      // Misma regla que la pantalla: cuenta el renglón con nombre o con precio.
+      const lista = (entrada.items ?? []).filter(
+        (i) => i.descripcion?.trim() || i.precioUnitarioCentavos != null,
       );
+
+      const totalDeclarado = entrada.montoCentavos != null;
+      const montoCentavos = totalDeclarado
+        ? entrada.montoCentavos!
+        : sumarItems(lista);
+
+      if (montoCentavos < 0) {
+        throw new Error("El monto no puede ser negativo");
+      }
+      if (montoCentavos === 0 && !lista.length) {
+        throw new Error("El movimiento no tiene ni monto ni ítems");
+      }
+      if (entrada.tipo === "pago" && montoCentavos <= 0) {
+        throw new Error("Un pago tiene que tener un monto mayor a cero");
+      }
+
+      let clienteId = entrada.clienteId;
+      if (clienteId && !UUID.test(clienteId)) {
+        throw new Error("Cliente inválido");
+      }
+      if (!clienteId) {
+        if (!entrada.nombreCliente) {
+          throw new Error("Falta el cliente del movimiento");
+        }
+        const cliente = await buscarOCrearClienteCon(tx, entrada.nombreCliente);
+        clienteId = cliente.id;
+      }
+
+      const [fila] = await tx
+        .insert(movimientos)
+        .values({
+          clienteId,
+          tipo: entrada.tipo,
+          montoCentavos,
+          totalDeclarado,
+          nota: entrada.nota?.trim() || null,
+          fecha: entrada.fecha,
+          origen: entrada.origen,
+          transcripcion: entrada.transcripcion ?? null,
+        })
+        .returning();
+
+      if (lista.length) {
+        await tx.insert(items).values(
+          lista.map((item, posicion) => ({
+            movimientoId: fila.id,
+            descripcion: item.descripcion?.trim() || null,
+            cantidad: Math.max(1, Math.round(item.cantidad || 1)),
+            precioUnitarioCentavos: item.precioUnitarioCentavos,
+            posicion,
+          })),
+        );
+      }
+
+      guardados.push(fila);
     }
 
-    guardados.push(fila);
-  }
-
-  return guardados;
+    return guardados;
+  });
 }
 
 /**

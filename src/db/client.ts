@@ -40,7 +40,22 @@ async function conectar(): Promise<DB> {
     const { drizzle } = await import("drizzle-orm/node-postgres");
     const { migrate } = await import("drizzle-orm/node-postgres/migrator");
     const { Pool } = await import("pg");
-    const pool = new Pool({ connectionString: url });
+    const pool = new Pool({
+      connectionString: url,
+      // Sin estos límites, pg espera para siempre: si la base no contesta, la
+      // petición nunca vuelve y la pantalla queda colgada en "Anotando…" sin
+      // que nadie sepa qué pasó. Mejor cortar y decirlo.
+      connectionTimeoutMillis: 10_000,
+      idleTimeoutMillis: 30_000,
+      statement_timeout: 15_000,
+      query_timeout: 15_000,
+      max: 10,
+    });
+
+    // Un error en una conexión ociosa no puede tumbar el proceso entero.
+    pool.on("error", (error) => {
+      console.error("[postgres] error en conexión ociosa:", error.message);
+    });
     const db = drizzle(pool, { schema });
     await migrate(db, { migrationsFolder: CARPETA_MIGRACIONES });
     return db;
