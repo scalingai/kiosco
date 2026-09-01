@@ -26,6 +26,16 @@ cache.__kioscoDb ??= {};
 async function conectar(): Promise<DB> {
   const url = process.env.DATABASE_URL;
 
+  if (!url && process.env.NODE_ENV === "production") {
+    // PGlite es sólo para desarrollo y ni siquiera arranca dentro de un build
+    // standalone. Sin esto el error que sale es "PGlite failed to initialize",
+    // que no le dice a nadie que lo que falta es la variable.
+    throw new Error(
+      "Falta DATABASE_URL. En producción la app necesita un Postgres; " +
+        "PGlite es sólo para desarrollo local.",
+    );
+  }
+
   if (url) {
     const { drizzle } = await import("drizzle-orm/node-postgres");
     const { migrate } = await import("drizzle-orm/node-postgres/migrator");

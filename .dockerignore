@@ -1,0 +1,9 @@
+node_modules
+.next
+.data
+.git
+.env*
+_legacy-vite
+.claude
+npm-debug.log*
+*.tsbuildinfo
