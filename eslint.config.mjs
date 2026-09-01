@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // El proyecto Vite anterior queda como referencia, no se lintea.
+    "_legacy-vite/**",
   ]),
 ]);
 

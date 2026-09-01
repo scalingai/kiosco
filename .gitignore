@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# base local de PGlite
+/.data/
+_legacy-vite/node_modules/
+
+# journal transitorio de la base vieja
+_legacy-vite/kiosco.db-shm
+_legacy-vite/kiosco.db-wal
