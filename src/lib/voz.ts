@@ -11,7 +11,9 @@ const MODELO_TEXTO = process.env.GROQ_MODELO_TEXTO ?? "openai/gpt-oss-120b";
 export class FaltaLaClave extends Error {
   constructor() {
     super(
-      "Falta GROQ_API_KEY. Poné la clave en .env.local (la sacás de console.groq.com/keys).",
+      process.env.NODE_ENV === "production"
+        ? "Falta GROQ_API_KEY en las variables de entorno del servicio."
+        : "Falta GROQ_API_KEY. Poné la clave en .env.local (la sacás de console.groq.com/keys).",
     );
     this.name = "FaltaLaClave";
   }

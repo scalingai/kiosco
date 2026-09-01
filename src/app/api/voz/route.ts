@@ -9,6 +9,35 @@ export const maxDuration = 60;
 const LIMITE_BYTES = 25 * 1024 * 1024;
 
 /**
+ * Traduce lo que devolvió Groq a algo accionable. Sin esto, cualquier problema
+ * —clave vencida, modelo dado de baja, cuota agotada— sale como el mismo
+ * "falló la transcripción", y desde el celular no hay forma de ver el log.
+ */
+function explicarFalla(error: unknown): string {
+  const estado =
+    typeof error === "object" && error !== null && "status" in error
+      ? Number((error as { status: unknown }).status)
+      : 0;
+
+  if (estado === 401 || estado === 403) {
+    return "Groq rechazó la clave. Revisá GROQ_API_KEY.";
+  }
+  if (estado === 404) {
+    return "Groq dio de baja el modelo configurado. Hay que actualizar GROQ_MODELO_AUDIO o GROQ_MODELO_TEXTO.";
+  }
+  if (estado === 429) {
+    return "Groq está limitando los pedidos. Esperá un momento y probá de nuevo.";
+  }
+  if (estado === 413) {
+    return "El audio es muy largo para Groq. Probá con uno más corto.";
+  }
+  if (estado >= 500) {
+    return "Groq está caído. Probá en un rato o cargalo a mano.";
+  }
+  return "Falló la transcripción. Probá de nuevo o cargalo a mano.";
+}
+
+/**
  * Transcribe el audio y propone movimientos. NO escribe nada en la base:
  * devuelve una propuesta que la persona confirma en pantalla. Whisper se
  * equivoca con nombres y con números, y acá eso es la deuda de alguien.
@@ -49,9 +78,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 503 });
     }
     console.error("[voz]", error);
-    return NextResponse.json(
-      { error: "Falló la transcripción. Probá de nuevo o cargalo a mano." },
-      { status: 502 },
-    );
+    return NextResponse.json({ error: explicarFalla(error) }, { status: 502 });
   }
 }

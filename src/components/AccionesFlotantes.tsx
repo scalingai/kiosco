@@ -204,6 +204,16 @@ export default function AccionesFlotantes({
       return;
     }
 
+    // Fuera de un origen seguro el navegador ni expone mediaDevices. Sin este
+    // chequeo el catch de abajo dice "no me diste permiso", que manda a buscar
+    // el problema donde no está.
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      setError(
+        "El micrófono sólo funciona con HTTPS. Entrá por https:// y no por IP.",
+      );
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const grabador = new MediaRecorder(
@@ -232,8 +242,18 @@ export default function AccionesFlotantes({
       grabador.start();
       setSegundos(0);
       setEstado("grabando");
-    } catch {
-      setError("No me diste permiso al micrófono, o no hay ninguno.");
+    } catch (problema) {
+      const nombre =
+        problema instanceof Error ? problema.name : "";
+      if (nombre === "NotFoundError" || nombre === "DevicesNotFoundError") {
+        setError("No encontré ningún micrófono en este dispositivo.");
+      } else if (nombre === "NotReadableError") {
+        setError("Otra app está usando el micrófono. Cerrala y probá de nuevo.");
+      } else {
+        setError(
+          "El navegador bloqueó el micrófono. Dale permiso en el candado de la barra de direcciones.",
+        );
+      }
     }
   }, [enviar]);
 
