@@ -160,29 +160,35 @@ Hacen falta **dos servicios** en el mismo proyecto de EasyPanel.
 
 En EasyPanel: **+ Service → Postgres**.
 
-- Nombre del servicio: `kiosco-db`
+- Nombre del servicio: `db`
 - Base de datos: `kiosco`
 - Usuario y contraseña: los que genere EasyPanel (guardalos)
 - **Volumen:** dejá el que viene por defecto. Sin volumen, los datos se pierden
   en cada redeploy.
 
-EasyPanel te muestra la URL interna. Queda parecida a:
+**Copiá la URL de conexión que muestra el propio panel**, no la escribas de
+memoria. EasyPanel arma el hostname interno como `proyecto_servicio`, así que
+con el proyecto `kiosco` y el servicio `db` queda:
 
 ```
-postgres://postgres:LA_CLAVE@kiosco-db:5432/kiosco
+postgres://postgres:LA_CLAVE@kiosco_db:5432/kiosco
 ```
 
-Ese host (`kiosco-db`) sólo resuelve dentro de la red del proyecto, que es lo
-que querés: la base **no** se expone a internet.
+Ese host sólo resuelve dentro de la red del proyecto, que es lo que querés: la
+base **no** se expone a internet.
 
 ### 2. La app
 
-**+ Service → App**, apuntando al repo `scalingai/kiosco`.
+**+ Service → App**, apuntando al repo `scalingai/kiosco`, rama `main`.
+
+En **Compilación** elegí **Dockerfile** (el repo tiene uno en la raíz). Nixpacks
+y Railpack adivinan cómo construir y con el modo standalone de Next arman una
+imagen enorme o directamente rota.
 
 Variables de entorno del servicio:
 
 ```
-DATABASE_URL=postgres://postgres:LA_CLAVE@kiosco-db:5432/kiosco
+DATABASE_URL=postgres://postgres:LA_CLAVE@kiosco_db:5432/kiosco
 GROQ_API_KEY=gsk_loquesea
 PIN_ACCESO=EL_PIN_QUE_ELIJAS
 NODE_ENV=production
