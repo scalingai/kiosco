@@ -9,7 +9,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 FROM base AS dependencias
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+# Las versiones quedan en el log: si npm ci falla, lo primero que hay que saber
+# es con qué node y qué npm corrió.
+RUN node -v && npm -v && ls -l package.json package-lock.json
+RUN npm ci --no-audit --no-fund
 
 # ─── Build ───────────────────────────────────────────────────────────────────
 FROM base AS build
