@@ -8,11 +8,22 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # ─── Dependencias ────────────────────────────────────────────────────────────
 FROM base AS dependencias
 WORKDIR /app
+
+# El lockfile lo genera npm 11. Que la imagen traiga otro npm es una diferencia
+# que no aporta nada y sí puede romper `npm ci`, así que se fija.
+RUN npm install -g npm@11.6.1
+
 COPY package.json package-lock.json ./
-# Las versiones quedan en el log: si npm ci falla, lo primero que hay que saber
-# es con qué node y qué npm corrió.
-RUN node -v && npm -v && ls -l package.json package-lock.json
-RUN npm ci --no-audit --no-fund
+
+# Si `npm ci` falla, BuildKit muestra sólo el final de la salida y el mensaje
+# concreto de npm queda arriba, fuera de pantalla. Escupir el log de debug acá
+# lo deja como últimas líneas, que es lo que se ve.
+RUN node -v && npm -v \
+ && ( npm ci --no-audit --no-fund \
+      || ( echo "######## ERROR REAL DE npm ci ########" \
+        && tail -n 60 /root/.npm/_logs/*-debug-0.log \
+        && echo "######################################" \
+        && exit 1 ) )
 
 # ─── Build ───────────────────────────────────────────────────────────────────
 FROM base AS build
