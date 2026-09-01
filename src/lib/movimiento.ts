@@ -5,7 +5,7 @@
 import { parsearMonto } from "@/lib/plata";
 
 export type ItemAGuardar = {
-  descripcion: string;
+  descripcion: string | null;
   cantidad: number;
   precioUnitarioCentavos: number | null;
 };
@@ -42,8 +42,16 @@ export function itemVacio(): ItemBorrador {
   return { descripcion: "", cantidad: "1", precio: "" };
 }
 
-export function itemsConTexto(lista: ItemBorrador[]): ItemBorrador[] {
-  return lista.filter((i) => i.descripcion.trim());
+/**
+ * Un renglón cuenta si tiene nombre O precio. Sólo se descarta el que está
+ * vacío del todo: un precio sin nombre sigue siendo plata que alguien debe.
+ */
+export function itemsCargados(lista: ItemBorrador[]): ItemBorrador[] {
+  return lista.filter((i) => i.descripcion.trim() || i.precio.trim());
+}
+
+function nombrar(item: ItemBorrador): string {
+  return item.descripcion.trim() || "el renglón sin nombre";
 }
 
 export class MontoInvalido extends Error {}
@@ -53,23 +61,23 @@ export class MontoInvalido extends Error {}
  * escrito pero no se entiende: mejor frenar que anotar un número al azar.
  */
 export function aItemsAGuardar(lista: ItemBorrador[]): ItemAGuardar[] {
-  return itemsConTexto(lista).map((item) => {
+  return itemsCargados(lista).map((item) => {
     const cantidad = Number(item.cantidad);
     if (!Number.isFinite(cantidad) || cantidad < 1) {
-      throw new MontoInvalido(`Revisá la cantidad de "${item.descripcion}".`);
+      throw new MontoInvalido(`Revisá la cantidad de ${nombrar(item)}.`);
     }
 
     let precioUnitarioCentavos: number | null = null;
     if (item.precio.trim()) {
       const centavos = parsearMonto(item.precio);
       if (centavos == null || centavos <= 0) {
-        throw new MontoInvalido(`Revisá el precio de "${item.descripcion}".`);
+        throw new MontoInvalido(`Revisá el precio de ${nombrar(item)}.`);
       }
       precioUnitarioCentavos = centavos;
     }
 
     return {
-      descripcion: item.descripcion.trim(),
+      descripcion: item.descripcion.trim() || null,
       cantidad: Math.round(cantidad),
       precioUnitarioCentavos,
     };
@@ -78,5 +86,5 @@ export function aItemsAGuardar(lista: ItemBorrador[]): ItemAGuardar[] {
 
 /** Cuántas líneas quedaron sin precio: son las que no suman a la deuda. */
 export function contarSinPrecio(lista: ItemBorrador[]): number {
-  return itemsConTexto(lista).filter((i) => !i.precio.trim()).length;
+  return itemsCargados(lista).filter((i) => !i.precio.trim()).length;
 }

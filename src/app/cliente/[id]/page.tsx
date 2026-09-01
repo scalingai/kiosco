@@ -95,7 +95,9 @@ export default async function Ficha({ params }: PageProps<"/cliente/[id]">) {
                           <span className="cifra text-tinta-suave">
                             {item.cantidad}×
                           </span>
-                          <span>{item.descripcion}</span>
+                          <span className={item.descripcion ? "" : "italic text-tinta-suave"}>
+                            {item.descripcion ?? "sin detalle"}
+                          </span>
                           {item.precioUnitarioCentavos != null ? (
                             <span className="cifra text-tinta-suave">
                               {formatearCentavos(

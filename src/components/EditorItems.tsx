@@ -3,7 +3,7 @@
 import {
   contarSinPrecio,
   itemVacio,
-  itemsConTexto,
+  itemsCargados,
   type ItemBorrador,
 } from "@/lib/movimiento";
 import { formatearCentavos, parsearMonto } from "@/lib/plata";
@@ -28,10 +28,10 @@ export default function EditorItems({
     onCambio(quedan.length ? quedan : [itemVacio()]);
   }
 
-  const conTexto = itemsConTexto(items);
+  const cargados = itemsCargados(items);
   const sinPrecio = contarSinPrecio(items);
 
-  const suma = conTexto.reduce((total, item) => {
+  const suma = cargados.reduce((total, item) => {
     const centavos = item.precio.trim() ? parsearMonto(item.precio) : null;
     const cantidad = Number(item.cantidad) || 1;
     return total + (centavos ?? 0) * cantidad;
@@ -41,7 +41,7 @@ export default function EditorItems({
     <div>
       <div className="flex items-baseline justify-between">
         <span className="text-xs text-tinta-suave">Qué se llevó</span>
-        {conTexto.length > 0 && (
+        {cargados.length > 0 && (
           <span className="cifra text-xs text-tinta-suave">
             {suma > 0 ? "suman " + formatearCentavos(suma) : "sin precios"}
           </span>

@@ -186,7 +186,10 @@ export async function registrarMovimientos(porGuardar: MovimientoAGuardar[]) {
   const guardados = [];
 
   for (const entrada of porGuardar) {
-    const lista = (entrada.items ?? []).filter((i) => i.descripcion.trim());
+    // Misma regla que la pantalla: cuenta el renglón con nombre o con precio.
+    const lista = (entrada.items ?? []).filter(
+      (i) => i.descripcion?.trim() || i.precioUnitarioCentavos != null,
+    );
 
     const totalDeclarado = entrada.montoCentavos != null;
     const montoCentavos = totalDeclarado
@@ -233,7 +236,7 @@ export async function registrarMovimientos(porGuardar: MovimientoAGuardar[]) {
       await db.insert(items).values(
         lista.map((item, posicion) => ({
           movimientoId: fila.id,
-          descripcion: item.descripcion.trim(),
+          descripcion: item.descripcion?.trim() || null,
           cantidad: Math.max(1, Math.round(item.cantidad || 1)),
           precioUnitarioCentavos: item.precioUnitarioCentavos,
           posicion,

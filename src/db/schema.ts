@@ -86,7 +86,11 @@ export const items = pgTable(
     movimientoId: uuid("movimiento_id")
       .notNull()
       .references(() => movimientos.id, { onDelete: "cascade" }),
-    descripcion: text("descripcion").notNull(),
+    /**
+     * Puede faltar: en el mostrador a veces se anota sólo el monto, sin decir
+     * qué se llevó. Descartar ese renglón sería perder plata en silencio.
+     */
+    descripcion: text("descripcion"),
     cantidad: integer("cantidad").notNull().default(1),
     precioUnitarioCentavos: bigint("precio_unitario_centavos", {
       mode: "number",

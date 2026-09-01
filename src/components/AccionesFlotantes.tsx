@@ -10,7 +10,7 @@ import { hoyLocal } from "@/lib/fechas";
 import {
   aItemsAGuardar,
   itemVacio,
-  itemsConTexto,
+  itemsCargados,
   MontoInvalido,
   sumarItems,
   type ItemBorrador,
@@ -424,7 +424,7 @@ export default function AccionesFlotantes({
             const faltanPrecios =
               b.tipo !== "pago" &&
               !total.declarado &&
-              itemsConTexto(b.items).some((item) => !item.precio.trim());
+              itemsCargados(b.items).some((item) => !item.precio.trim());
 
             return (
               <li

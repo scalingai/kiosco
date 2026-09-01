@@ -8,7 +8,7 @@ import { hoyLocal } from "@/lib/fechas";
 import {
   aItemsAGuardar,
   itemVacio,
-  itemsConTexto,
+  itemsCargados,
   MontoInvalido,
   sumarItems,
   type ItemBorrador,
@@ -132,7 +132,7 @@ export default function FormMovimiento({
   const sinPrecioYSinTotal =
     !esPago &&
     !monto.trim() &&
-    itemsConTexto(items).some((i) => !i.precio.trim());
+    itemsCargados(items).some((i) => !i.precio.trim());
 
   return (
     <form
