@@ -39,9 +39,11 @@ no lo declaró nadie (`total_declarado = false`) y hay ítems con
 esconde a ese cliente aunque su saldo sea cero. Nunca lo conviertas en un cero
 silencioso "para simplificar la query".
 
-**El service worker no cachea saldos.** Sólo `/_next/static` y `/iconos`, que
-llevan hash. Un saldo viejo mostrado como actual es peor que la pantalla de
-`/sin-conexion`.
+**El service worker no se mete con la navegación.** Cachea `/_next/static` y
+`/iconos` y nada más. Ya pasó una vez: interceptaba las navegaciones para
+mostrar una pantalla de "sin conexión" propia y terminó mostrándola con el
+servidor arriba. No agregues fallbacks de navegación ni caché de páginas: si no
+hay red, el error lo pone el navegador, que no se equivoca.
 
 **Un audio nunca escribe directo.** `/api/voz` devuelve una propuesta; la
 escritura pasa siempre por `src/app/acciones.ts` después de que alguien confirmó.

@@ -138,10 +138,15 @@ scripts/semilla.ts       datos de ejemplo
 ## La PWA
 
 El manifest está en `src/app/manifest.ts` y los iconos salen del logo, recortado
-al oso con la corona (`public/iconos/`). El service worker (`public/sw.js`)
-cachea **sólo** los assets estáticos de Next, que llevan hash en el nombre.
-Los saldos jamás se cachean: sin señal muestra `/sin-conexion` en vez de un
-número viejo que parezca actual.
+al oso con la corona (`public/iconos/`).
+
+El service worker (`public/sw.js`) cachea **sólo** `/_next/static` y `/iconos`,
+que llevan hash en el nombre y por lo tanto nunca quedan viejos. **No toca la
+navegación ni la API.** Antes interceptaba la navegación para mostrar una
+pantalla propia sin señal, y terminó diciendo "sin conexión" con el servidor
+perfectamente arriba. Un service worker que miente sobre el estado de la app es
+peor que no tener ninguno; si no hay red, la pantalla de error la pone el
+navegador.
 
 Para instalarla:
 

@@ -1,23 +1,22 @@
 /**
  * Service worker de El Osito.
  *
- * Regla de oro: los saldos NUNCA se sirven de caché. Un fiado viejo mostrado
- * como actual es peor que no mostrar nada. Sólo se cachean los assets estáticos
- * de Next (que llevan hash en el nombre, así que nunca quedan viejos) y una
- * página de cortesía para cuando no hay señal.
+ * Hace UNA sola cosa: cachear los assets estáticos de Next, que llevan hash en
+ * el nombre y por lo tanto nunca quedan viejos. Nada más.
+ *
+ * En particular NO toca la navegación. Antes la interceptaba para mostrar una
+ * página propia cuando no había señal, y el resultado fue que la app decía
+ * "sin conexión" estando el servidor perfectamente arriba. Un service worker
+ * que miente sobre el estado de la app es peor que no tener ninguno: acá se
+ * maneja plata y el que está del otro lado necesita saber si lo que ve es real.
+ * Si no hay red, que la pantalla de error la ponga el navegador, que no se
+ * equivoca.
  */
-const VERSION = "v1";
+const VERSION = "v2";
 const CACHE_ESTATICO = `osito-estatico-${VERSION}`;
-const CACHE_APP = `osito-app-${VERSION}`;
-const SIN_CONEXION = "/sin-conexion";
 
-self.addEventListener("install", (evento) => {
-  evento.waitUntil(
-    caches
-      .open(CACHE_APP)
-      .then((cache) => cache.addAll([SIN_CONEXION]))
-      .then(() => self.skipWaiting()),
-  );
+self.addEventListener("install", () => {
+  self.skipWaiting();
 });
 
 self.addEventListener("activate", (evento) => {
@@ -26,9 +25,7 @@ self.addEventListener("activate", (evento) => {
       .keys()
       .then((nombres) =>
         Promise.all(
-          nombres
-            .filter((n) => n !== CACHE_ESTATICO && n !== CACHE_APP)
-            .map((n) => caches.delete(n)),
+          nombres.filter((n) => n !== CACHE_ESTATICO).map((n) => caches.delete(n)),
         ),
       )
       .then(() => self.clients.claim()),
@@ -37,41 +34,24 @@ self.addEventListener("activate", (evento) => {
 
 self.addEventListener("fetch", (evento) => {
   const pedido = evento.request;
-
-  // Todo lo que escribe (server actions, /api/voz) va derecho a la red.
   if (pedido.method !== "GET") return;
 
   const url = new URL(pedido.url);
   if (url.origin !== self.location.origin) return;
 
-  // Assets con hash en el nombre: cachear es seguro y hace que abra al toque.
-  if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/iconos/")) {
-    evento.respondWith(
-      caches.open(CACHE_ESTATICO).then(async (cache) => {
-        const guardado = await cache.match(pedido);
-        if (guardado) return guardado;
-        const respuesta = await fetch(pedido);
-        if (respuesta.ok) cache.put(pedido, respuesta.clone());
-        return respuesta;
-      }),
-    );
-    return;
-  }
+  // Sólo lo inmutable. Todo lo demás —páginas, saldos, la API— va directo a la
+  // red sin que este archivo se meta en el medio.
+  const inmutable =
+    url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/iconos/");
+  if (!inmutable) return;
 
-  // Páginas: siempre de la red. Si no hay señal, la página de cortesía.
-  if (pedido.mode === "navigate") {
-    evento.respondWith(
-      fetch(pedido).catch(async () => {
-        const cache = await caches.open(CACHE_APP);
-        const guardado = await cache.match(SIN_CONEXION);
-        return (
-          guardado ??
-          new Response("Sin conexión", {
-            status: 503,
-            headers: { "content-type": "text/plain; charset=utf-8" },
-          })
-        );
-      }),
-    );
-  }
+  evento.respondWith(
+    caches.open(CACHE_ESTATICO).then(async (cache) => {
+      const guardado = await cache.match(pedido);
+      if (guardado) return guardado;
+      const respuesta = await fetch(pedido);
+      if (respuesta.ok) cache.put(pedido, respuesta.clone());
+      return respuesta;
+    }),
+  );
 });
