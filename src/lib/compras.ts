@@ -42,6 +42,7 @@ export type CompraDelHistorial = {
   fecha: string;
   pagadoEn: string | null;
   medio: MedioPago | null;
+  enBlanco: boolean;
   comprobante: string | null;
   nota: string | null;
   faltanPrecios: boolean;
@@ -97,6 +98,7 @@ export async function historialDeCompras(
       fecha: compras.fecha,
       pagadoEn: compras.pagadoEn,
       medio: compras.medio,
+      enBlanco: compras.enBlanco,
       comprobante: compras.comprobante,
       nota: compras.nota,
     })

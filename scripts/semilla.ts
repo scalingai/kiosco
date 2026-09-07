@@ -145,6 +145,8 @@ type CompraSemilla = {
   /** hace cuántos días se pagó; si falta, quedó a cuenta */
   pagadaHace?: number;
   medio?: "efectivo" | "mercadopago" | "banco";
+  /** con factura: al importe se le suma el IVA para el costo real */
+  enBlanco?: boolean;
 };
 
 const PROVEEDORES = ["Coca-Cola", "Distribuidora El Norte", "Panadería Sur"];
@@ -155,6 +157,7 @@ const COMPRAS: CompraSemilla[] = [
   {
     proveedor: "Coca-Cola",
     comprobante: "A-0012345",
+    enBlanco: true,
     items: [
       { descripcion: "gaseosa grande", cantidad: 8, unidadesPorBulto: 6, importe: 144000 },
       { descripcion: "agua saborizada", cantidad: 3, unidadesPorBulto: 6, importe: 41000 },
@@ -176,6 +179,7 @@ const COMPRAS: CompraSemilla[] = [
     proveedor: "Distribuidora El Norte",
     total: 240000,
     comprobante: "R-8891",
+    enBlanco: true,
     dias: 0,
   },
   // Llegó hace días y se paga hoy: la salida cae hoy, no el día que llegó.
@@ -369,6 +373,7 @@ async function main() {
           pagadoEn: c.pagadaHace != null ? fechaHace(c.pagadaHace) : null,
           medio: c.pagadaHace != null ? (c.medio ?? "efectivo") : null,
           comprobante: c.comprobante ?? null,
+          enBlanco: c.enBlanco ?? false,
         })
         .returning();
 

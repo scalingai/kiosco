@@ -113,6 +113,8 @@ export type CompraAGuardar = {
   medio: MedioPago | null;
   comprobante?: string | null;
   nota?: string | null;
+  /** con factura: el costo real es el importe por 1,21 */
+  enBlanco: boolean;
 };
 
 /** Suma de los renglones que ya tienen importe. Los que no, no suman. */
@@ -215,6 +217,74 @@ export function costoPorContenido(renglon: {
     centavos: Math.round((renglon.importeCentavos * 1000) / volumen),
     porCada: renglon.contenidoUnidad === "gr" ? "el kilo" : "el litro",
   };
+}
+
+/* ── Del costo al precio de venta ─────────────────────────────────────────── */
+
+/** IVA general. El kiosco compra a mayoristas que facturan con esta alícuota. */
+export const IVA = 1.21;
+
+/**
+ * Cuánto se le pone encima al costo para llegar al precio de venta. Es un punto
+ * de partida, no una regla: cada rubro se vende distinto y el precio final lo
+ * decide quien atiende. Por eso se puede guardar el precio real del producto y
+ * la app calcula el margen que salió de verdad.
+ */
+export const MARGEN_SUGERIDO = 1.4;
+
+/**
+ * Lo que de verdad sale una unidad.
+ *
+ * Comprando en blanco el mayorista factura y encima va el IVA, así que el
+ * importe de la factura NO es el costo: el costo es ese número por 1,21. En
+ * negro, el importe ya es el costo. Confundirlos es vender con 21% menos de
+ * margen del que uno cree.
+ */
+export function costoConIva(centavos: number, enBlanco: boolean): number {
+  return enBlanco ? Math.round(centavos * IVA) : centavos;
+}
+
+/** El precio que sugiere la app: el costo real por el margen. */
+export function precioSugerido(
+  costoCentavos: number,
+  margen = MARGEN_SUGERIDO,
+): number {
+  return Math.round(costoCentavos * margen);
+}
+
+export type Margen = {
+  /** por cuánto se multiplica el costo para llegar al precio: 1,4 */
+  multiplicador: number;
+  /** qué parte del precio de venta te queda, en por ciento */
+  porcentaje: number;
+  /** cuántos pesos deja cada unidad vendida */
+  gananciaCentavos: number;
+};
+
+/**
+ * El margen que sale de verdad, con el precio al que se vende hoy.
+ *
+ * Van los dos números porque son dos preguntas distintas y se confunden todo el
+ * tiempo: el multiplicador es cuánto le pusiste encima al costo, el porcentaje
+ * es qué parte de lo que cobrás te queda. Multiplicar por 1,4 no es ganar 40%:
+ * es ganar 28,6% de lo que cobrás.
+ */
+export function calcularMargen(
+  costoCentavos: number,
+  precioVentaCentavos: number,
+): Margen | null {
+  if (costoCentavos <= 0 || precioVentaCentavos <= 0) return null;
+  return {
+    multiplicador: precioVentaCentavos / costoCentavos,
+    porcentaje:
+      ((precioVentaCentavos - costoCentavos) / precioVentaCentavos) * 100,
+    gananciaCentavos: precioVentaCentavos - costoCentavos,
+  };
+}
+
+/** "×1,40" — cómo se escribe un multiplicador. */
+export function formatearMultiplicador(valor: number): string {
+  return "×" + valor.toFixed(2).replace(".", ",");
 }
 
 /** Lo que se edita en pantalla: todo texto hasta que se confirma. */

@@ -10,8 +10,12 @@ import {
   proveedores,
 } from "@/db/schema";
 import {
+  calcularMargen,
+  costoConIva,
   costoDeReferencia,
   costoPorContenido,
+  precioSugerido,
+  type Margen,
   type Unidad,
 } from "@/lib/negocio";
 import { normalizarNombre } from "@/lib/nombres";
@@ -71,10 +75,20 @@ export type FilaStock = {
   contenido: number | null;
   contenidoUnidad: Unidad | null;
   falta: boolean;
-  /** lo que salió la unidad, el kilo o el litro, la última vez que se compró */
+  /** lo que decía la factura: la unidad, el kilo o el litro, sin IVA */
   costoCentavos: number | null;
   /** cómo se lee ese costo: "cada una", "el kilo", "el litro" */
   porCada: string | null;
+  /** la última compra fue con factura, así que al costo le falta el IVA */
+  enBlanco: boolean;
+  /** lo que sale DE VERDAD: el de arriba con el IVA ya sumado si va */
+  costoRealCentavos: number | null;
+  /** a cuánto se vende hoy, si alguien lo cargó */
+  precioVentaCentavos: number | null;
+  /** a cuánto habría que venderlo con el margen de la casa */
+  sugeridoCentavos: number | null;
+  /** el margen que sale de verdad; sólo existe si hay precio de venta */
+  margen: Margen | null;
   ultimaCompra: string | null;
   /**
    * Lo mismo llevado a kilo o litro, cuando el producto declara su contenido.
@@ -109,6 +123,7 @@ export async function listarStock(): Promise<FilaStock[]> {
         marca: marcas.nombre,
         contenido: productos.contenido,
         contenidoUnidad: productos.contenidoUnidad,
+        precioVentaCentavos: productos.precioVentaCentavos,
       })
       .from(productos)
       .leftJoin(proveedores, eq(proveedores.id, productos.proveedorId))
@@ -126,6 +141,7 @@ export async function listarStock(): Promise<FilaStock[]> {
         unidad: comprasItems.unidad,
         importeCentavos: comprasItems.importeCentavos,
         fecha: compras.fecha,
+        enBlanco: compras.enBlanco,
       })
       .from(comprasItems)
       .innerJoin(compras, eq(compras.id, comprasItems.compraId))
@@ -148,6 +164,17 @@ export async function listarStock(): Promise<FilaStock[]> {
           contenidoUnidad: producto.contenidoUnidad,
         })
       : null;
+    // La factura no dice lo que sale: comprando en blanco hay que sumarle el
+    // IVA. Sobre ESE número se calcula el precio sugerido y el margen, porque
+    // sacar el margen contra el importe de la factura infla la ganancia un 21%.
+    const enBlanco = compra?.enBlanco ?? false;
+    const costoReal =
+      costo != null ? costoConIva(costo.centavos, enBlanco) : null;
+    const porContenidoReal =
+      porContenido != null
+        ? costoConIva(porContenido.centavos, enBlanco)
+        : null;
+
     return {
       id: producto.id,
       nombre: producto.nombre,
@@ -156,10 +183,18 @@ export async function listarStock(): Promise<FilaStock[]> {
       marca: producto.marca,
       contenido: producto.contenido,
       contenidoUnidad: producto.contenidoUnidad,
+      enBlanco,
+      costoRealCentavos: costoReal,
+      precioVentaCentavos: producto.precioVentaCentavos,
+      sugeridoCentavos: costoReal != null ? precioSugerido(costoReal) : null,
+      margen:
+        costoReal != null && producto.precioVentaCentavos != null
+          ? calcularMargen(costoReal, producto.precioVentaCentavos)
+          : null,
       falta: producto.falta,
       costoCentavos: costo?.centavos ?? null,
       porCada: costo?.porCada ?? null,
-      porContenidoCentavos: porContenido?.centavos ?? null,
+      porContenidoCentavos: porContenidoReal,
       porContenido: porContenido?.porCada ?? null,
       ultimaCompra: compra?.fecha ?? null,
       cantidad: compra?.cantidad ?? null,
@@ -273,6 +308,8 @@ export type FichaProducto = {
   marca?: string | null;
   contenido?: number | null;
   contenidoUnidad?: Unidad | null;
+  /** a cuánto se vende; `null` lo borra y vuelve a mostrarse el sugerido */
+  precioVentaCentavos?: number | null;
 };
 
 /**
@@ -290,6 +327,7 @@ export async function actualizarProducto(id: string, ficha: FichaProducto) {
     marcaId?: string | null;
     contenido?: number | null;
     contenidoUnidad?: Unidad | null;
+    precioVentaCentavos?: number | null;
   } = {};
 
   if (ficha.nombre != null) {
@@ -317,6 +355,14 @@ export async function actualizarProducto(id: string, ficha: FichaProducto) {
     if (cambios.contenido && !cambios.contenidoUnidad) {
       throw new Error("Falta decir si el contenido va en gramos o mililitros");
     }
+  }
+
+  if (ficha.precioVentaCentavos !== undefined) {
+    const precio = ficha.precioVentaCentavos;
+    if (precio != null && precio <= 0) {
+      throw new Error("El precio de venta tiene que ser mayor a cero");
+    }
+    cambios.precioVentaCentavos = precio;
   }
 
   if (!Object.keys(cambios).length) return null;

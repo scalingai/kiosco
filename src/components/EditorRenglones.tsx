@@ -2,9 +2,11 @@
 
 import {
   contenidoTotal,
+  costoConIva,
   costoDeReferencia,
   ETIQUETA_UNIDAD,
   formatearContenido,
+  precioSugerido,
   renglonVacio,
   renglonesCargados,
   UNIDADES,
@@ -28,11 +30,14 @@ export default function EditorRenglones({
   renglones,
   onCambio,
   productos,
+  enBlanco,
 }: {
   renglones: RenglonBorrador[];
   onCambio: (renglones: RenglonBorrador[]) => void;
   /** los que ya existen, para no crear "coca cola" al lado de "Coca-Cola" */
   productos: Producto[];
+  /** con factura el costo real es el importe por 1,21 */
+  enBlanco: boolean;
 }) {
   function editar(indice: number, cambio: Partial<RenglonBorrador>) {
     onCambio(renglones.map((r, n) => (n === indice ? { ...r, ...cambio } : r)));
@@ -50,14 +55,19 @@ export default function EditorRenglones({
     const importeCentavos = renglon.importe.trim()
       ? parsearMonto(renglon.importe)
       : null;
+    const costo = costoDeReferencia({
+      cantidad,
+      unidadesPorBulto: porBulto,
+      unidad: renglon.unidad,
+      importeCentavos,
+    });
+    // El costo de la factura no es lo que sale: en blanco hay que sumarle IVA.
+    const real = costo ? costoConIva(costo.centavos, enBlanco) : null;
     return {
       total: contenidoTotal(cantidad, porBulto),
-      costo: costoDeReferencia({
-        cantidad,
-        unidadesPorBulto: porBulto,
-        unidad: renglon.unidad,
-        importeCentavos,
-      }),
+      costo,
+      real,
+      sugerido: real != null ? precioSugerido(real) : null,
       importeCentavos,
     };
   }
@@ -96,7 +106,7 @@ export default function EditorRenglones({
 
       <ul className="mt-1 space-y-2">
         {renglones.map((renglon, i) => {
-          const { total, costo } = cuentas(renglon);
+          const { total, costo, real, sugerido } = cuentas(renglon);
           const nuevo = esNuevo(renglon.descripcion);
           return (
             <li
@@ -172,13 +182,15 @@ export default function EditorRenglones({
                 />
               </div>
 
-              {/* El número que se mira para poner el precio de venta. */}
+              {/* La cadena completa: lo que dice la factura, lo que sale de
+                  verdad con IVA, y a cuánto habría que venderlo. Es la cuenta
+                  que se hace en la cabeza al recibir el pedido. */}
               <p className="mt-1.5 text-xs text-tinta-suave">
                 {formatearContenido(total, renglon.unidad)}
                 {costo ? (
                   <>
-                    {" · "}
-                    <span className="cifra text-tinta">
+                    {" · factura "}
+                    <span className="cifra">
                       {formatearCentavos(costo.centavos)}
                     </span>{" "}
                     {costo.porCada}
@@ -187,6 +199,24 @@ export default function EditorRenglones({
                   " · poné el importe y te digo a cuánto sale"
                 )}
               </p>
+              {real != null && sugerido != null && costo && (
+                <p className="text-xs text-tinta-suave">
+                  {enBlanco && (
+                    <>
+                      {"con IVA "}
+                      <span className="cifra text-tinta">
+                        {formatearCentavos(real)}
+                      </span>
+                      {" · "}
+                    </>
+                  )}
+                  {"vendé a "}
+                  <span className="cifra text-pago">
+                    {formatearCentavos(sugerido)}
+                  </span>{" "}
+                  {costo.porCada}
+                </p>
+              )}
             </li>
           );
         })}

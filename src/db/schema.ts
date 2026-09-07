@@ -230,6 +230,16 @@ export const compras = pgTable(
     pagadoEn: date("pagado_en"),
     /** con qué se le pagó. Va junto con `pagadoEn`: sin pago no hay medio. */
     medio: medioPago("medio"),
+    /**
+     * Si la compra vino con factura. Cambia el costo real: cuando se compra en
+     * blanco el mayorista factura + IVA, así que lo que sale de verdad cada
+     * unidad es el importe por 1,21. En negro, el importe es el costo.
+     *
+     * Arranca en `false` a propósito: las compras cargadas antes de que esto
+     * existiera no declararon nada, y ponerles IVA por default les cambiaría el
+     * costo a todas de un día para el otro sin que nadie lo haya dicho.
+     */
+    enBlanco: boolean("en_blanco").notNull().default(false),
     /** número de factura o remito, para poder buscar el papel */
     comprobante: text("comprobante"),
     nota: text("nota"),
@@ -396,6 +406,12 @@ export const productos = pgTable(
     contenido: integer("contenido"),
     /** en qué se mide el contenido de arriba */
     contenidoUnidad: unidadMedida("contenido_unidad"),
+    /**
+     * A cuánto se vende una unidad. Es lo único que convierte el costo en un
+     * margen de verdad: sin esto la app sólo puede sugerir un precio, no decir
+     * cuánto estás ganando.
+     */
+    precioVentaCentavos: bigint("precio_venta_centavos", { mode: "number" }),
     /** marcado a mano cuando se ve el hueco en la góndola */
     falta: boolean("falta").notNull().default(false),
     archivadoEn: timestamp("archivado_en", { withTimezone: true }),

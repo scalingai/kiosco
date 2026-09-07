@@ -117,6 +117,7 @@ export default async function DiaDeCompras({
                     : `pagada el ${fechaCorta(compra.pagadoEn)}`
                   : "a cuenta, sin pagar"}
                 {compra.medio && ` · ${MEDIO_CORTO[compra.medio]}`}
+                {compra.enBlanco ? " · en blanco" : " · en negro"}
                 {compra.comprobante && ` · N.º ${compra.comprobante}`}
                 {compra.faltanPrecios && (
                   <span className="text-deuda"> · faltan precios</span>

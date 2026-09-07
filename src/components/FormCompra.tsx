@@ -48,6 +48,7 @@ export default function FormCompra({
   const [pago, setPago] = useState<"ahora" | "cuenta">("ahora");
   const [fechaPago, setFechaPago] = useState(fecha);
   const [medio, setMedio] = useState<MedioPago>("efectivo");
+  const [enBlanco, setEnBlanco] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
@@ -112,6 +113,7 @@ export default function FormCompra({
         medio: pago === "ahora" ? medio : null,
         comprobante,
         nota,
+        enBlanco,
       }),
     );
     setGuardando(false);
@@ -166,6 +168,7 @@ export default function FormCompra({
         renglones={items}
         onCambio={setItems}
         productos={productos}
+        enBlanco={enBlanco}
       />
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -197,6 +200,48 @@ export default function FormCompra({
           />
         </label>
       </div>
+
+      {/*
+        Cambia el costo, no un rótulo: en blanco el mayorista factura + IVA, así
+        que lo que sale de verdad cada unidad es el importe por 1,21. Va arriba
+        de los renglones porque el número que se lee abajo depende de esto.
+      */}
+      <fieldset className="rounded-xl border border-linea bg-white/60 px-3 py-2.5">
+        <legend className="px-1 text-xs text-tinta-suave">Cómo se compró</legend>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            aria-pressed={enBlanco}
+            onClick={() => setEnBlanco(true)}
+            className={
+              "flex-1 rounded-lg border px-2 py-2 text-sm " +
+              (enBlanco
+                ? "border-acento bg-acento text-white"
+                : "border-linea bg-white text-tinta")
+            }
+          >
+            En blanco
+          </button>
+          <button
+            type="button"
+            aria-pressed={!enBlanco}
+            onClick={() => setEnBlanco(false)}
+            className={
+              "flex-1 rounded-lg border px-2 py-2 text-sm " +
+              (!enBlanco
+                ? "border-acento bg-acento text-white"
+                : "border-linea bg-white text-tinta")
+            }
+          >
+            En negro
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-tinta-suave">
+          {enBlanco
+            ? "Con factura: al importe se le suma el IVA para saber el costo real."
+            : "Sin factura: el importe ya es el costo."}
+        </p>
+      </fieldset>
 
       <fieldset className="rounded-xl border border-linea bg-white/60 px-3 py-2.5">
         <legend className="px-1 text-xs text-tinta-suave">Cómo se paga</legend>

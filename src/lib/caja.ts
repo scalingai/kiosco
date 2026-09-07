@@ -189,6 +189,7 @@ export async function registrarCompra(entrada: CompraAGuardar) {
         medio: entrada.pagadoEn ? (entrada.medio ?? "efectivo") : null,
         comprobante: entrada.comprobante?.trim() || null,
         nota: entrada.nota?.trim() || null,
+        enBlanco: entrada.enBlanco,
       })
       .returning();
 
@@ -326,6 +327,7 @@ export type FilaCompra = {
   fecha: string;
   pagadoEn: string | null;
   medio: MedioPago | null;
+  enBlanco: boolean;
   comprobante: string | null;
   nota: string | null;
   /** hay renglones sin importe y el total no lo declaró la factura */
@@ -416,6 +418,7 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
           fecha: compras.fecha,
           pagadoEn: compras.pagadoEn,
           medio: compras.medio,
+          enBlanco: compras.enBlanco,
           comprobante: compras.comprobante,
           nota: compras.nota,
         })

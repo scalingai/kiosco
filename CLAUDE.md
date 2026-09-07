@@ -56,6 +56,22 @@ Para `gr` y `ml`, `costoDeReferencia()` devuelve el precio **por kilo y por
 litro**, no por gramo: el precio de un gramo son centavos que nadie puede leer,
 y en el mayorista los precios se comparan por kilo.
 
+**El importe de la factura NO es el costo.** Comprando en blanco el mayorista
+factura + IVA, así que lo que sale de verdad cada unidad es el importe por 1,21
+(`compras.en_blanco` → `costoConIva()`). En negro, el importe ya es el costo.
+Todo lo que sea margen o precio sugerido se calcula sobre el costo CON IVA:
+sacarlo contra el importe de la factura infla la ganancia un 21%.
+
+`en_blanco` arranca en `false` a propósito. Las compras cargadas antes de que
+existiera no declararon nada, y ponerles IVA por default les habría cambiado el
+costo a todas de un día para el otro sin que nadie lo dijera.
+
+**Margen y multiplicador no son lo mismo**, y se confunden todo el tiempo:
+multiplicar el costo por 1,4 no es ganar 40%, es ganar 28,6% de lo que cobrás.
+`calcularMargen()` devuelve los dos números y la pantalla muestra los dos. El
+1,4 es sólo una sugerencia; si el producto tiene `precio_venta_centavos`
+cargado, la app dice el margen REAL en vez de uno inventado.
+
 **La marca agrupa, el contenido compara.** Un producto puede tener `marca_id`
 (opcional: el pan no tiene) y `contenido` + `contenido_unidad` — cuánto trae UNA
 unidad de venta, 2250 ml la Coca grande. El contenido es lo que hace comparables

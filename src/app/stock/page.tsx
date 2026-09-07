@@ -7,7 +7,7 @@ import {
 } from "@/components/AccionesStock";
 import FichaProducto from "@/components/FichaProducto";
 import { fechaCorta } from "@/lib/fechas";
-import { formatearContenido } from "@/lib/negocio";
+import { formatearContenido, formatearMultiplicador } from "@/lib/negocio";
 import { formatearCentavos } from "@/lib/plata";
 import { listarMarcas, listarStock, type FilaStock } from "@/lib/stock";
 
@@ -62,10 +62,12 @@ function Producto({
           </span>
 
           <span className="shrink-0 text-right">
+            {/* Lo que sale DE VERDAD: con el IVA ya sumado si se compró en
+                blanco. Es el número contra el que se mide el margen. */}
             <span className="cifra block text-sm">
-              {fila.costoCentavos != null ? (
+              {fila.costoRealCentavos != null ? (
                 <>
-                  {formatearCentavos(fila.costoCentavos)}{" "}
+                  {formatearCentavos(fila.costoRealCentavos)}{" "}
                   <span className="text-xs font-normal text-tinta-suave">
                     {fila.porCada}
                   </span>
@@ -82,6 +84,18 @@ function Producto({
                 {fila.porContenido}
               </span>
             )}
+            {fila.margen ? (
+              <span className="cifra block text-xs text-pago">
+                vendés a {formatearCentavos(fila.precioVentaCentavos!)} ·{" "}
+                {Math.round(fila.margen.porcentaje)}%
+              </span>
+            ) : (
+              fila.sugeridoCentavos != null && (
+                <span className="cifra block text-xs text-tinta-suave">
+                  vendé a {formatearCentavos(fila.sugeridoCentavos)}
+                </span>
+              )
+            )}
           </span>
         </span>
 
@@ -93,12 +107,47 @@ function Producto({
       </summary>
 
       <div className="border-l border-linea pl-3">
+        {/* La cuenta abierta, para que el número de arriba no sea magia. */}
+        {fila.costoCentavos != null && fila.costoRealCentavos != null && (
+          <p className="text-xs text-tinta-suave">
+            Factura{" "}
+            <span className="cifra">{formatearCentavos(fila.costoCentavos)}</span>
+            {fila.enBlanco ? (
+              <>
+                {" + IVA = "}
+                <span className="cifra text-tinta">
+                  {formatearCentavos(fila.costoRealCentavos)}
+                </span>{" "}
+                de costo
+              </>
+            ) : (
+              " · en negro, sin IVA"
+            )}
+            {fila.margen && (
+              <>
+                {" · vendiendo a "}
+                <span className="cifra">
+                  {formatearCentavos(fila.precioVentaCentavos!)}
+                </span>{" "}
+                te queda{" "}
+                <span className="cifra text-pago">
+                  {formatearCentavos(fila.margen.gananciaCentavos)}
+                </span>{" "}
+                ({formatearMultiplicador(fila.margen.multiplicador)},{" "}
+                {Math.round(fila.margen.porcentaje)}% de lo que cobrás)
+              </>
+            )}
+          </p>
+        )}
+
         <FichaProducto
           id={fila.id}
           nombre={fila.nombre}
           marca={fila.marca}
           contenido={fila.contenido}
           contenidoUnidad={fila.contenidoUnidad}
+          precioVentaCentavos={fila.precioVentaCentavos}
+          sugeridoCentavos={fila.sugeridoCentavos}
           marcas={marcas}
         />
         <div className="mt-2 flex items-center gap-3">
@@ -208,11 +257,11 @@ export default async function Stock({ searchParams }: PageProps<"/stock">) {
                   </span>
                   <span className="text-xs text-tinta-suave">
                     {procedencia(f)}
-                    {f.costoCentavos != null && (
+                    {f.costoRealCentavos != null && (
                       <>
                         {" · "}
                         <span className="cifra">
-                          {formatearCentavos(f.costoCentavos)}
+                          {formatearCentavos(f.costoRealCentavos)}
                         </span>{" "}
                         {f.porCada}
                       </>
