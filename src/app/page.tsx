@@ -120,7 +120,7 @@ export default async function Inicio() {
         />
 
         <Tarjeta
-          href="/caja"
+          href="/compras?por=estado&impagas=1"
           titulo="Se le debe a proveedores"
           cifra={
             aProveedores === 0 && proveedoresSinPrecio

@@ -92,6 +92,25 @@ function IconoFiado() {
   );
 }
 
+function IconoCompras() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5 shrink-0"
+      aria-hidden="true"
+    >
+      <path d="M3.5 6.5h2l1.6 9.2a1.5 1.5 0 0 0 1.5 1.3h8.3a1.5 1.5 0 0 0 1.5-1.2l1.1-6.3H6" />
+      <circle cx="9.5" cy="20" r="1" />
+      <circle cx="17" cy="20" r="1" />
+    </svg>
+  );
+}
+
 function IconoVentas() {
   return (
     <svg
@@ -150,6 +169,7 @@ const PAGINAS = [
   { href: "/fiado", etiqueta: "Fiado", Icono: IconoFiado },
   { href: "/caja", etiqueta: "Caja", Icono: IconoDia },
   { href: "/ventas", etiqueta: "Ventas", Icono: IconoVentas },
+  { href: "/compras", etiqueta: "Compras", Icono: IconoCompras },
   { href: "/stock", etiqueta: "Stock", Icono: IconoStock },
   { href: "/historial", etiqueta: "Historial", Icono: IconoHistorial },
 ] as const;

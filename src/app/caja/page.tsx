@@ -169,7 +169,13 @@ export default async function Caja({ searchParams }: PageProps<"/caja">) {
         total={formatearCentavos(balance.pagosProveedoresCentavos)}
       >
         {balance.compras.length === 0 ? (
-          <Vacio>No llegó ni se pagó mercadería este día.</Vacio>
+          <Vacio>
+            No llegó ni se pagó mercadería este día.{" "}
+            <Link href="/compras" className="underline underline-offset-4">
+              Ver todas las compras
+            </Link>
+            .
+          </Vacio>
         ) : (
           <ul className="divide-y divide-linea">
             {balance.compras.map((c) => {
