@@ -5,10 +5,15 @@ import { getDb, type DB } from "@/db/client";
 import {
   compras,
   comprasItems,
+  marcas,
   productos,
   proveedores,
 } from "@/db/schema";
-import { costoDeReferencia, type Unidad } from "@/lib/negocio";
+import {
+  costoDeReferencia,
+  costoPorContenido,
+  type Unidad,
+} from "@/lib/negocio";
 import { normalizarNombre } from "@/lib/nombres";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -60,12 +65,23 @@ export type FilaStock = {
   id: string;
   nombre: string;
   proveedor: string | null;
+  marcaId: string | null;
+  marca: string | null;
+  /** cuánto trae una unidad de venta: 2250 (ml) para la Coca grande */
+  contenido: number | null;
+  contenidoUnidad: Unidad | null;
   falta: boolean;
   /** lo que salió la unidad, el kilo o el litro, la última vez que se compró */
   costoCentavos: number | null;
   /** cómo se lee ese costo: "cada una", "el kilo", "el litro" */
   porCada: string | null;
   ultimaCompra: string | null;
+  /**
+   * Lo mismo llevado a kilo o litro, cuando el producto declara su contenido.
+   * Es el único número con el que se pueden comparar dos tamaños entre sí.
+   */
+  porContenidoCentavos: number | null;
+  porContenido: string | null;
   /** cómo venía: 3 packs de 6 unidades, o 2 bolsas de 1000 gr */
   cantidad: number | null;
   unidadesPorBulto: number | null;
@@ -89,9 +105,14 @@ export async function listarStock(): Promise<FilaStock[]> {
         nombre: productos.nombre,
         falta: productos.falta,
         proveedor: proveedores.nombre,
+        marcaId: productos.marcaId,
+        marca: marcas.nombre,
+        contenido: productos.contenido,
+        contenidoUnidad: productos.contenidoUnidad,
       })
       .from(productos)
       .leftJoin(proveedores, eq(proveedores.id, productos.proveedorId))
+      .leftJoin(marcas, eq(marcas.id, productos.marcaId))
       .where(isNull(productos.archivadoEn))
       .orderBy(asc(productos.nombre)),
 
@@ -120,13 +141,26 @@ export async function listarStock(): Promise<FilaStock[]> {
   return catalogo.map((producto) => {
     const compra = ultima.get(producto.id);
     const costo = compra ? costoDeReferencia(compra) : null;
+    const porContenido = compra
+      ? costoPorContenido({
+          ...compra,
+          contenido: producto.contenido,
+          contenidoUnidad: producto.contenidoUnidad,
+        })
+      : null;
     return {
       id: producto.id,
       nombre: producto.nombre,
       proveedor: producto.proveedor,
+      marcaId: producto.marcaId,
+      marca: producto.marca,
+      contenido: producto.contenido,
+      contenidoUnidad: producto.contenidoUnidad,
       falta: producto.falta,
       costoCentavos: costo?.centavos ?? null,
       porCada: costo?.porCada ?? null,
+      porContenidoCentavos: porContenido?.centavos ?? null,
+      porContenido: porContenido?.porCada ?? null,
       ultimaCompra: compra?.fecha ?? null,
       cantidad: compra?.cantidad ?? null,
       unidadesPorBulto: compra?.unidadesPorBulto ?? null,
@@ -191,4 +225,106 @@ export async function listarFaltantes() {
     // Agrupados por proveedor: la lista se usa para ir a comprar, y se compra
     // por proveedor, no por orden alfabético.
     .orderBy(asc(proveedores.nombre), asc(productos.nombre));
+}
+
+/* ── Marcas ───────────────────────────────────────────────────────────────── */
+
+/** Mismo patrón que clientes, proveedores y productos. */
+async function buscarOCrearMarcaCon(db: Ejecutor, nombre: string) {
+  const limpio = nombre.trim();
+  if (!limpio) return null;
+  const normalizado = normalizarNombre(limpio);
+  if (!normalizado) return null;
+
+  const [existente] = await db
+    .select()
+    .from(marcas)
+    .where(eq(marcas.nombreNormalizado, normalizado))
+    .limit(1);
+  if (existente) return existente;
+
+  const [creada] = await db
+    .insert(marcas)
+    .values({ nombre: limpio, nombreNormalizado: normalizado })
+    .onConflictDoNothing({ target: marcas.nombreNormalizado })
+    .returning();
+  if (creada) return creada;
+
+  const [ganadora] = await db
+    .select()
+    .from(marcas)
+    .where(eq(marcas.nombreNormalizado, normalizado))
+    .limit(1);
+  return ganadora ?? null;
+}
+
+export async function listarMarcas() {
+  const db = await getDb();
+  return db
+    .select({ id: marcas.id, nombre: marcas.nombre })
+    .from(marcas)
+    .where(isNull(marcas.archivadoEn))
+    .orderBy(asc(marcas.nombre));
+}
+
+export type FichaProducto = {
+  nombre?: string;
+  /** vacío saca la marca; el pan no tiene y está bien */
+  marca?: string | null;
+  contenido?: number | null;
+  contenidoUnidad?: Unidad | null;
+};
+
+/**
+ * Lo que se edita a mano de un producto. El costo y el proveedor NO están acá:
+ * esos los escribe la última compra, y dejarlos editar sería tener dos
+ * verdades para el mismo número.
+ */
+export async function actualizarProducto(id: string, ficha: FichaProducto) {
+  if (!UUID.test(id)) return null;
+  const db = await getDb();
+
+  const cambios: {
+    nombre?: string;
+    nombreNormalizado?: string;
+    marcaId?: string | null;
+    contenido?: number | null;
+    contenidoUnidad?: Unidad | null;
+  } = {};
+
+  if (ficha.nombre != null) {
+    const limpio = ficha.nombre.trim();
+    if (!limpio) throw new Error("El nombre no puede estar vacío");
+    cambios.nombre = limpio;
+    cambios.nombreNormalizado = normalizarNombre(limpio);
+  }
+
+  if (ficha.marca !== undefined) {
+    const marca = ficha.marca
+      ? await buscarOCrearMarcaCon(db, ficha.marca)
+      : null;
+    cambios.marcaId = marca?.id ?? null;
+  }
+
+  if (ficha.contenido !== undefined) {
+    // El contenido y su unidad viajan juntos: un 2250 sin decir de qué no se
+    // puede leer, y una unidad sin número no mide nada.
+    cambios.contenido =
+      ficha.contenido && ficha.contenido > 0 ? ficha.contenido : null;
+    cambios.contenidoUnidad = cambios.contenido
+      ? (ficha.contenidoUnidad ?? null)
+      : null;
+    if (cambios.contenido && !cambios.contenidoUnidad) {
+      throw new Error("Falta decir si el contenido va en gramos o mililitros");
+    }
+  }
+
+  if (!Object.keys(cambios).length) return null;
+
+  const [fila] = await db
+    .update(productos)
+    .set(cambios)
+    .where(eq(productos.id, id))
+    .returning();
+  return fila ?? null;
 }

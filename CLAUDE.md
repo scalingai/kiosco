@@ -56,11 +56,26 @@ Para `gr` y `ml`, `costoDeReferencia()` devuelve el precio **por kilo y por
 litro**, no por gramo: el precio de un gramo son centavos que nadie puede leer,
 y en el mayorista los precios se comparan por kilo.
 
+**La marca agrupa, el contenido compara.** Un producto puede tener `marca_id`
+(opcional: el pan no tiene) y `contenido` + `contenido_unidad` — cuánto trae UNA
+unidad de venta, 2250 ml la Coca grande. El contenido es lo que hace comparables
+dos tamaños de la misma marca: por botella, $3.000 y $2.000 son dos precios
+sueltos; por litro son $1.333 y $4.000, y ahí se ve cuál conviene. Ese número lo
+da `costoPorContenido()` y sólo se calcula cuando el renglón vino por unidad —
+si ya venía en gramos, el precio por kilo lo da `costoDeReferencia()` y tener
+dos fuentes para el mismo número es peor que no tenerlo.
+
+Marca y contenido NO salen de la factura (ahí dice "8 packs", no "cada botella
+trae 2,25 L"): se cargan a mano en `/stock`. El costo y el proveedor, al revés,
+NO se editan a mano — los escribe la última compra.
+
 **Los nombres se comparan normalizados.** Clientes, proveedores y productos
 pasan todos por `normalizarNombre()` antes de buscar o crear, y cada tabla tiene
 su índice único sobre la columna normalizada. Por eso "coca cola" encuentra a
 "Coca-Cola" en vez de crear un duplicado. Si agregás otra entidad con nombre,
-seguí el mismo patrón: `buscarOCrear…` + `uniqueIndex` sobre `nombre_normalizado`.
+seguí el mismo patrón: `buscarOCrear…` + `uniqueIndex` sobre
+`nombre_normalizado`. Hoy lo cumplen `clientes`, `proveedores`, `productos` y
+`marcas`.
 
 **Stock no cuenta unidades.** `productos` es un catálogo de reposición, no un
 inventario: qué se vende, a quién se le compra, a cuánto salió la última vez y

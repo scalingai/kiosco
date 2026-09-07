@@ -19,9 +19,11 @@ import {
   type MovimientoAGuardar,
 } from "@/lib/consultas";
 import {
+  actualizarProducto,
   archivarProducto,
   crearProducto,
   marcarFalta,
+  type FichaProducto,
 } from "@/lib/stock";
 import type {
   CompraAGuardar,
@@ -211,6 +213,24 @@ export async function archivar(id: string): Promise<Resultado> {
   try {
     const fila = await archivarProducto(id);
     if (!fila) return { ok: false, error: "Ese producto ya estaba archivado" };
+    revalidatePath("/", "layout");
+    return { ok: true, datos: null };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+/**
+ * Lo que se edita a mano de un producto: nombre, marca y cuánto trae cada
+ * unidad. El costo y el proveedor no se tocan acá — los escribe la compra.
+ */
+export async function editarProducto(
+  id: string,
+  ficha: FichaProducto,
+): Promise<Resultado> {
+  try {
+    const fila = await actualizarProducto(id, ficha);
+    if (!fila) return { ok: false, error: "No se pudo guardar ese producto" };
     revalidatePath("/", "layout");
     return { ok: true, datos: null };
   } catch (error) {

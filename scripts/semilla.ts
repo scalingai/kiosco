@@ -20,6 +20,7 @@ import {
   gastos,
   items,
   movimientos,
+  marcas,
   productos,
   proveedores,
   ventas,
@@ -155,8 +156,11 @@ const COMPRAS: CompraSemilla[] = [
     proveedor: "Coca-Cola",
     comprobante: "A-0012345",
     items: [
-      { descripcion: "gaseosa 2,25L", cantidad: 8, unidadesPorBulto: 6, importe: 144000 },
+      { descripcion: "gaseosa grande", cantidad: 8, unidadesPorBulto: 6, importe: 144000 },
       { descripcion: "agua saborizada", cantidad: 3, unidadesPorBulto: 6, importe: 41000 },
+      // El mismo producto en otro envase: por botella parece mas barato, y
+      // por litro es el doble. Es justo lo que la pantalla tiene que mostrar.
+      { descripcion: "gaseosa chica", cantidad: 4, unidadesPorBulto: 12, importe: 96000 },
       // Comprado por peso: el precio que sirve es el del kilo, no el del gramo.
       { descripcion: "yerba", cantidad: 4, unidadesPorBulto: 1000, unidad: "gr", importe: 38000 },
     ],
@@ -223,6 +227,39 @@ const VENTAS: {
   { monto: 540000, dias: 1 },
   { monto: 495000, dias: 2 },
   { monto: 610000, dias: 3 },
+];
+
+
+/**
+ * La marca y el contenido de cada unidad. No salen de la factura —ahi dice
+ * "8 packs", no "cada botella trae 2,25 L"—, asi que en la app se cargan a
+ * mano y aca se siembran para poder ver la comparacion por litro.
+ */
+const FICHAS: {
+  producto: string;
+  marca?: string;
+  contenido?: number;
+  contenidoUnidad?: "gr" | "ml";
+}[] = [
+  {
+    producto: "gaseosa grande",
+    marca: "Coca-Cola",
+    contenido: 2250,
+    contenidoUnidad: "ml",
+  },
+  {
+    producto: "gaseosa chica",
+    marca: "Coca-Cola",
+    contenido: 500,
+    contenidoUnidad: "ml",
+  },
+  {
+    producto: "agua saborizada",
+    marca: "Coca-Cola",
+    contenido: 1500,
+    contenidoUnidad: "ml",
+  },
+  { producto: "yerba", marca: "Playadito" },
 ];
 
 function fechaHace(dias: number): string {
@@ -390,9 +427,43 @@ async function main() {
       })),
     );
 
+    for (const ficha of FICHAS) {
+      const normalizado = normalizarNombre(ficha.producto);
+      let marcaId: string | null = null;
+
+      if (ficha.marca) {
+        const [creada] = await db
+          .insert(marcas)
+          .values({
+            nombre: ficha.marca,
+            nombreNormalizado: normalizarNombre(ficha.marca),
+          })
+          .onConflictDoNothing({ target: marcas.nombreNormalizado })
+          .returning();
+        if (creada) {
+          marcaId = creada.id;
+        } else {
+          const [existente] = await db
+            .select()
+            .from(marcas)
+            .where(eq(marcas.nombreNormalizado, normalizarNombre(ficha.marca)));
+          marcaId = existente?.id ?? null;
+        }
+      }
+
+      await db
+        .update(productos)
+        .set({
+          marcaId,
+          contenido: ficha.contenido ?? null,
+          contenidoUnidad: ficha.contenidoUnidad ?? null,
+        })
+        .where(eq(productos.nombreNormalizado, normalizado));
+    }
+
     // Dos cosas marcadas como faltantes: es la pantalla que se mira antes de
     // salir a comprar, y vacía no se entiende para qué sirve.
-    for (const nombre of ["yerba", "gaseosa 2,25L"]) {
+    for (const nombre of ["yerba", "gaseosa grande"]) {
       const [creado] = await db
         .insert(productos)
         .values({
@@ -410,7 +481,7 @@ async function main() {
       }
     }
 
-    console.log("cargado: proveedores, compras, gastos, ventas y stock");
+    console.log("cargado: proveedores, compras, gastos, ventas, marcas y stock");
   } else {
     console.log("ya estaban: proveedores");
   }

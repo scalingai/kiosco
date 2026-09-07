@@ -181,6 +181,42 @@ export function costoDeReferencia(renglon: {
   };
 }
 
+/**
+ * El costo por kilo o por litro cuando lo que se compró viene por unidad y el
+ * producto tiene declarado cuánto trae cada una.
+ *
+ * Es el número que hace comparables dos tamaños de la misma marca: la Coca de
+ * 2,25 L y la de 500 ml tienen precios por botella que no se pueden mirar uno
+ * al lado del otro, pero sí por litro.
+ *
+ * Devuelve `null` cuando no hay con qué calcularlo. Si el renglón ya venía en
+ * gramos o mililitros tampoco calcula nada: ese precio por kilo lo da
+ * `costoDeReferencia`, y repetirlo acá sería tener dos fuentes para el mismo
+ * número.
+ */
+export function costoPorContenido(renglon: {
+  cantidad: number;
+  unidadesPorBulto: number;
+  unidad: Unidad;
+  importeCentavos: number | null;
+  contenido: number | null;
+  contenidoUnidad: Unidad | null;
+}): CostoDeReferencia | null {
+  if (renglon.unidad !== "un") return null;
+  if (renglon.importeCentavos == null) return null;
+  if (!renglon.contenido || renglon.contenido <= 0) return null;
+  if (!renglon.contenidoUnidad || renglon.contenidoUnidad === "un") return null;
+
+  const unidades = contenidoTotal(renglon.cantidad, renglon.unidadesPorBulto);
+  const volumen = unidades * renglon.contenido;
+  if (volumen <= 0) return null;
+
+  return {
+    centavos: Math.round((renglon.importeCentavos * 1000) / volumen),
+    porCada: renglon.contenidoUnidad === "gr" ? "el kilo" : "el litro",
+  };
+}
+
 /** Lo que se edita en pantalla: todo texto hasta que se confirma. */
 export type RenglonBorrador = {
   descripcion: string;

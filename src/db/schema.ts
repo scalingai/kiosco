@@ -343,6 +343,25 @@ export type CategoriaGasto = (typeof categoriaGasto.enumValues)[number];
 export type MedioPago = (typeof medioPago.enumValues)[number];
 
 /**
+ * La marca: Coca-Cola, Lays, Arcor. Agrupa productos que son la misma cosa en
+ * distintos tamaños. Es OPCIONAL a propósito —el pan no tiene marca— y por eso
+ * `productos.marca_id` es nullable.
+ */
+export const marcas = pgTable(
+  "marcas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nombre: text("nombre").notNull(),
+    nombreNormalizado: text("nombre_normalizado").notNull(),
+    archivadoEn: timestamp("archivado_en", { withTimezone: true }),
+    creadoEn: timestamp("creado_en", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("marcas_nombre_normalizado_key").on(t.nombreNormalizado)],
+);
+
+/**
  * El catálogo de lo que se vende. NO es un inventario: no lleva cuántas
  * unidades hay, porque para eso habría que cargar cada venta una por una y una
  * cuenta que nadie actualiza miente peor que no tenerla.
@@ -362,6 +381,21 @@ export const productos = pgTable(
     proveedorId: uuid("proveedor_id").references(() => proveedores.id, {
       onDelete: "set null",
     }),
+    /** opcional: el pan no tiene marca, la Coca sí */
+    marcaId: uuid("marca_id").references(() => marcas.id, {
+      onDelete: "set null",
+    }),
+    /**
+     * Cuánto trae UNA unidad de venta: la botella de Coca son 2250 ml, el
+     * paquete de papas 120 gr.
+     *
+     * Es lo que hace comparables dos tamaños de la misma marca. Sin esto, la
+     * Coca de 2,25 L a $3.000 y la de 500 ml a $1.200 son dos precios sueltos;
+     * con esto son $1.333 y $2.400 el litro, y ahí se ve cuál conviene.
+     */
+    contenido: integer("contenido"),
+    /** en qué se mide el contenido de arriba */
+    contenidoUnidad: unidadMedida("contenido_unidad"),
     /** marcado a mano cuando se ve el hueco en la góndola */
     falta: boolean("falta").notNull().default(false),
     archivadoEn: timestamp("archivado_en", { withTimezone: true }),
@@ -375,4 +409,5 @@ export const productos = pgTable(
   ],
 );
 
+export type Marca = typeof marcas.$inferSelect;
 export type Producto = typeof productos.$inferSelect;
