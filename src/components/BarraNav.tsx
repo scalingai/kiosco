@@ -30,6 +30,25 @@ function IconoCasa() {
   );
 }
 
+function IconoDia() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+      aria-hidden="true"
+    >
+      <rect x="3" y="5" width="18" height="16" rx="2.5" />
+      <path d="M3 10h18M8 3v4M16 3v4" />
+      <path d="M8.5 15.5h7" />
+    </svg>
+  );
+}
+
 function IconoHistorial() {
   return (
     <svg
@@ -97,6 +116,11 @@ export default function BarraNav({
         <Link href="/" className={casilla(ruta === "/")}>
           <IconoCasa />
           Inicio
+        </Link>
+
+        <Link href="/dia" className={casilla(ruta === "/dia")}>
+          <IconoDia />
+          El día
         </Link>
 
         <Link href="/historial" className={casilla(ruta === "/historial")}>
