@@ -45,6 +45,18 @@ mostrar una pantalla de "sin conexión" propia y terminó mostrándola con el
 servidor arriba. No agregues fallbacks de navegación ni caché de páginas: si no
 hay red, el error lo pone el navegador, que no se equivoca.
 
+**El costo por unidad se calcula, no se carga.** Al proveedor se le compra por
+pack. El renglón de una compra guarda lo que dice la factura —cuántos bultos,
+`unidades_por_bulto` e `importe_centavos`— y el costo unitario sale de dividir,
+al mostrarlo. Guardarlo redondeado hace que el renglón deje de sumar lo que se
+pagó: $41.000 entre 18 unidades no da un número redondo.
+
+**Una compra impaga no toca la caja.** `compras.fecha` es cuándo llegó la
+mercadería; `compras.pagado_en` es cuándo salió la plata, y en null significa
+que se le debe al proveedor. La salida del día se cuenta por `pagado_en`, nunca
+por `fecha`: el pedido que te dejan el martes y pagás el viernes salió el
+viernes.
+
 **Un audio nunca escribe directo.** `/api/voz` devuelve una propuesta; la
 escritura pasa siempre por `src/app/acciones.ts` después de que alguien confirmó.
 Si aparece la tentación de "cargar automático cuando la confianza es alta", no.
