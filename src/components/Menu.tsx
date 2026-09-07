@@ -183,6 +183,8 @@ function tituloDe(ruta: string): string {
   const pagina = PAGINAS.find((p) => p.href === ruta);
   if (pagina) return pagina.etiqueta;
   if (ruta.startsWith("/cliente/")) return "Cuenta del cliente";
+  // Las subpáginas de compras (proveedor, día) siguen siendo compras.
+  if (ruta.startsWith("/compras")) return "Compras";
   return "El Osito";
 }
 

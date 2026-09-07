@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { compras, comprasItems, proveedores } from "@/db/schema";
 import {
@@ -51,8 +51,26 @@ export type CompraDelHistorial = {
 export type Filtro = {
   /** ISO; si falta, desde siempre */
   desde?: string;
+  /** ISO; si falta, hasta hoy */
+  hasta?: string;
+  proveedorId?: string;
   soloImpagas?: boolean;
 };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** "2026-09" → el primero y el último día de ese mes. */
+export function rangoDelMes(mes: string): { desde: string; hasta: string } {
+  const [anio, numero] = mes.split("-").map(Number);
+  // El día 0 del mes siguiente es el último de este, y JS ya sabe cuántos son.
+  const ultimo = new Date(Date.UTC(anio, numero, 0)).getUTCDate();
+  const dosDigitos = String(numero).padStart(2, "0");
+  return {
+    desde: `${anio}-${dosDigitos}-01`,
+    hasta: `${anio}-${dosDigitos}-${String(ultimo).padStart(2, "0")}`,
+  };
+}
+
 
 export async function historialDeCompras(
   filtro: Filtro = {},
@@ -61,7 +79,13 @@ export async function historialDeCompras(
 
   const condiciones = [isNull(compras.anuladoEn)];
   if (filtro.desde) condiciones.push(gte(compras.fecha, filtro.desde));
+  if (filtro.hasta) condiciones.push(lte(compras.fecha, filtro.hasta));
   if (filtro.soloImpagas) condiciones.push(isNull(compras.pagadoEn));
+  if (filtro.proveedorId) {
+    // Un id que no es UUID es "no existe", no un error de Postgres.
+    if (!UUID.test(filtro.proveedorId)) return [];
+    condiciones.push(eq(compras.proveedorId, filtro.proveedorId));
+  }
 
   const filas = await db
     .select({
@@ -376,4 +400,65 @@ export async function primeraCompra(): Promise<string | null> {
     .orderBy(asc(compras.fecha))
     .limit(1);
   return fila?.fecha ?? null;
+}
+
+/** El proveedor, para poner su nombre arriba de su ficha. */
+export async function obtenerProveedor(id: string) {
+  if (!UUID.test(id)) return null;
+  const db = await getDb();
+  const [fila] = await db
+    .select({ id: proveedores.id, nombre: proveedores.nombre })
+    .from(proveedores)
+    .where(eq(proveedores.id, id))
+    .limit(1);
+  return fila ?? null;
+}
+
+/**
+ * Lo que se le debe a un proveedor, sin importar el mes que se esté mirando.
+ * Una deuda de agosto no deja de existir porque estás parado en septiembre.
+ */
+export async function deudaDelProveedor(id: string): Promise<number> {
+  if (!UUID.test(id)) return 0;
+  const db = await getDb();
+  const filas = await db
+    .select({ monto: compras.montoCentavos })
+    .from(compras)
+    .where(
+      and(
+        eq(compras.proveedorId, id),
+        isNull(compras.anuladoEn),
+        isNull(compras.pagadoEn),
+      ),
+    );
+  return filas.reduce((total, f) => total + f.monto, 0);
+}
+
+/** Los meses que tienen alguna compra, del más nuevo al más viejo. */
+export async function mesesConCompras(): Promise<string[]> {
+  const db = await getDb();
+  const filas = await db
+    .select({ fecha: compras.fecha })
+    .from(compras)
+    .where(isNull(compras.anuladoEn))
+    .orderBy(desc(compras.fecha));
+  const meses = new Set(filas.map((f) => f.fecha.slice(0, 7)));
+  return [...meses];
+}
+
+/** Agrupa por día. Cada fecha es una parada de la navegación. */
+export function agruparPorFecha(lista: CompraDelHistorial[]): GrupoDeCompras[] {
+  const grupos = acumular(
+    lista,
+    (c) => c.fecha,
+    (c) => c.fecha,
+  );
+  for (const grupo of grupos.values()) {
+    const proveedores = new Set(grupo.compras.map((c) => c.proveedor));
+    grupo.detalle =
+      proveedores.size === 1
+        ? [...proveedores][0]
+        : `${proveedores.size} proveedores`;
+  }
+  return [...grupos.values()].sort((a, b) => (a.clave < b.clave ? 1 : -1));
 }

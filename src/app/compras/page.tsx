@@ -1,20 +1,16 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import BotonAnularFila from "@/components/BotonAnularFila";
-import BotonPagarCompra from "@/components/BotonPagarCompra";
+import SelectorMes from "@/components/SelectorMes";
 import {
-  agruparPorEstado,
+  agruparPorFecha,
   agruparPorMedio,
-  agruparPorMes,
   agruparPorProducto,
   agruparPorProveedor,
   historialDeCompras,
+  rangoDelMes,
   totalDesglosado,
-  type CompraDelHistorial,
-  type GrupoDeCompras,
 } from "@/lib/compras";
-import { fechaCorta, fechaLarga, hoyLocal } from "@/lib/fechas";
-import { formatearContenido, MEDIO_CORTO } from "@/lib/negocio";
+import { fechaLarga, hoyLocal } from "@/lib/fechas";
 import { formatearCentavos } from "@/lib/plata";
 
 export const dynamic = "force-dynamic";
@@ -22,52 +18,15 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Compras — El Osito" };
 
 const CORTES = [
-  { clave: "fecha", etiqueta: "Por fecha" },
-  { clave: "proveedor", etiqueta: "Por proveedor" },
-  { clave: "producto", etiqueta: "Por producto" },
-  { clave: "mes", etiqueta: "Por mes" },
-  { clave: "estado", etiqueta: "Por estado" },
-  { clave: "medio", etiqueta: "Por medio" },
+  { clave: "proveedor", etiqueta: "Proveedores" },
+  { clave: "fecha", etiqueta: "Días" },
+  { clave: "producto", etiqueta: "Productos" },
+  { clave: "medio", etiqueta: "Medios" },
 ] as const;
 
 type Corte = (typeof CORTES)[number]["clave"];
 
-const PERIODOS = [
-  { clave: "mes", etiqueta: "Este mes", meses: 0 },
-  { clave: "3meses", etiqueta: "3 meses", meses: 2 },
-  { clave: "ano", etiqueta: "12 meses", meses: 11 },
-  { clave: "todo", etiqueta: "Todo", meses: null },
-] as const;
-
-type Periodo = (typeof PERIODOS)[number]["clave"];
-
-const MES_LARGO = new Intl.DateTimeFormat("es-AR", {
-  month: "long",
-  year: "numeric",
-});
-
-/** "2026-09" → "septiembre de 2026" */
-function nombreDeMes(clave: string): string {
-  return MES_LARGO.format(new Date(`${clave}-01T12:00:00Z`));
-}
-
-/** El primer día del mes que arranca el período elegido. */
-function desdeDelPeriodo(periodo: Periodo, hoy: string): string | undefined {
-  const meses = PERIODOS.find((p) => p.clave === periodo)?.meses;
-  if (meses == null) return undefined;
-  const [anio, mes] = hoy.split("-").map(Number);
-  const inicio = new Date(Date.UTC(anio, mes - 1 - meses, 1));
-  return inicio.toISOString().slice(0, 10);
-}
-
-function enlace(corte: Corte, periodo: Periodo, impagas: boolean): string {
-  const params = new URLSearchParams();
-  if (corte !== "fecha") params.set("por", corte);
-  if (periodo !== "3meses") params.set("periodo", periodo);
-  if (impagas) params.set("impagas", "1");
-  const query = params.toString();
-  return query ? `/compras?${query}` : "/compras";
-}
+const MES = /^\d{4}-\d{2}$/;
 
 function Chip({
   href,
@@ -93,116 +52,51 @@ function Chip({
   );
 }
 
-/** Una compra, con sus renglones adentro de un desplegable. */
-function Compra({ compra }: { compra: CompraDelHistorial }) {
+/** Una tarjeta que lleva a otro nivel: proveedor o día. */
+function Puerta({
+  href,
+  titulo,
+  detalle,
+  monto,
+  impago,
+  aviso,
+}: {
+  href: string;
+  titulo: string;
+  detalle: string;
+  monto: number;
+  impago: number;
+  aviso?: boolean;
+}) {
   return (
-    <details className="group py-2">
-      <summary className="cursor-pointer list-none">
-        <span className="flex items-center justify-between gap-3">
-          <span className="min-w-0">
-            <span className="block truncate text-sm">{compra.proveedor}</span>
-            <span className="text-xs text-tinta-suave">
-              {fechaCorta(compra.fecha)}
-              {compra.pagadoEn
-                ? compra.pagadoEn === compra.fecha
-                  ? " · pagada"
-                  : ` · pagada el ${fechaCorta(compra.pagadoEn)}`
-                : " · sin pagar"}
-              {compra.medio && ` · ${MEDIO_CORTO[compra.medio]}`}
-              {compra.comprobante && ` · N.º ${compra.comprobante}`}
-              {compra.faltanPrecios && (
-                <span className="text-deuda"> · faltan precios</span>
-              )}
-            </span>
-          </span>
-          <span
-            className={
-              "cifra shrink-0 text-sm font-medium " +
-              (compra.pagadoEn ? "text-tinta" : "text-deuda")
-            }
-          >
-            {formatearCentavos(compra.montoCentavos)}
-          </span>
-        </span>
-      </summary>
-
-      <div className="mt-2 border-l border-linea pl-3">
-        {compra.renglones.length === 0 ? (
-          <p className="text-xs text-tinta-suave">
-            Se cargó sólo el total, sin detalle de qué vino.
-          </p>
-        ) : (
-          <ul className="space-y-0.5">
-            {compra.renglones.map((r) => (
-              <li
-                key={r.id}
-                className="flex flex-wrap items-baseline gap-x-2 text-xs text-tinta-suave"
-              >
-                <span className="text-tinta">{r.descripcion || "sin nombre"}</span>
-                <span className="cifra">
-                  {r.cantidad} × {formatearContenido(r.unidadesPorBulto, r.unidad)}
-                </span>
-                {r.importeCentavos != null && (
-                  <span className="cifra">
-                    {formatearCentavos(r.importeCentavos)}
-                  </span>
-                )}
-                {r.costoCentavos != null && (
-                  <span className="cifra text-tinta">
-                    {formatearCentavos(r.costoCentavos)} {r.porCada}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {compra.nota && (
-          <p className="mt-1 text-xs text-tinta-suave">{compra.nota}</p>
-        )}
-
-        <div className="mt-2 flex items-center gap-3">
-          <BotonPagarCompra
-            id={compra.id}
-            pagadoEn={compra.pagadoEn}
-            hoy={hoyLocal()}
-          />
-          <BotonAnularFila que="compra" id={compra.id} />
-        </div>
-      </div>
-    </details>
-  );
-}
-
-function Grupo({ grupo, titulo }: { grupo: GrupoDeCompras; titulo: string }) {
-  return (
-    <section className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="min-w-0 truncate font-display text-xl leading-none">
+    <Link
+      href={href}
+      className="flex items-center justify-between gap-3 rounded-2xl border border-linea bg-white/60 px-4 py-3.5 transition-colors hover:bg-white"
+    >
+      <span className="min-w-0">
+        <span className="block truncate font-display text-xl leading-none">
           {titulo}
-        </h2>
-        <span className="cifra shrink-0 text-sm font-medium">
-          {formatearCentavos(grupo.totalCentavos)}
         </span>
-      </div>
-      <p className="mt-1 text-xs text-tinta-suave">
-        {grupo.detalle}
-        {grupo.impagoCentavos > 0 && (
-          <span className="text-deuda">
-            {" · "}
-            {formatearCentavos(grupo.impagoCentavos)} sin pagar
-          </span>
-        )}
-        {grupo.faltanPrecios && (
-          <span className="text-deuda"> · con precios sin poner</span>
-        )}
-      </p>
-      <div className="mt-2 divide-y divide-linea border-t border-linea">
-        {grupo.compras.map((compra) => (
-          <Compra key={compra.id} compra={compra} />
-        ))}
-      </div>
-    </section>
+        <span className="mt-1 block text-xs text-tinta-suave">
+          {detalle}
+          {impago > 0 && (
+            <span className="text-deuda">
+              {" · "}
+              {formatearCentavos(impago)} sin pagar
+            </span>
+          )}
+          {aviso && <span className="text-deuda"> · faltan precios</span>}
+        </span>
+      </span>
+      <span className="flex shrink-0 items-center gap-2">
+        <span className="cifra text-sm font-medium">
+          {formatearCentavos(monto)}
+        </span>
+        <span aria-hidden="true" className="text-tinta-suave">
+          ›
+        </span>
+      </span>
+    </Link>
   );
 }
 
@@ -213,23 +107,18 @@ export default async function Compras({ searchParams }: PageProps<"/compras">) {
     return Array.isArray(valor) ? valor[0] : valor;
   };
 
+  const hoy = hoyLocal();
+  const mesActual = hoy.slice(0, 7);
+  const pedidoMes = leer("mes");
+  const mes = pedidoMes && MES.test(pedidoMes) ? pedidoMes : mesActual;
+
   const pedido = leer("por");
   const corte: Corte = CORTES.some((c) => c.clave === pedido)
     ? (pedido as Corte)
-    : "fecha";
+    : "proveedor";
 
-  const pedidoPeriodo = leer("periodo");
-  const periodo: Periodo = PERIODOS.some((p) => p.clave === pedidoPeriodo)
-    ? (pedidoPeriodo as Periodo)
-    : "3meses";
-
-  const soloImpagas = leer("impagas") === "1";
-
-  const hoy = hoyLocal();
-  const lista = await historialDeCompras({
-    desde: desdeDelPeriodo(periodo, hoy),
-    soloImpagas,
-  });
+  const { desde, hasta } = rangoDelMes(mes);
+  const lista = await historialDeCompras({ desde, hasta });
 
   const total = lista.reduce((t, c) => t + c.montoCentavos, 0);
   const impago = lista.reduce(
@@ -237,45 +126,38 @@ export default async function Compras({ searchParams }: PageProps<"/compras">) {
     0,
   );
 
+  const enlace = (c: Corte) =>
+    `/compras?mes=${mes}${c === "proveedor" ? "" : `&por=${c}`}`;
+
   const porProducto = corte === "producto" ? agruparPorProducto(lista) : [];
   const desglosado = corte === "producto" ? totalDesglosado(lista) : 0;
 
-  const grupos: { titulo: string; grupo: GrupoDeCompras }[] =
-    corte === "proveedor"
-      ? agruparPorProveedor(lista).map((g) => ({ titulo: g.titulo, grupo: g }))
-      : corte === "mes"
-        ? agruparPorMes(lista).map((g) => ({
-            titulo: nombreDeMes(g.clave),
-            grupo: g,
-          }))
-        : corte === "estado"
-          ? agruparPorEstado(lista).map((g) => ({ titulo: g.titulo, grupo: g }))
-          : corte === "medio"
-            ? agruparPorMedio(lista).map((g) => ({ titulo: g.titulo, grupo: g }))
-            : [];
-
   return (
     <div className="space-y-4">
-      <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-3xl leading-none">Compras</h1>
-        <p className="mt-1 text-sm text-tinta-suave">
-          Todo lo que entró de mercadería. Tocá una compra para ver qué vino y a
-          cuánto.
-        </p>
+        <SelectorMes
+          mes={mes}
+          base="/compras"
+          tope={mesActual}
+          extra={corte === "proveedor" ? undefined : { por: corte }}
+        />
       </div>
 
       <section className="rounded-2xl border border-linea bg-papel-hondo px-5 py-5">
         <p className="text-xs uppercase tracking-[0.18em] text-tinta-suave">
-          {soloImpagas ? "Sin pagar" : "Comprado en el período"}
+          Comprado en el mes
         </p>
         <p className="cifra mt-1 text-3xl font-medium sm:text-4xl">
           {formatearCentavos(total)}
         </p>
         <p className="mt-1 text-sm text-tinta-suave">
           {lista.length === 0
-            ? "No hay compras en este período."
-            : `${lista.length === 1 ? "1 compra" : lista.length + " compras"}`}
-          {!soloImpagas && impago > 0 && (
+            ? "No entró mercadería este mes."
+            : lista.length === 1
+              ? "1 compra"
+              : `${lista.length} compras`}
+          {impago > 0 && (
             <span className="text-deuda">
               {" · "}
               {formatearCentavos(impago)} todavía sin pagar
@@ -284,36 +166,13 @@ export default async function Compras({ searchParams }: PageProps<"/compras">) {
         </p>
       </section>
 
-      {/* Los cortes viven en la URL: se puede compartir el link de "lo que le
-          compré a Coca-Cola este año" y el server lo arma sin estado de nadie. */}
-      <div className="-mx-4 space-y-2 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+      <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
         <div className="flex gap-2">
           {CORTES.map((c) => (
-            <Chip
-              key={c.clave}
-              href={enlace(c.clave, periodo, soloImpagas)}
-              activo={c.clave === corte}
-            >
+            <Chip key={c.clave} href={enlace(c.clave)} activo={c.clave === corte}>
               {c.etiqueta}
             </Chip>
           ))}
-        </div>
-        <div className="flex gap-2">
-          {PERIODOS.map((p) => (
-            <Chip
-              key={p.clave}
-              href={enlace(corte, p.clave, soloImpagas)}
-              activo={p.clave === periodo}
-            >
-              {p.etiqueta}
-            </Chip>
-          ))}
-          <Chip
-            href={enlace(corte, periodo, !soloImpagas)}
-            activo={soloImpagas}
-          >
-            Sólo sin pagar
-          </Chip>
         </div>
       </div>
 
@@ -325,20 +184,59 @@ export default async function Compras({ searchParams }: PageProps<"/compras">) {
           </Link>
           .
         </p>
+      ) : corte === "proveedor" ? (
+        /* El nivel de arriba: a quién le compré este mes. Cada uno abre su
+           ficha, con sus productos y su historial. */
+        <div className="space-y-3">
+          {agruparPorProveedor(lista).map((g) => (
+            <Puerta
+              key={g.clave}
+              href={`/compras/proveedor/${g.clave}?mes=${mes}`}
+              titulo={g.titulo}
+              detalle={g.detalle}
+              monto={g.totalCentavos}
+              impago={g.impagoCentavos}
+              aviso={g.faltanPrecios}
+            />
+          ))}
+        </div>
       ) : corte === "fecha" ? (
-        <section className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5">
-          <div className="divide-y divide-linea">
-            {lista.map((compra) => (
-              <Compra key={compra.id} compra={compra} />
-            ))}
-          </div>
-        </section>
-      ) : corte === "producto" ? (
+        <div className="space-y-3">
+          {agruparPorFecha(lista).map((g) => (
+            <Puerta
+              key={g.clave}
+              href={`/compras/dia/${g.clave}`}
+              titulo={fechaLarga(g.clave)}
+              detalle={g.detalle}
+              monto={g.totalCentavos}
+              impago={g.impagoCentavos}
+              aviso={g.faltanPrecios}
+            />
+          ))}
+        </div>
+      ) : corte === "medio" ? (
+        <div className="space-y-3">
+          {agruparPorMedio(lista).map((g) => (
+            <section
+              key={g.clave}
+              className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5"
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 className="font-display text-xl leading-none">{g.titulo}</h2>
+                <span className="cifra text-sm font-medium">
+                  {formatearCentavos(g.totalCentavos)}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-tinta-suave">{g.detalle}</p>
+            </section>
+          ))}
+        </div>
+      ) : (
         <>
           {/*
-            Acá se agrupan renglones y no compras, así que la suma de los grupos
-            NO da el total de arriba. Decirlo es la diferencia entre una pantalla
-            que se entiende y una que parece tener un error de cuentas.
+            Acá se agrupan renglones y no facturas, así que la suma de los
+            grupos NO da el total de arriba. Decirlo es la diferencia entre una
+            pantalla que se entiende y una que parece tener un error de cuentas.
           */}
           <p className="rounded-xl bg-papel-hondo px-3 py-2 text-xs text-tinta-suave">
             Este corte suma renglones, no facturas. De{" "}
@@ -348,77 +246,43 @@ export default async function Compras({ searchParams }: PageProps<"/compras">) {
             desglose.
           </p>
 
-          {porProducto.map((p) => (
-            <section
-              key={p.clave}
-              className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5"
-            >
-              <div className="flex items-baseline justify-between gap-3">
-                <h2 className="min-w-0 truncate font-display text-xl leading-none">
-                  {p.nombre}
-                </h2>
-                <span className="cifra shrink-0 text-sm font-medium">
-                  {formatearCentavos(p.totalCentavos)}
-                </span>
-              </div>
-
-              <p className="mt-1 text-xs text-tinta-suave">
-                {p.veces === 1 ? "1 compra" : `${p.veces} compras`}
-                {p.ultimoCosto?.costoCentavos != null && (
-                  <>
-                    {" · última a "}
-                    <span className="cifra text-tinta">
-                      {formatearCentavos(p.ultimoCosto.costoCentavos)}
-                    </span>{" "}
-                    {p.ultimoCosto.porCada}
-                  </>
-                )}
-                {p.variacion != null && p.variacion !== 0 && (
-                  <span className={p.variacion > 0 ? "text-deuda" : "text-pago"}>
-                    {" · "}
-                    {p.variacion > 0 ? "+" : ""}
-                    {p.variacion}% desde la primera del período
+          <div className="space-y-3">
+            {porProducto.map((p) => (
+              <section
+                key={p.clave}
+                className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5"
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <h2 className="min-w-0 truncate font-display text-xl leading-none">
+                    {p.nombre}
+                  </h2>
+                  <span className="cifra shrink-0 text-sm font-medium">
+                    {formatearCentavos(p.totalCentavos)}
                   </span>
-                )}
-              </p>
-
-              <ul className="mt-2 divide-y divide-linea border-t border-linea">
-                {p.compras.map((c, i) => (
-                  <li
-                    key={c.compraId + i}
-                    className="flex flex-wrap items-baseline justify-between gap-x-3 py-1.5 text-xs"
-                  >
-                    <span className="text-tinta-suave">
-                      {fechaCorta(c.fecha)} · {c.proveedor}
+                </div>
+                <p className="mt-1 text-xs text-tinta-suave">
+                  {p.veces === 1 ? "1 compra" : `${p.veces} compras`}
+                  {p.ultimoCosto?.costoCentavos != null && (
+                    <>
+                      {" · última a "}
+                      <span className="cifra text-tinta">
+                        {formatearCentavos(p.ultimoCosto.costoCentavos)}
+                      </span>{" "}
+                      {p.ultimoCosto.porCada}
+                    </>
+                  )}
+                  {p.variacion != null && p.variacion !== 0 && (
+                    <span className={p.variacion > 0 ? "text-deuda" : "text-pago"}>
+                      {" · "}
+                      {p.variacion > 0 ? "+" : ""}
+                      {p.variacion}% en el mes
                     </span>
-                    <span className="flex items-baseline gap-3">
-                      {c.costoCentavos != null && (
-                        <span className="cifra text-tinta">
-                          {formatearCentavos(c.costoCentavos)} {c.porCada}
-                        </span>
-                      )}
-                      <span className="cifra text-tinta-suave">
-                        {c.importeCentavos != null
-                          ? formatearCentavos(c.importeCentavos)
-                          : "sin importe"}
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
+                  )}
+                </p>
+              </section>
+            ))}
+          </div>
         </>
-      ) : (
-        grupos.map(({ titulo, grupo }) => (
-          <Grupo key={grupo.clave} grupo={grupo} titulo={titulo} />
-        ))
-      )}
-
-      {lista.length > 0 && (
-        <p className="text-xs text-tinta-suave">
-          Desde el {fechaLarga(lista[lista.length - 1].fecha)}.
-        </p>
       )}
     </div>
   );

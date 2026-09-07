@@ -164,7 +164,8 @@ const COMPRAS: CompraSemilla[] = [
       // Comprado por peso: el precio que sirve es el del kilo, no el del gramo.
       { descripcion: "yerba", cantidad: 4, unidadesPorBulto: 1000, unidad: "gr", importe: 38000 },
     ],
-    total: 185000,
+    // 144.000 + 41.000 + 96.000 + 38.000
+    total: 319000,
     dias: 1,
     pagadaHace: 1,
     medio: "banco",
