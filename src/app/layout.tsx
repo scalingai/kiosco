@@ -15,8 +15,9 @@ const serif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "El Osito — Fiado",
-  description: "El fiado del maxikiosco: quién debe, cuánto y desde cuándo.",
+  title: "El Osito",
+  description:
+    "El maxikiosco de punta a punta: fiado, caja del día, ventas y reposición.",
   applicationName: "El Osito",
   manifest: "/manifest.webmanifest",
   // iOS no lee el manifest: la instalación desde "Agregar a inicio" se

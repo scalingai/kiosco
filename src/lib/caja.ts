@@ -3,6 +3,7 @@ import "server-only";
 import {
   and,
   asc,
+  desc,
   eq,
   gte,
   inArray,
@@ -20,6 +21,7 @@ import {
   comprasItems,
   gastos,
   movimientos,
+  productos,
   proveedores,
   ventas,
 } from "@/db/schema";
@@ -32,6 +34,7 @@ import {
   type VentaAGuardar,
 } from "@/lib/negocio";
 import { normalizarNombre } from "@/lib/nombres";
+import { buscarOCrearProductoCon } from "@/lib/stock";
 
 /** Mismo motivo que en consultas.ts: un id que no es UUID es "no existe", no un 500. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -180,9 +183,33 @@ export async function registrarCompra(entrada: CompraAGuardar) {
       .returning();
 
     if (lista.length) {
+      // Cada renglón con nombre engancha con su producto del catálogo, y lo
+      // crea si es la primera vez. Así la lista de reposición se llena sola con
+      // lo que de verdad se compra, en vez de depender de que alguien se siente
+      // a cargarla.
+      const enganchados = [];
+      for (const renglon of lista) {
+        const nombre = renglon.descripcion?.trim();
+        const producto = nombre
+          ? await buscarOCrearProductoCon(tx, nombre)
+          : null;
+
+        // El proveedor del producto es siempre el de la última compra: si
+        // cambiaste de distribuidor, la lista tiene que decir el nuevo.
+        if (producto) {
+          await tx
+            .update(productos)
+            .set({ proveedorId })
+            .where(eq(productos.id, producto.id));
+        }
+
+        enganchados.push({ renglon, productoId: producto?.id ?? null });
+      }
+
       await tx.insert(comprasItems).values(
-        lista.map((renglon, posicion) => ({
+        enganchados.map(({ renglon, productoId }, posicion) => ({
           compraId: fila.id,
+          productoId,
           descripcion: renglon.descripcion?.trim() || null,
           cantidad: Math.max(1, Math.round(renglon.cantidad || 1)),
           unidadesPorBulto: Math.max(
@@ -619,4 +646,47 @@ export async function resumenDelMes(fecha: string): Promise<ResumenMes> {
       ventasCentavos + cobrosCentavos - gastosCentavos - pagosProveedoresCentavos,
     dias: ultimo,
   };
+}
+
+export type DiaDeVentas = {
+  fecha: string;
+  totalCentavos: number;
+  cargas: FilaVenta[];
+};
+
+/**
+ * Las ventas agrupadas por día, lo más nuevo arriba. Se devuelven también las
+ * cargas sueltas de cada día: el total de un día son varios renglones (mañana,
+ * tarde) y hay que poder ver cuál anular sin adivinar.
+ */
+export async function ventasPorDia(dias = 60): Promise<DiaDeVentas[]> {
+  const db = await getDb();
+  const filas = await db
+    .select({
+      id: ventas.id,
+      fecha: ventas.fecha,
+      montoCentavos: ventas.montoCentavos,
+      nota: ventas.nota,
+    })
+    .from(ventas)
+    .where(isNull(ventas.anuladoEn))
+    .orderBy(desc(ventas.fecha), asc(ventas.creadoEn));
+
+  const porFecha = new Map<string, DiaDeVentas>();
+  for (const fila of filas) {
+    const dia = porFecha.get(fila.fecha) ?? {
+      fecha: fila.fecha,
+      totalCentavos: 0,
+      cargas: [],
+    };
+    dia.totalCentavos += fila.montoCentavos;
+    dia.cargas.push({
+      id: fila.id,
+      montoCentavos: fila.montoCentavos,
+      nota: fila.nota,
+    });
+    porFecha.set(fila.fecha, dia);
+  }
+
+  return [...porFecha.values()].slice(0, dias);
 }

@@ -20,7 +20,7 @@ export default function SelectorDia({ fecha }: { fecha: string }) {
   const hoy = hoyLocal();
 
   function ir(destino: string) {
-    router.push(destino === hoy ? "/dia" : `/dia?f=${destino}`);
+    router.push(destino === hoy ? "/caja" : `/caja?f=${destino}`);
   }
 
   const flecha =

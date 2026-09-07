@@ -29,6 +29,13 @@
       "when": 1788817539600,
       "tag": "0003_caja-diaria",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788818690335,
+      "tag": "0004_stock",
+      "breakpoints": true
     }
   ]
 }

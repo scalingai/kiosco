@@ -245,6 +245,14 @@ export const comprasItems = pgTable(
       .notNull()
       .references(() => compras.id, { onDelete: "cascade" }),
     descripcion: text("descripcion"),
+    /**
+     * Con qué producto del catálogo engancha este renglón. Es lo que hace que
+     * la lista de reposición se llene sola: si falta, el renglón igual vale
+     * como plata, sólo que no alimenta el catálogo.
+     */
+    productoId: uuid("producto_id").references(() => productos.id, {
+      onDelete: "set null",
+    }),
     /** cuántos bultos entraron (packs, cajas, bolsas… o unidades sueltas) */
     cantidad: integer("cantidad").notNull().default(1),
     /** cuántas unidades de venta trae cada bulto; 1 si se compra suelto */
@@ -303,3 +311,38 @@ export type CompraItem = typeof comprasItems.$inferSelect;
 export type Gasto = typeof gastos.$inferSelect;
 export type Venta = typeof ventas.$inferSelect;
 export type CategoriaGasto = (typeof categoriaGasto.enumValues)[number];
+
+/**
+ * El catálogo de lo que se vende. NO es un inventario: no lleva cuántas
+ * unidades hay, porque para eso habría que cargar cada venta una por una y una
+ * cuenta que nadie actualiza miente peor que no tenerla.
+ *
+ * Lo que sí lleva es lo que se usa para reponer: a quién se le compra, a cuánto
+ * salió la última vez, y si falta. Y se llena solo: cada renglón de compra que
+ * tenga nombre engancha con su producto, así la lista aparece sin que nadie se
+ * siente a cargarla.
+ */
+export const productos = pgTable(
+  "productos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nombre: text("nombre").notNull(),
+    nombreNormalizado: text("nombre_normalizado").notNull(),
+    /** a quién se le suele comprar; lo escribe la última compra */
+    proveedorId: uuid("proveedor_id").references(() => proveedores.id, {
+      onDelete: "set null",
+    }),
+    /** marcado a mano cuando se ve el hueco en la góndola */
+    falta: boolean("falta").notNull().default(false),
+    archivadoEn: timestamp("archivado_en", { withTimezone: true }),
+    creadoEn: timestamp("creado_en", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("productos_nombre_normalizado_key").on(t.nombreNormalizado),
+    index("productos_falta_idx").on(t.falta),
+  ],
+);
+
+export type Producto = typeof productos.$inferSelect;

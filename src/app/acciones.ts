@@ -18,6 +18,11 @@ import {
   registrarMovimientos,
   type MovimientoAGuardar,
 } from "@/lib/consultas";
+import {
+  archivarProducto,
+  crearProducto,
+  marcarFalta,
+} from "@/lib/stock";
 import type {
   CompraAGuardar,
   GastoAGuardar,
@@ -166,6 +171,46 @@ export async function crearProveedor(
     const proveedor = await buscarOCrearProveedor(nombre);
     revalidatePath("/", "layout");
     return { ok: true, datos: { id: proveedor.id } };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+/* ── Stock: el catálogo de reposición ─────────────────────────────────────── */
+
+export async function marcarQueFalta(
+  id: string,
+  falta: boolean,
+): Promise<Resultado> {
+  try {
+    const fila = await marcarFalta(id, falta);
+    if (!fila) return { ok: false, error: "Ese producto ya no está" };
+    revalidatePath("/", "layout");
+    return { ok: true, datos: null };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+export async function agregarProducto(
+  nombre: string,
+): Promise<Resultado<{ id: string }>> {
+  try {
+    const producto = await crearProducto(nombre);
+    revalidatePath("/", "layout");
+    return { ok: true, datos: { id: producto.id } };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+/** Sacarlo de la lista sin borrar las compras que lo mencionan. */
+export async function archivar(id: string): Promise<Resultado> {
+  try {
+    const fila = await archivarProducto(id);
+    if (!fila) return { ok: false, error: "Ese producto ya estaba archivado" };
+    revalidatePath("/", "layout");
+    return { ok: true, datos: null };
   } catch (error) {
     return { ok: false, error: mensaje(error) };
   }

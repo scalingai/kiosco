@@ -16,7 +16,7 @@ import { formatearCentavos } from "@/lib/plata";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "El día — El Osito" };
+export const metadata: Metadata = { title: "Caja — El Osito" };
 
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -46,7 +46,7 @@ function Vacio({ children }: { children: React.ReactNode }) {
   return <p className="text-sm text-tinta-suave">{children}</p>;
 }
 
-export default async function Dia({ searchParams }: PageProps<"/dia">) {
+export default async function Caja({ searchParams }: PageProps<"/caja">) {
   const params = await searchParams;
   const pedida = Array.isArray(params.f) ? params.f[0] : params.f;
   // Una fecha rota en la URL no puede tumbar la pantalla: se cae en hoy.

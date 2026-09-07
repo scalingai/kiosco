@@ -26,7 +26,7 @@ export default async function Ficha({ params }: PageProps<"/cliente/[id]">) {
   return (
     <div className="space-y-6">
       <Link
-        href="/"
+        href="/fiado"
         className="inline-block text-sm text-tinta-suave underline underline-offset-4"
       >
         ← Todos los clientes

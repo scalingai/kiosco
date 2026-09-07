@@ -10,6 +10,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import {
@@ -19,6 +20,7 @@ import {
   gastos,
   items,
   movimientos,
+  productos,
   proveedores,
   ventas,
 } from "../src/db/schema.ts";
@@ -286,6 +288,8 @@ async function main() {
   // Si los proveedores ya estaban, tampoco cargamos su historia de nuevo: esto
   // se corre varias veces mientras se prueba.
   if (idPorProveedor.size === PROVEEDORES.length) {
+    const idPorProducto = new Map<string, string>();
+
     for (const c of COMPRAS) {
       const lista = c.items ?? [];
       const totalDeclarado = c.total != null;
@@ -306,18 +310,39 @@ async function main() {
         })
         .returning();
 
-      if (lista.length) {
-        await db.insert(comprasItems).values(
-          lista.map((renglon, posicion) => ({
-            compraId: guardada.id,
-            descripcion: renglon.descripcion,
-            cantidad: renglon.cantidad,
-            unidadesPorBulto: renglon.unidadesPorBulto ?? 1,
-            importeCentavos:
-              renglon.importe != null ? centavos(renglon.importe) : null,
-            posicion,
-          })),
-        );
+      // Cada renglón engancha con su producto, igual que hace la app cuando
+      // cargás una compra de verdad: así el catálogo de stock aparece solo.
+      let posicion = 0;
+      for (const renglon of lista) {
+        const normalizado = normalizarNombre(renglon.descripcion);
+        let productoId = idPorProducto.get(normalizado);
+        if (!productoId) {
+          const [creado] = await db
+            .insert(productos)
+            .values({
+              nombre: renglon.descripcion,
+              nombreNormalizado: normalizado,
+              proveedorId: idPorProveedor.get(c.proveedor)!,
+            })
+            .onConflictDoNothing({ target: productos.nombreNormalizado })
+            .returning();
+          if (creado) {
+            productoId = creado.id;
+            idPorProducto.set(normalizado, creado.id);
+          }
+        }
+
+        await db.insert(comprasItems).values({
+          compraId: guardada.id,
+          productoId: productoId ?? null,
+          descripcion: renglon.descripcion,
+          cantidad: renglon.cantidad,
+          unidadesPorBulto: renglon.unidadesPorBulto ?? 1,
+          importeCentavos:
+            renglon.importe != null ? centavos(renglon.importe) : null,
+          posicion,
+        });
+        posicion += 1;
       }
     }
 
@@ -338,7 +363,27 @@ async function main() {
       })),
     );
 
-    console.log("cargado: proveedores, compras, gastos y ventas");
+    // Dos cosas marcadas como faltantes: es la pantalla que se mira antes de
+    // salir a comprar, y vacía no se entiende para qué sirve.
+    for (const nombre of ["yerba", "gaseosa 2,25L"]) {
+      const [creado] = await db
+        .insert(productos)
+        .values({
+          nombre,
+          nombreNormalizado: normalizarNombre(nombre),
+          falta: true,
+        })
+        .onConflictDoNothing({ target: productos.nombreNormalizado })
+        .returning();
+      if (!creado) {
+        await db
+          .update(productos)
+          .set({ falta: true })
+          .where(eq(productos.nombreNormalizado, normalizarNombre(nombre)));
+      }
+    }
+
+    console.log("cargado: proveedores, compras, gastos, ventas y stock");
   } else {
     console.log("ya estaban: proveedores");
   }

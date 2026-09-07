@@ -51,6 +51,14 @@ pack. El renglón de una compra guarda lo que dice la factura —cuántos bultos
 al mostrarlo. Guardarlo redondeado hace que el renglón deje de sumar lo que se
 pagó: $41.000 entre 18 unidades no da un número redondo.
 
+**Stock no cuenta unidades.** `productos` es un catálogo de reposición, no un
+inventario: qué se vende, a quién se le compra, a cuánto salió la última vez y
+si falta. No agregues una columna de unidades en existencia — sin cargar cada
+venta se desincroniza en días, y un número que miente es peor que no tenerlo. El
+último costo tampoco se guarda: se lee del último renglón de compra enganchado a
+ese producto. El catálogo se llena solo desde `registrarCompra`, que engancha
+cada renglón con nombre a su producto.
+
 **Una compra impaga no toca la caja.** `compras.fecha` es cuándo llegó la
 mercadería; `compras.pagado_en` es cuándo salió la plata, y en null significa
 que se le debe al proveedor. La salida del día se cuenta por `pagado_en`, nunca

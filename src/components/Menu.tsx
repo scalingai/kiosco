@@ -73,6 +73,60 @@ function IconoHistorial() {
   );
 }
 
+function IconoFiado() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5 shrink-0"
+      aria-hidden="true"
+    >
+      <path d="M4 6.5h16v11H4z" />
+      <path d="M8 6.5v11M4 10h4M4 14h4" />
+      <path d="M12 11h5M12 14h3" />
+    </svg>
+  );
+}
+
+function IconoVentas() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5 shrink-0"
+      aria-hidden="true"
+    >
+      <path d="M4 19V9.5M10 19V5M16 19v-6.5M4 19h16" />
+    </svg>
+  );
+}
+
+function IconoStock() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5 shrink-0"
+      aria-hidden="true"
+    >
+      <path d="M3.5 7.5 12 3.5l8.5 4v9L12 20.5l-8.5-4z" />
+      <path d="m3.5 7.5 8.5 4 8.5-4M12 11.5v9" />
+    </svg>
+  );
+}
+
 function IconoMicrofono({ grande }: { grande?: boolean }) {
   return (
     <svg
@@ -93,9 +147,24 @@ function IconoMicrofono({ grande }: { grande?: boolean }) {
 
 const PAGINAS = [
   { href: "/", etiqueta: "Inicio", Icono: IconoCasa },
-  { href: "/dia", etiqueta: "El día", Icono: IconoDia },
+  { href: "/fiado", etiqueta: "Fiado", Icono: IconoFiado },
+  { href: "/caja", etiqueta: "Caja", Icono: IconoDia },
+  { href: "/ventas", etiqueta: "Ventas", Icono: IconoVentas },
+  { href: "/stock", etiqueta: "Stock", Icono: IconoStock },
   { href: "/historial", etiqueta: "Historial", Icono: IconoHistorial },
 ] as const;
+
+/**
+ * Cómo se llama la pantalla que estás mirando. En el celular la barra de arriba
+ * es lo único que queda, así que decir dónde estás es lo que tiene que hacer:
+ * un botón solo, sin texto, no te ubica cuando volvés a la app al rato.
+ */
+function tituloDe(ruta: string): string {
+  const pagina = PAGINAS.find((p) => p.href === ruta);
+  if (pagina) return pagina.etiqueta;
+  if (ruta.startsWith("/cliente/")) return "Cuenta del cliente";
+  return "El Osito";
+}
 
 /**
  * El menú de la app: una columna fija en pantalla grande y un cajón que se
@@ -247,6 +316,10 @@ export default function Menu({
           </svg>
         </button>
 
+        <span className="min-w-0 flex-1 truncate font-display text-xl leading-none">
+          {tituloDe(ruta)}
+        </span>
+
         {/*
           Mientras graba, el botón de frenar tiene que estar a la vista sí o sí:
           si viviera sólo adentro del cajón, quedaría un micrófono abierto que
@@ -258,7 +331,7 @@ export default function Menu({
             onClick={grabando ? onFrenar : undefined}
             disabled={procesando}
             className={
-              "ml-auto flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white disabled:opacity-70 " +
+              "flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white disabled:opacity-70 " +
               (grabando ? "bg-deuda" : "bg-acento")
             }
           >
