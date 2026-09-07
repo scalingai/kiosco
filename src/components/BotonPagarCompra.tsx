@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { despagarCompra, pagarCompra } from "@/app/acciones";
+import { ETIQUETA_MEDIO, MEDIOS, type MedioPago } from "@/lib/negocio";
 
 /**
  * Marcar una compra como pagada mueve plata: la salida cae en el día que se
@@ -22,6 +23,7 @@ export default function BotonPagarCompra({
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   const [fecha, setFecha] = useState(hoy);
+  const [medio, setMedio] = useState<MedioPago>("efectivo");
   const [error, setError] = useState<string | null>(null);
   const [pendiente, empezar] = useTransition();
 
@@ -73,10 +75,22 @@ export default function BotonPagarCompra({
         aria-label="Día en que se pagó"
         className="cifra rounded-lg border border-linea bg-white px-2 py-1"
       />
+      <select
+        value={medio}
+        onChange={(e) => setMedio(e.target.value as MedioPago)}
+        aria-label="Con qué se pagó"
+        className="rounded-lg border border-linea bg-white px-2 py-1"
+      >
+        {MEDIOS.map((m) => (
+          <option key={m} value={m}>
+            {ETIQUETA_MEDIO[m]}
+          </option>
+        ))}
+      </select>
       <button
         type="button"
         disabled={pendiente}
-        onClick={() => correr(() => pagarCompra(id, fecha))}
+        onClick={() => correr(() => pagarCompra(id, fecha, medio))}
         className="rounded-full bg-acento px-2.5 py-1 font-medium text-white disabled:opacity-45"
       >
         Pagada

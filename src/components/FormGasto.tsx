@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { guardarGasto } from "@/app/acciones";
+import SelectorMedio from "@/components/SelectorMedio";
 import { AVISO_TARDANZA, conLimiteDeTiempo } from "@/lib/espera";
 import {
   CATEGORIAS_GASTO,
   ETIQUETA_GASTO,
   type CategoriaGasto,
+  type MedioPago,
 } from "@/lib/negocio";
 import { parsearMonto } from "@/lib/plata";
 
@@ -27,6 +29,7 @@ export default function FormGasto({
   const [categoria, setCategoria] = useState<CategoriaGasto>("otros");
   const [monto, setMonto] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [medio, setMedio] = useState<MedioPago>("efectivo");
   const [cuando, setCuando] = useState(fecha);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -43,7 +46,13 @@ export default function FormGasto({
 
     setGuardando(true);
     const espera = await conLimiteDeTiempo(
-      guardarGasto({ categoria, montoCentavos, descripcion, fecha: cuando }),
+      guardarGasto({
+        categoria,
+        montoCentavos,
+        descripcion,
+        fecha: cuando,
+        medio,
+      }),
     );
     setGuardando(false);
 
@@ -102,6 +111,8 @@ export default function FormGasto({
           className="mt-1 w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm"
         />
       </label>
+
+      <SelectorMedio valor={medio} onCambio={setMedio} etiqueta="Con qué se pagó" />
 
       <label className="block">
         <span className="text-xs text-tinta-suave">Día</span>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { guardarMovimientos } from "@/app/acciones";
 import EditorItems from "@/components/EditorItems";
+import SelectorMedio from "@/components/SelectorMedio";
 import { AVISO_TARDANZA, conLimiteDeTiempo } from "@/lib/espera";
 import { hoyLocal } from "@/lib/fechas";
 import {
@@ -14,6 +15,7 @@ import {
   sumarItems,
   type ItemBorrador,
 } from "@/lib/movimiento";
+import type { MedioPago } from "@/lib/negocio";
 import { centavosAPesos, formatearCentavos, parsearMonto } from "@/lib/plata";
 
 type Candidato = { id: string; nombre: string };
@@ -40,6 +42,7 @@ export default function FormMovimiento({
   const [items, setItems] = useState<ItemBorrador[]>([itemVacio()]);
   const [monto, setMonto] = useState("");
   const [nota, setNota] = useState("");
+  const [medio, setMedio] = useState<MedioPago>("efectivo");
   const [fecha, setFecha] = useState(hoyLocal());
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -110,6 +113,8 @@ export default function FormMovimiento({
         items: itemsAGuardar,
         nota,
         fecha,
+        // Un fiado no mueve plata: el medio sólo viaja cuando es un pago.
+        medio: esPago ? medio : undefined,
         origen: "manual",
       },
       ]),
@@ -182,6 +187,10 @@ export default function FormMovimiento({
         </label>
 
         {!esPago && <EditorItems items={items} onCambio={setItems} />}
+
+        {esPago && (
+          <SelectorMedio valor={medio} onCambio={setMedio} etiqueta="Cómo pagó" />
+        )}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block">

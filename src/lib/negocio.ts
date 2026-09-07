@@ -5,6 +5,24 @@
  */
 import { parsearMonto } from "@/lib/plata";
 
+export const MEDIOS = ["efectivo", "mercadopago", "banco"] as const;
+
+export type MedioPago = (typeof MEDIOS)[number];
+
+/** Cómo se nombra cada medio en pantalla. */
+export const ETIQUETA_MEDIO: Record<MedioPago, string> = {
+  efectivo: "Efectivo",
+  mercadopago: "Mercado Pago",
+  banco: "Banco",
+};
+
+/** Cortito, para meter al lado de un monto sin ocupar media fila. */
+export const MEDIO_CORTO: Record<MedioPago, string> = {
+  efectivo: "efvo",
+  mercadopago: "MP",
+  banco: "banco",
+};
+
 export const CATEGORIAS_GASTO = [
   "alquiler",
   "servicios",
@@ -43,6 +61,7 @@ export type VentaAGuardar = {
   montoCentavos: number;
   nota?: string | null;
   fecha: string;
+  medio: MedioPago;
 };
 
 export type GastoAGuardar = {
@@ -50,6 +69,7 @@ export type GastoAGuardar = {
   montoCentavos: number;
   descripcion?: string | null;
   fecha: string;
+  medio: MedioPago;
 };
 
 export const UNIDADES = ["un", "gr", "ml"] as const;
@@ -89,6 +109,8 @@ export type CompraAGuardar = {
   fecha: string;
   /** Fecha en que se pagó. `null` deja la compra a cuenta del proveedor. */
   pagadoEn: string | null;
+  /** Con qué se pagó. Va junto con `pagadoEn`: sin pago no hay medio. */
+  medio: MedioPago | null;
   comprobante?: string | null;
   nota?: string | null;
 };
@@ -237,4 +259,35 @@ export function aRenglonesAGuardar(
 /** Cuántos renglones quedaron sin importe: son los que no suman al total. */
 export function contarSinImporte(lista: RenglonBorrador[]): number {
   return renglonesCargados(lista).filter((r) => !r.importe.trim()).length;
+}
+
+export type PorMedio = Record<MedioPago, number>;
+
+export function medioVacio(): PorMedio {
+  return { efectivo: 0, mercadopago: 0, banco: 0 };
+}
+
+/**
+ * Reparte una plata entre los tres medios. Se usa para el día: "quedó
+ * $300.000" no sirve si no se sabe cuánto de eso está en el cajón y cuánto en
+ * Mercado Pago, que es justo lo que se necesita para saber con qué se le puede
+ * pagar al proveedor que viene mañana.
+ */
+export function sumarPorMedio<T>(
+  filas: T[],
+  medio: (fila: T) => MedioPago,
+  monto: (fila: T) => number,
+): PorMedio {
+  const total = medioVacio();
+  for (const fila of filas) total[medio(fila)] += monto(fila);
+  return total;
+}
+
+/** Resta dos repartos: entradas menos salidas, medio por medio. */
+export function restarPorMedio(entro: PorMedio, salio: PorMedio): PorMedio {
+  return {
+    efectivo: entro.efectivo - salio.efectivo,
+    mercadopago: entro.mercadopago - salio.mercadopago,
+    banco: entro.banco - salio.banco,
+  };
 }

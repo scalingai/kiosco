@@ -11,7 +11,13 @@ import {
   resumenDelMes,
 } from "@/lib/caja";
 import { fechaCorta, fechaLarga, hoyLocal } from "@/lib/fechas";
-import { ETIQUETA_GASTO, formatearContenido } from "@/lib/negocio";
+import {
+  ETIQUETA_GASTO,
+  ETIQUETA_MEDIO,
+  formatearContenido,
+  MEDIOS,
+  MEDIO_CORTO,
+} from "@/lib/negocio";
 import { formatearCentavos } from "@/lib/plata";
 import { listarNombresDeProductos } from "@/lib/stock";
 
@@ -119,6 +125,33 @@ export default async function Caja({ searchParams }: PageProps<"/caja">) {
           </div>
         </dl>
 
+        {/* Las tres cajas por separado: es lo que contesta "¿tengo efectivo
+            para pagarle al que viene mañana?". */}
+        <ul className="mt-3 grid grid-cols-3 gap-2">
+          {MEDIOS.map((medio) => {
+            const queda = balance.resultadoPorMedio[medio];
+            return (
+              <li
+                key={medio}
+                className="rounded-xl bg-white/70 px-2.5 py-2 text-center"
+              >
+                <span className="block text-xs text-tinta-suave">
+                  {ETIQUETA_MEDIO[medio]}
+                </span>
+                <span
+                  className={
+                    "cifra mt-0.5 block text-sm font-medium " +
+                    (queda < 0 ? "text-deuda" : "text-tinta")
+                  }
+                >
+                  {queda < 0 ? "−" : ""}
+                  {formatearCentavos(Math.abs(queda))}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+
         {balance.fiadoOtorgadoCentavos > 0 && (
           <p className="mt-3 text-xs text-tinta-suave">
             Además fiaste{" "}
@@ -151,6 +184,10 @@ export default async function Caja({ searchParams }: PageProps<"/caja">) {
               >
                 <span className="min-w-0 text-sm">
                   {v.nota || <span className="text-tinta-suave">Venta</span>}
+                  <span className="text-xs text-tinta-suave">
+                    {" · "}
+                    {MEDIO_CORTO[v.medio]}
+                  </span>
                 </span>
                 <span className="flex shrink-0 items-center gap-3">
                   <span className="cifra text-sm font-medium text-pago">
@@ -207,6 +244,7 @@ export default async function Caja({ searchParams }: PageProps<"/caja">) {
                           : c.pagadoEn
                             ? `pagada el ${fechaCorta(c.pagadoEn)}`
                             : "a cuenta, sin pagar"}
+                      {c.medio && ` · ${MEDIO_CORTO[c.medio]}`}
                     </span>
                     {c.comprobante && <span>N.º {c.comprobante}</span>}
                     {c.nota && <span>{c.nota}</span>}
@@ -274,11 +312,10 @@ export default async function Caja({ searchParams }: PageProps<"/caja">) {
                   <span className="block truncate text-sm">
                     {g.descripcion || ETIQUETA_GASTO[g.categoria]}
                   </span>
-                  {g.descripcion && (
-                    <span className="text-xs text-tinta-suave">
-                      {ETIQUETA_GASTO[g.categoria]}
-                    </span>
-                  )}
+                  <span className="text-xs text-tinta-suave">
+                    {g.descripcion && ETIQUETA_GASTO[g.categoria] + " · "}
+                    {MEDIO_CORTO[g.medio]}
+                  </span>
                 </span>
                 <span className="flex shrink-0 items-center gap-3">
                   <span className="cifra text-sm font-medium text-deuda">
@@ -309,8 +346,13 @@ export default async function Caja({ searchParams }: PageProps<"/caja">) {
                 >
                   {c.cliente}
                 </Link>
-                <span className="cifra shrink-0 text-sm font-medium text-pago">
-                  {formatearCentavos(c.montoCentavos)}
+                <span className="flex shrink-0 items-baseline gap-2">
+                  <span className="text-xs text-tinta-suave">
+                    {MEDIO_CORTO[c.medio]}
+                  </span>
+                  <span className="cifra text-sm font-medium text-pago">
+                    {formatearCentavos(c.montoCentavos)}
+                  </span>
                 </span>
               </li>
             ))}

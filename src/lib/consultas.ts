@@ -239,6 +239,7 @@ export async function registrarMovimientos(porGuardar: MovimientoAGuardar[]) {
           totalDeclarado,
           nota: entrada.nota?.trim() || null,
           fecha: entrada.fecha,
+          medio: entrada.medio ?? "efectivo",
           origen: entrada.origen,
           notaId: entrada.notaId ?? null,
         })

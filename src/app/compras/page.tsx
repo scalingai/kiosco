@@ -4,6 +4,7 @@ import BotonAnularFila from "@/components/BotonAnularFila";
 import BotonPagarCompra from "@/components/BotonPagarCompra";
 import {
   agruparPorEstado,
+  agruparPorMedio,
   agruparPorMes,
   agruparPorProducto,
   agruparPorProveedor,
@@ -13,7 +14,7 @@ import {
   type GrupoDeCompras,
 } from "@/lib/compras";
 import { fechaCorta, fechaLarga, hoyLocal } from "@/lib/fechas";
-import { formatearContenido } from "@/lib/negocio";
+import { formatearContenido, MEDIO_CORTO } from "@/lib/negocio";
 import { formatearCentavos } from "@/lib/plata";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,7 @@ const CORTES = [
   { clave: "producto", etiqueta: "Por producto" },
   { clave: "mes", etiqueta: "Por mes" },
   { clave: "estado", etiqueta: "Por estado" },
+  { clave: "medio", etiqueta: "Por medio" },
 ] as const;
 
 type Corte = (typeof CORTES)[number]["clave"];
@@ -106,6 +108,7 @@ function Compra({ compra }: { compra: CompraDelHistorial }) {
                   ? " · pagada"
                   : ` · pagada el ${fechaCorta(compra.pagadoEn)}`
                 : " · sin pagar"}
+              {compra.medio && ` · ${MEDIO_CORTO[compra.medio]}`}
               {compra.comprobante && ` · N.º ${compra.comprobante}`}
               {compra.faltanPrecios && (
                 <span className="text-deuda"> · faltan precios</span>
@@ -247,7 +250,9 @@ export default async function Compras({ searchParams }: PageProps<"/compras">) {
           }))
         : corte === "estado"
           ? agruparPorEstado(lista).map((g) => ({ titulo: g.titulo, grupo: g }))
-          : [];
+          : corte === "medio"
+            ? agruparPorMedio(lista).map((g) => ({ titulo: g.titulo, grupo: g }))
+            : [];
 
   return (
     <div className="space-y-4">

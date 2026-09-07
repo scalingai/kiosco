@@ -43,6 +43,13 @@
       "when": 1788819412820,
       "tag": "0005_unidad-de-medida",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788820333531,
+      "tag": "0006_medios-de-pago",
+      "breakpoints": true
     }
   ]
 }

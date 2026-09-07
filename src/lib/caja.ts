@@ -27,10 +27,14 @@ import {
 } from "@/db/schema";
 import {
   costoDeReferencia,
+  restarPorMedio,
+  sumarPorMedio,
   sumarRenglones,
   type CategoriaGasto,
   type CompraAGuardar,
   type GastoAGuardar,
+  type MedioPago,
+  type PorMedio,
   type Unidad,
   type VentaAGuardar,
 } from "@/lib/negocio";
@@ -110,6 +114,7 @@ export async function registrarVenta(entrada: VentaAGuardar) {
       montoCentavos: entrada.montoCentavos,
       nota: entrada.nota?.trim() || null,
       fecha: validarFecha(entrada.fecha),
+      medio: entrada.medio,
     })
     .returning();
   return fila;
@@ -127,6 +132,7 @@ export async function registrarGasto(entrada: GastoAGuardar) {
       montoCentavos: entrada.montoCentavos,
       descripcion: entrada.descripcion?.trim() || null,
       fecha: validarFecha(entrada.fecha),
+      medio: entrada.medio,
     })
     .returning();
   return fila;
@@ -178,6 +184,9 @@ export async function registrarCompra(entrada: CompraAGuardar) {
         pagadoEn: entrada.pagadoEn
           ? validarFecha(entrada.pagadoEn, "La fecha de pago")
           : null,
+        // El medio va atado al pago: una compra a cuenta todavía no se pagó
+        // con nada, y guardarle un medio seria inventar por dónde salió.
+        medio: entrada.pagadoEn ? (entrada.medio ?? "efectivo") : null,
         comprobante: entrada.comprobante?.trim() || null,
         nota: entrada.nota?.trim() || null,
       })
@@ -232,12 +241,16 @@ export async function registrarCompra(entrada: CompraAGuardar) {
  * Marcar una compra como pagada mueve plata: la salida cae en `fecha`, que es
  * el día en que de verdad saliste el billete, no el día en que llegó el pedido.
  */
-export async function marcarCompraPagada(id: string, fecha: string) {
+export async function marcarCompraPagada(
+  id: string,
+  fecha: string,
+  medio: MedioPago,
+) {
   if (!UUID.test(id)) return null;
   const db = await getDb();
   const [fila] = await db
     .update(compras)
-    .set({ pagadoEn: validarFecha(fecha, "La fecha de pago") })
+    .set({ pagadoEn: validarFecha(fecha, "La fecha de pago"), medio })
     .where(and(eq(compras.id, id), isNull(compras.anuladoEn)))
     .returning();
   return fila ?? null;
@@ -249,7 +262,7 @@ export async function marcarCompraImpaga(id: string) {
   const db = await getDb();
   const [fila] = await db
     .update(compras)
-    .set({ pagadoEn: null })
+    .set({ pagadoEn: null, medio: null })
     .where(and(eq(compras.id, id), isNull(compras.anuladoEn)))
     .returning();
   return fila ?? null;
@@ -280,6 +293,7 @@ export type FilaVenta = {
   id: string;
   montoCentavos: number;
   nota: string | null;
+  medio: MedioPago;
 };
 
 export type FilaGasto = {
@@ -287,6 +301,7 @@ export type FilaGasto = {
   categoria: CategoriaGasto;
   montoCentavos: number;
   descripcion: string | null;
+  medio: MedioPago;
 };
 
 export type RenglonCompra = {
@@ -310,6 +325,7 @@ export type FilaCompra = {
   totalDeclarado: boolean;
   fecha: string;
   pagadoEn: string | null;
+  medio: MedioPago | null;
   comprobante: string | null;
   nota: string | null;
   /** hay renglones sin importe y el total no lo declaró la factura */
@@ -322,6 +338,7 @@ export type FilaCobro = {
   clienteId: string;
   cliente: string;
   montoCentavos: number;
+  medio: MedioPago;
 };
 
 export type BalanceDia = {
@@ -339,6 +356,13 @@ export type BalanceDia = {
   entroCentavos: number;
   salioCentavos: number;
   resultadoCentavos: number;
+  /**
+   * El mismo día repartido en las tres cajas. "Quedó $300.000" no alcanza para
+   * saber si mañana se le puede pagar en efectivo al proveedor.
+   */
+  entroPorMedio: PorMedio;
+  salioPorMedio: PorMedio;
+  resultadoPorMedio: PorMedio;
   /**
    * Lo que se fio ese día. No es plata que se movió, por eso va aparte: es lo
    * que explica un día de mucha venta con poca caja.
@@ -361,6 +385,7 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
           id: ventas.id,
           montoCentavos: ventas.montoCentavos,
           nota: ventas.nota,
+          medio: ventas.medio,
         })
         .from(ventas)
         .where(and(eq(ventas.fecha, fecha), isNull(ventas.anuladoEn)))
@@ -372,6 +397,7 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
           categoria: gastos.categoria,
           montoCentavos: gastos.montoCentavos,
           descripcion: gastos.descripcion,
+          medio: gastos.medio,
         })
         .from(gastos)
         .where(and(eq(gastos.fecha, fecha), isNull(gastos.anuladoEn)))
@@ -389,6 +415,7 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
           totalDeclarado: compras.totalDeclarado,
           fecha: compras.fecha,
           pagadoEn: compras.pagadoEn,
+          medio: compras.medio,
           comprobante: compras.comprobante,
           nota: compras.nota,
         })
@@ -409,6 +436,7 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
           cliente: clientes.nombre,
           tipo: movimientos.tipo,
           montoCentavos: movimientos.montoCentavos,
+          medio: movimientos.medio,
         })
         .from(movimientos)
         .innerJoin(clientes, eq(clientes.id, movimientos.clienteId))
@@ -458,11 +486,12 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
 
   const cobros = filasMovimientos
     .filter((m) => m.tipo === "pago")
-    .map(({ id, clienteId, cliente, montoCentavos }) => ({
+    .map(({ id, clienteId, cliente, montoCentavos, medio }) => ({
       id,
       clienteId,
       cliente,
       montoCentavos,
+      medio,
     }));
 
   const ventasCentavos = sumar(filasVentas, (v) => v.montoCentavos);
@@ -478,6 +507,26 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
   const entroCentavos = ventasCentavos + cobrosCentavos;
   const salioCentavos = gastosCentavos + pagosProveedoresCentavos;
 
+  const pagadasHoy = listaCompras.filter((c) => c.pagadoEn === fecha);
+  const entroPorMedio = sumarPorMedio(
+    [...filasVentas, ...cobros],
+    (f) => f.medio,
+    (f) => f.montoCentavos,
+  );
+  const salioPorMedio = sumarPorMedio(
+    [
+      ...filasGastos.map((g) => ({ medio: g.medio, monto: g.montoCentavos })),
+      // Una compra pagada siempre tiene medio; el `?? "efectivo"` cubre las
+      // que quedaron cargadas antes de que existieran los medios.
+      ...pagadasHoy.map((c) => ({
+        medio: c.medio ?? ("efectivo" as MedioPago),
+        monto: c.montoCentavos,
+      })),
+    ],
+    (f) => f.medio,
+    (f) => f.monto,
+  );
+
   return {
     fecha,
     ventas: filasVentas,
@@ -491,6 +540,9 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
     entroCentavos,
     salioCentavos,
     resultadoCentavos: entroCentavos - salioCentavos,
+    entroPorMedio,
+    salioPorMedio,
+    resultadoPorMedio: restarPorMedio(entroPorMedio, salioPorMedio),
     fiadoOtorgadoCentavos: sumar(
       filasMovimientos.filter((m) => m.tipo === "fiado"),
       (m) => m.montoCentavos,
@@ -675,6 +727,7 @@ export async function ventasPorDia(dias = 60): Promise<DiaDeVentas[]> {
       fecha: ventas.fecha,
       montoCentavos: ventas.montoCentavos,
       nota: ventas.nota,
+      medio: ventas.medio,
     })
     .from(ventas)
     .where(isNull(ventas.anuladoEn))
@@ -692,6 +745,7 @@ export async function ventasPorDia(dias = 60): Promise<DiaDeVentas[]> {
       id: fila.id,
       montoCentavos: fila.montoCentavos,
       nota: fila.nota,
+      medio: fila.medio,
     });
     porFecha.set(fila.fecha, dia);
   }

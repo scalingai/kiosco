@@ -70,6 +70,16 @@ venta se desincroniza en días, y un número que miente es peor que no tenerlo. 
 ese producto. El catálogo se llena solo desde `registrarCompra`, que engancha
 cada renglón con nombre a su producto.
 
+**Hay tres cajas, no una.** Efectivo, Mercado Pago y banco son plata distinta:
+"quedó $300.000" no contesta si mañana se le puede pagar en efectivo al
+proveedor. Toda entrada y toda salida lleva `medio`, y el día se muestra
+repartido en los tres. El medio de una compra va **atado a `pagado_en`**: una
+compra a cuenta no se pagó con nada todavía, y guardarle un medio sería
+inventar por dónde salió.
+
+Los pagos de fiado cargados por audio quedan en efectivo, que es como se paga en
+el mostrador. Si fue por otro medio, se anula y se recarga a mano.
+
 **Una compra impaga no toca la caja.** `compras.fecha` es cuándo llegó la
 mercadería; `compras.pagado_en` es cuándo salió la plata, y en null significa
 que se le debe al proveedor. La salida del día se cuenta por `pagado_en`, nunca

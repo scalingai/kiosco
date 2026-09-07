@@ -4,6 +4,7 @@ import BotonAnularFila from "@/components/BotonAnularFila";
 import FormVenta from "@/components/FormVenta";
 import { resumenDelMes, ventasPorDia } from "@/lib/caja";
 import { fechaLarga, hoyLocal } from "@/lib/fechas";
+import { MEDIO_CORTO } from "@/lib/negocio";
 import { formatearCentavos } from "@/lib/plata";
 
 export const dynamic = "force-dynamic";
@@ -86,7 +87,7 @@ export default async function Ventas() {
                       className="flex items-center justify-between gap-3 py-1.5 text-xs"
                     >
                       <span className="min-w-0 truncate text-tinta-suave">
-                        {carga.nota || "sin detalle"}
+                        {carga.nota || "sin detalle"} · {MEDIO_CORTO[carga.medio]}
                       </span>
                       <span className="flex shrink-0 items-center gap-3">
                         <span className="cifra">
@@ -102,7 +103,8 @@ export default async function Ventas() {
               {dia.cargas.length === 1 && (
                 <div className="mt-1 flex items-center justify-between gap-3 text-xs text-tinta-suave">
                   <span className="min-w-0 truncate">
-                    {dia.cargas[0].nota || "sin detalle"}
+                    {dia.cargas[0].nota || "sin detalle"} ·{" "}
+                    {MEDIO_CORTO[dia.cargas[0].medio]}
                   </span>
                   <BotonAnularFila que="venta" id={dia.cargas[0].id} />
                 </div>

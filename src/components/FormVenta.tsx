@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { guardarVenta } from "@/app/acciones";
+import SelectorMedio from "@/components/SelectorMedio";
 import { AVISO_TARDANZA, conLimiteDeTiempo } from "@/lib/espera";
+import type { MedioPago } from "@/lib/negocio";
 import { parsearMonto } from "@/lib/plata";
 
 /**
@@ -21,6 +23,7 @@ export default function FormVenta({
   const router = useRouter();
   const [monto, setMonto] = useState("");
   const [nota, setNota] = useState("");
+  const [medio, setMedio] = useState<MedioPago>("efectivo");
   const [cuando, setCuando] = useState(fecha);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -37,7 +40,7 @@ export default function FormVenta({
 
     setGuardando(true);
     const espera = await conLimiteDeTiempo(
-      guardarVenta({ montoCentavos, nota, fecha: cuando }),
+      guardarVenta({ montoCentavos, nota, fecha: cuando, medio }),
     );
     setGuardando(false);
 
@@ -82,6 +85,8 @@ export default function FormVenta({
         </label>
       </div>
 
+      <SelectorMedio valor={medio} onCambio={setMedio} etiqueta="Cómo entró" />
+
       <label className="block">
         <span className="text-xs text-tinta-suave">Nota</span>
         <input
@@ -93,7 +98,7 @@ export default function FormVenta({
       </label>
 
       <p className="text-xs text-tinta-suave">
-        Podés cargar varias veces el mismo día: se suman. El fiado que diste no
+        Si cobraste por varios medios, cargá uno por cada uno: se suman. El fiado que diste no
         va acá, ya está anotado en la cuenta de cada cliente.
       </p>
 

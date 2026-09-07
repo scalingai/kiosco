@@ -2,6 +2,7 @@
  * Tipos y conversiones que comparten el servidor y las pantallas. Nada de acá
  * toca la base, así que lo puede importar un componente de cliente.
  */
+import type { MedioPago } from "@/lib/negocio";
 import { parsearMonto } from "@/lib/plata";
 
 export type ItemAGuardar = {
@@ -19,6 +20,8 @@ export type MovimientoAGuardar = {
   items?: ItemAGuardar[];
   nota?: string | null;
   fecha: string;
+  /** Por dónde entró la plata. Sólo significa algo en los pagos. */
+  medio?: MedioPago;
   origen: "audio" | "manual";
   /** la nota de voz de la que salió, si vino de un audio */
   notaId?: string | null;

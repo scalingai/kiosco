@@ -3,7 +3,12 @@ import "server-only";
 import { and, asc, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { compras, comprasItems, proveedores } from "@/db/schema";
-import { costoDeReferencia, type Unidad } from "@/lib/negocio";
+import {
+  costoDeReferencia,
+  ETIQUETA_MEDIO,
+  type MedioPago,
+  type Unidad,
+} from "@/lib/negocio";
 
 /**
  * El historial de compras y sus cortes.
@@ -36,6 +41,7 @@ export type CompraDelHistorial = {
   totalDeclarado: boolean;
   fecha: string;
   pagadoEn: string | null;
+  medio: MedioPago | null;
   comprobante: string | null;
   nota: string | null;
   faltanPrecios: boolean;
@@ -66,6 +72,7 @@ export async function historialDeCompras(
       totalDeclarado: compras.totalDeclarado,
       fecha: compras.fecha,
       pagadoEn: compras.pagadoEn,
+      medio: compras.medio,
       comprobante: compras.comprobante,
       nota: compras.nota,
     })
@@ -226,6 +233,26 @@ export function agruparPorEstado(lista: CompraDelHistorial[]): GrupoDeCompras[] 
   }
   // Lo que se debe va primero: es lo accionable.
   return [...grupos.values()].sort((a) => (a.clave === "impagas" ? -1 : 1));
+}
+
+/**
+ * Con qué se le paga a los proveedores. Las impagas van juntas: todavía no
+ * salieron por ningún lado, y meterlas en efectivo seria contar plata que
+ * está en el cajón como si ya se hubiera ido.
+ */
+export function agruparPorMedio(lista: CompraDelHistorial[]): GrupoDeCompras[] {
+  const grupos = acumular(
+    lista,
+    (c) => c.medio ?? "sin-pagar",
+    (c) => (c.medio ? ETIQUETA_MEDIO[c.medio] : "Sin pagar"),
+  );
+  for (const grupo of grupos.values()) {
+    grupo.detalle =
+      grupo.clave === "sin-pagar"
+        ? `${contarCompras(grupo.compras.length)} · no salieron de ningún lado todavía`
+        : contarCompras(grupo.compras.length);
+  }
+  return [...grupos.values()].sort((a, b) => b.totalCentavos - a.totalCentavos);
 }
 
 /* ── El corte que agrupa RENGLONES ────────────────────────────────────────── */

@@ -143,6 +143,7 @@ type CompraSemilla = {
   dias: number;
   /** hace cuántos días se pagó; si falta, quedó a cuenta */
   pagadaHace?: number;
+  medio?: "efectivo" | "mercadopago" | "banco";
 };
 
 const PROVEEDORES = ["Coca-Cola", "Distribuidora El Norte", "Panadería Sur"];
@@ -162,6 +163,7 @@ const COMPRAS: CompraSemilla[] = [
     total: 185000,
     dias: 1,
     pagadaHace: 1,
+    medio: "banco",
   },
   { proveedor: "Panadería Sur", total: 22400, dias: 0, pagadaHace: 0 },
   // Llegó hoy y quedó a cuenta: figura en el día pero no toca la caja.
@@ -172,7 +174,13 @@ const COMPRAS: CompraSemilla[] = [
     dias: 0,
   },
   // Llegó hace días y se paga hoy: la salida cae hoy, no el día que llegó.
-  { proveedor: "Distribuidora El Norte", total: 96000, dias: 6, pagadaHace: 0 },
+  {
+    proveedor: "Distribuidora El Norte",
+    total: 96000,
+    dias: 6,
+    pagadaHace: 0,
+    medio: "mercadopago",
+  },
   // Renglones sin precio y sin total declarado: el total todavía no es el total.
   {
     proveedor: "Panadería Sur",
@@ -188,18 +196,30 @@ const GASTOS: {
   categoria: "alquiler" | "servicios" | "fletes" | "retiro" | "otros";
   monto: number;
   descripcion?: string;
+  medio?: "efectivo" | "mercadopago" | "banco";
   dias: number;
 }[] = [
-  { categoria: "servicios", monto: 48000, descripcion: "factura de luz", dias: 0 },
+  {
+    categoria: "servicios",
+    monto: 48000,
+    descripcion: "factura de luz",
+    medio: "banco",
+    dias: 0,
+  },
   { categoria: "fletes", monto: 9000, descripcion: "flete del mayorista", dias: 0 },
   { categoria: "retiro", monto: 60000, dias: 1 },
   { categoria: "alquiler", monto: 320000, dias: 5 },
 ];
 
 /** Un renglón por turno: así se ve que el día suma varias cargas. */
-const VENTAS: { monto: number; nota?: string; dias: number }[] = [
+const VENTAS: {
+  monto: number;
+  nota?: string;
+  medio?: "efectivo" | "mercadopago" | "banco";
+  dias: number;
+}[] = [
   { monto: 310000, nota: "mañana", dias: 0 },
-  { monto: 268500, nota: "tarde", dias: 0 },
+  { monto: 268500, nota: "tarde", medio: "mercadopago", dias: 0 },
   { monto: 540000, dias: 1 },
   { monto: 495000, dias: 2 },
   { monto: 610000, dias: 3 },
@@ -309,6 +329,7 @@ async function main() {
           totalDeclarado,
           fecha: fechaHace(c.dias),
           pagadoEn: c.pagadaHace != null ? fechaHace(c.pagadaHace) : null,
+          medio: c.pagadaHace != null ? (c.medio ?? "efectivo") : null,
           comprobante: c.comprobante ?? null,
         })
         .returning();
@@ -355,6 +376,7 @@ async function main() {
         categoria: g.categoria,
         montoCentavos: centavos(g.monto),
         descripcion: g.descripcion ?? null,
+        medio: g.medio ?? "efectivo",
         fecha: fechaHace(g.dias),
       })),
     );
@@ -363,6 +385,7 @@ async function main() {
       VENTAS.map((v) => ({
         montoCentavos: centavos(v.monto),
         nota: v.nota ?? null,
+        medio: v.medio ?? "efectivo",
         fecha: fechaHace(v.dias),
       })),
     );

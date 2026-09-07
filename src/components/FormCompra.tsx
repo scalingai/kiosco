@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { guardarCompra } from "@/app/acciones";
 import EditorRenglones from "@/components/EditorRenglones";
+import SelectorMedio from "@/components/SelectorMedio";
 import { AVISO_TARDANZA, conLimiteDeTiempo } from "@/lib/espera";
 import {
   aRenglonesAGuardar,
@@ -11,6 +12,7 @@ import {
   renglonesCargados,
   RenglonInvalido,
   sumarRenglones,
+  type MedioPago,
   type RenglonBorrador,
 } from "@/lib/negocio";
 import { normalizarNombre } from "@/lib/nombres";
@@ -45,6 +47,7 @@ export default function FormCompra({
   const [cuando, setCuando] = useState(fecha);
   const [pago, setPago] = useState<"ahora" | "cuenta">("ahora");
   const [fechaPago, setFechaPago] = useState(fecha);
+  const [medio, setMedio] = useState<MedioPago>("efectivo");
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
@@ -106,6 +109,7 @@ export default function FormCompra({
         items: itemsAGuardar,
         fecha: cuando,
         pagadoEn: pago === "ahora" ? fechaPago : null,
+        medio: pago === "ahora" ? medio : null,
         comprobante,
         nota,
       }),
@@ -218,15 +222,18 @@ export default function FormCompra({
         </div>
 
         {pago === "ahora" ? (
-          <label className="mt-2 block">
-            <span className="text-xs text-tinta-suave">Día en que se pagó</span>
-            <input
-              type="date"
-              value={fechaPago}
-              onChange={(e) => setFechaPago(e.target.value)}
-              className="cifra mt-1 w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm sm:w-48"
-            />
-          </label>
+          <div className="mt-2 space-y-2">
+            <label className="block">
+              <span className="text-xs text-tinta-suave">Día en que se pagó</span>
+              <input
+                type="date"
+                value={fechaPago}
+                onChange={(e) => setFechaPago(e.target.value)}
+                className="cifra mt-1 w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm sm:w-48"
+              />
+            </label>
+            <SelectorMedio valor={medio} onCambio={setMedio} />
+          </div>
         ) : (
           <p className="mt-2 text-xs text-tinta-suave">
             No toca la caja de ningún día hasta que la marques pagada. Mientras

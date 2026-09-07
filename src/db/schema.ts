@@ -19,6 +19,17 @@ import {
  */
 
 export const tipoMovimiento = pgEnum("tipo_movimiento", ["fiado", "pago"]);
+
+/**
+ * Por dónde entró o salió la plata. Son tres cajas distintas de verdad: la
+ * plata del cajón, la de Mercado Pago y la del banco. Sin separarlas, "quedó
+ * $300.000" no dice cuánto hay para pagarle al proveedor que viene mañana.
+ */
+export const medioPago = pgEnum("medio_pago", [
+  "efectivo",
+  "mercadopago",
+  "banco",
+]);
 export const origenMovimiento = pgEnum("origen_movimiento", ["audio", "manual"]);
 
 /**
@@ -76,6 +87,12 @@ export const movimientos = pgTable(
     totalDeclarado: boolean("total_declarado").notNull().default(true),
     nota: text("nota"),
     fecha: date("fecha").notNull(),
+    /**
+     * Por dónde entró el pago. Sólo significa algo cuando `tipo` es "pago": un
+     * fiado no mueve plata. Los que entran por audio quedan en efectivo, que es
+     * como se paga en el mostrador; si fue por otro lado, se anula y se recarga.
+     */
+    medio: medioPago("medio").notNull().default("efectivo"),
     origen: origenMovimiento("origen").notNull().default("manual"),
     /** la nota de voz de la que salió este movimiento */
     notaId: uuid("nota_id").references(() => notas.id, { onDelete: "set null" }),
@@ -211,6 +228,8 @@ export const compras = pgTable(
     fecha: date("fecha").notNull(),
     /** null = impaga, se le debe al proveedor */
     pagadoEn: date("pagado_en"),
+    /** con qué se le pagó. Va junto con `pagadoEn`: sin pago no hay medio. */
+    medio: medioPago("medio"),
     /** número de factura o remito, para poder buscar el papel */
     comprobante: text("comprobante"),
     nota: text("nota"),
@@ -283,6 +302,7 @@ export const gastos = pgTable(
     montoCentavos: bigint("monto_centavos", { mode: "number" }).notNull(),
     descripcion: text("descripcion"),
     fecha: date("fecha").notNull(),
+    medio: medioPago("medio").notNull().default("efectivo"),
     anuladoEn: timestamp("anulado_en", { withTimezone: true }),
     creadoEn: timestamp("creado_en", { withTimezone: true })
       .notNull()
@@ -305,6 +325,7 @@ export const ventas = pgTable(
     montoCentavos: bigint("monto_centavos", { mode: "number" }).notNull(),
     nota: text("nota"),
     fecha: date("fecha").notNull(),
+    medio: medioPago("medio").notNull().default("efectivo"),
     anuladoEn: timestamp("anulado_en", { withTimezone: true }),
     creadoEn: timestamp("creado_en", { withTimezone: true })
       .notNull()
@@ -319,6 +340,7 @@ export type CompraItem = typeof comprasItems.$inferSelect;
 export type Gasto = typeof gastos.$inferSelect;
 export type Venta = typeof ventas.$inferSelect;
 export type CategoriaGasto = (typeof categoriaGasto.enumValues)[number];
+export type MedioPago = (typeof medioPago.enumValues)[number];
 
 /**
  * El catálogo de lo que se vende. NO es un inventario: no lleva cuántas

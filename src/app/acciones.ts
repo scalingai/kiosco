@@ -26,6 +26,7 @@ import {
 import type {
   CompraAGuardar,
   GastoAGuardar,
+  MedioPago,
   VentaAGuardar,
 } from "@/lib/negocio";
 
@@ -115,9 +116,10 @@ export async function guardarCompra(
 export async function pagarCompra(
   id: string,
   fecha: string,
+  medio: MedioPago,
 ): Promise<Resultado> {
   try {
-    const fila = await marcarCompraPagada(id, fecha);
+    const fila = await marcarCompraPagada(id, fecha, medio);
     if (!fila) return { ok: false, error: "Esa compra ya no está" };
     revalidatePath("/", "layout");
     return { ok: true, datos: null };
