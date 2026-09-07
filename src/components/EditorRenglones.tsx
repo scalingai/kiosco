@@ -1,29 +1,38 @@
 "use client";
 
 import {
-  contarSinImporte,
-  costoPorUnidad,
+  contenidoTotal,
+  costoDeReferencia,
+  ETIQUETA_UNIDAD,
+  formatearContenido,
   renglonVacio,
   renglonesCargados,
-  unidadesTotales,
+  UNIDADES,
   type RenglonBorrador,
+  type Unidad,
 } from "@/lib/negocio";
+import { normalizarNombre } from "@/lib/nombres";
 import { formatearCentavos, parsearMonto } from "@/lib/plata";
+
+type Producto = { id: string; nombre: string };
 
 /**
  * Los renglones de la factura del proveedor.
  *
- * Se carga lo que dice el papel —cuántos bultos, qué trae cada uno, cuánta
- * plata— y abajo aparece lo que salió cada unidad. Ese número no se tipea ni se
- * guarda: es la división, y se muestra en vivo porque es lo que se mira para
- * decidir a cuánto vender.
+ * Se carga lo que dice el papel —cuántos bultos, cuánto trae cada uno y cuánta
+ * plata— y abajo aparece a cuánto sale la unidad, el kilo o el litro. Ese
+ * número no se tipea ni se guarda: es la división, y se muestra en vivo porque
+ * es lo que se mira para decidir a cuánto vender.
  */
 export default function EditorRenglones({
   renglones,
   onCambio,
+  productos,
 }: {
   renglones: RenglonBorrador[];
   onCambio: (renglones: RenglonBorrador[]) => void;
+  /** los que ya existen, para no crear "coca cola" al lado de "Coca-Cola" */
+  productos: Producto[];
 }) {
   function editar(indice: number, cambio: Partial<RenglonBorrador>) {
     onCambio(renglones.map((r, n) => (n === indice ? { ...r, ...cambio } : r)));
@@ -42,26 +51,37 @@ export default function EditorRenglones({
       ? parsearMonto(renglon.importe)
       : null;
     return {
-      unidades: unidadesTotales(cantidad, porBulto),
-      porBulto,
-      costo: costoPorUnidad({
+      total: contenidoTotal(cantidad, porBulto),
+      costo: costoDeReferencia({
         cantidad,
         unidadesPorBulto: porBulto,
+        unidad: renglon.unidad,
         importeCentavos,
       }),
       importeCentavos,
     };
   }
 
+  /**
+   * Si el nombre tipeado todavía no existe, se avisa. No frena nada —hay que
+   * poder comprar algo por primera vez— pero es lo que evita terminar con el
+   * mismo producto escrito de tres formas.
+   */
+  function esNuevo(nombre: string): boolean {
+    const limpio = normalizarNombre(nombre);
+    if (!limpio) return false;
+    return !productos.some((p) => normalizarNombre(p.nombre) === limpio);
+  }
+
   const cargados = renglonesCargados(renglones);
-  const sinImporte = contarSinImporte(renglones);
   const suma = cargados.reduce(
     (total, r) => total + (cuentas(r).importeCentavos ?? 0),
     0,
   );
+  const sinImporte = cargados.filter((r) => !r.importe.trim()).length;
 
   const campo =
-    "rounded-lg border border-linea bg-white px-2 py-2 text-sm text-center";
+    "rounded-lg border border-linea bg-white px-2 py-2 text-center text-sm";
 
   return (
     <div>
@@ -76,31 +96,41 @@ export default function EditorRenglones({
 
       <ul className="mt-1 space-y-2">
         {renglones.map((renglon, i) => {
-          const { unidades, porBulto, costo } = cuentas(renglon);
+          const { total, costo } = cuentas(renglon);
+          const nuevo = esNuevo(renglon.descripcion);
           return (
             <li
               key={i}
               className="rounded-xl border border-linea bg-white/70 px-2.5 py-2"
             >
               <div className="flex items-center gap-2">
-                <input
-                  value={renglon.descripcion}
-                  placeholder="producto"
-                  aria-label="Producto"
-                  onChange={(e) => editar(i, { descripcion: e.target.value })}
-                  className="min-w-0 flex-1 rounded-lg border border-linea bg-white px-3 py-2 text-sm"
-                />
+                <span className="min-w-0 flex-1">
+                  <input
+                    value={renglon.descripcion}
+                    list="lista-productos"
+                    placeholder="producto"
+                    aria-label="Producto"
+                    onChange={(e) => editar(i, { descripcion: e.target.value })}
+                    className="w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm"
+                  />
+                  {nuevo && (
+                    <span className="mt-1 block text-xs text-tinta-suave">
+                      Es nuevo: se va a agregar al stock. Si ya lo tenías, elegilo
+                      de la lista para no duplicarlo.
+                    </span>
+                  )}
+                </span>
                 <button
                   type="button"
                   onClick={() => sacar(i)}
                   aria-label="Sacar este renglón"
-                  className="shrink-0 rounded-lg px-1.5 py-2 text-lg leading-none text-tinta-suave"
+                  className="shrink-0 self-start rounded-lg px-1.5 py-2 text-lg leading-none text-tinta-suave"
                 >
                   ×
                 </button>
               </div>
 
-              <div className="mt-2 flex items-center gap-1.5">
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 <input
                   value={renglon.cantidad}
                   inputMode="numeric"
@@ -112,13 +142,26 @@ export default function EditorRenglones({
                 <input
                   value={renglon.unidadesPorBulto}
                   inputMode="numeric"
-                  aria-label="Unidades por bulto"
+                  aria-label="Cuánto trae cada bulto"
                   onChange={(e) =>
                     editar(i, { unidadesPorBulto: e.target.value })
                   }
-                  className={campo + " cifra w-12 shrink-0"}
+                  className={campo + " cifra w-16 shrink-0"}
                 />
-                <span className="shrink-0 text-xs text-tinta-suave">u.</span>
+                <select
+                  value={renglon.unidad}
+                  aria-label="Unidad de medida"
+                  onChange={(e) =>
+                    editar(i, { unidad: e.target.value as Unidad })
+                  }
+                  className="shrink-0 rounded-lg border border-linea bg-white px-2 py-2 text-sm"
+                >
+                  {UNIDADES.map((u) => (
+                    <option key={u} value={u}>
+                      {ETIQUETA_UNIDAD[u]}
+                    </option>
+                  ))}
+                </select>
                 <input
                   value={renglon.importe}
                   inputMode="decimal"
@@ -131,18 +174,17 @@ export default function EditorRenglones({
 
               {/* El número que se mira para poner el precio de venta. */}
               <p className="mt-1.5 text-xs text-tinta-suave">
-                {costo != null ? (
+                {formatearContenido(total, renglon.unidad)}
+                {costo ? (
                   <>
-                    {unidades} unidad{unidades === 1 ? "" : "es"} ·{" "}
+                    {" · "}
                     <span className="cifra text-tinta">
-                      {formatearCentavos(costo)}
+                      {formatearCentavos(costo.centavos)}
                     </span>{" "}
-                    te sale cada una
+                    {costo.porCada}
                   </>
-                ) : porBulto > 1 ? (
-                  `${unidades} unidades. Poné el importe y te digo a cuánto te sale cada una.`
                 ) : (
-                  "Poné el importe y te digo a cuánto te sale cada una."
+                  " · poné el importe y te digo a cuánto sale"
                 )}
               </p>
             </li>
@@ -166,6 +208,12 @@ export default function EditorRenglones({
           Si no ponés el total de la factura, no suman al costo.
         </p>
       )}
+
+      <datalist id="lista-productos">
+        {productos.map((p) => (
+          <option key={p.id} value={p.nombre} />
+        ))}
+      </datalist>
     </div>
   );
 }

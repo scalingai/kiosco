@@ -11,8 +11,9 @@ import {
   resumenDelMes,
 } from "@/lib/caja";
 import { fechaCorta, fechaLarga, hoyLocal } from "@/lib/fechas";
-import { ETIQUETA_GASTO } from "@/lib/negocio";
+import { ETIQUETA_GASTO, formatearContenido } from "@/lib/negocio";
 import { formatearCentavos } from "@/lib/plata";
+import { listarNombresDeProductos } from "@/lib/stock";
 
 export const dynamic = "force-dynamic";
 
@@ -53,10 +54,11 @@ export default async function Caja({ searchParams }: PageProps<"/caja">) {
   const fecha = pedida && FECHA.test(pedida) ? pedida : hoyLocal();
   const esHoy = fecha === hoyLocal();
 
-  const [balance, mes, proveedores, deudas] = await Promise.all([
+  const [balance, mes, proveedores, productos, deudas] = await Promise.all([
     balanceDelDia(fecha),
     resumenDelMes(fecha),
     listarProveedores(),
+    listarNombresDeProductos(),
     deudaProveedores(),
   ]);
 
@@ -128,7 +130,11 @@ export default async function Caja({ searchParams }: PageProps<"/caja">) {
         )}
       </section>
 
-      <CargaDelDia fecha={fecha} proveedores={proveedores} />
+      <CargaDelDia
+        fecha={fecha}
+        proveedores={proveedores}
+        productos={productos}
+      />
 
       <Seccion
         titulo="Ventas"
@@ -224,17 +230,17 @@ export default async function Caja({ searchParams }: PageProps<"/caja">) {
                             {r.descripcion || "sin nombre"}
                           </span>
                           <span className="cifra">
-                            {r.cantidad}
-                            {r.unidadesPorBulto > 1 && `×${r.unidadesPorBulto}`}
+                            {r.cantidad} ×{" "}
+                            {formatearContenido(r.unidadesPorBulto, r.unidad)}
                           </span>
                           {r.importeCentavos != null && (
                             <span className="cifra">
                               {formatearCentavos(r.importeCentavos)}
                             </span>
                           )}
-                          {r.costoUnitarioCentavos != null && (
+                          {r.costoCentavos != null && (
                             <span className="cifra text-tinta">
-                              {formatearCentavos(r.costoUnitarioCentavos)} c/u
+                              {formatearCentavos(r.costoCentavos)} {r.porCada}
                             </span>
                           )}
                         </li>

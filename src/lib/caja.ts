@@ -26,11 +26,12 @@ import {
   ventas,
 } from "@/db/schema";
 import {
-  costoPorUnidad,
+  costoDeReferencia,
   sumarRenglones,
   type CategoriaGasto,
   type CompraAGuardar,
   type GastoAGuardar,
+  type Unidad,
   type VentaAGuardar,
 } from "@/lib/negocio";
 import { normalizarNombre } from "@/lib/nombres";
@@ -216,6 +217,7 @@ export async function registrarCompra(entrada: CompraAGuardar) {
             1,
             Math.round(renglon.unidadesPorBulto || 1),
           ),
+          unidad: renglon.unidad,
           importeCentavos: renglon.importeCentavos,
           posicion,
         })),
@@ -292,9 +294,12 @@ export type RenglonCompra = {
   descripcion: string | null;
   cantidad: number;
   unidadesPorBulto: number;
+  unidad: Unidad;
   importeCentavos: number | null;
-  /** derivado: lo que costó cada unidad de las que se venden */
-  costoUnitarioCentavos: number | null;
+  /** derivado: lo que costó la unidad, el kilo o el litro, según se mida */
+  costoCentavos: number | null;
+  /** cómo se lee ese costo: "cada una", "el kilo", "el litro" */
+  porCada: string | null;
 };
 
 export type FilaCompra = {
@@ -430,13 +435,16 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
 
     for (const r of sueltos) {
       const lista = porCompra.get(r.compraId) ?? [];
+      const costo = costoDeReferencia(r);
       lista.push({
         id: r.id,
         descripcion: r.descripcion,
         cantidad: r.cantidad,
         unidadesPorBulto: r.unidadesPorBulto,
+        unidad: r.unidad,
         importeCentavos: r.importeCentavos,
-        costoUnitarioCentavos: costoPorUnidad(r),
+        costoCentavos: costo?.centavos ?? null,
+        porCada: costo?.porCada ?? null,
       });
       porCompra.set(r.compraId, lista);
     }

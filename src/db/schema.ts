@@ -147,6 +147,12 @@ export type Item = typeof items.$inferSelect;
  * para él: no es un gasto del kiosco, pero si no se anota el día nunca cierra y
  * uno termina buscando un faltante que no existe.
  */
+/**
+ * En qué se mide lo que trae un bulto. Un pack de gaseosa trae 6 unidades; una
+ * bolsa de yerba trae 1000 gramos. Sin esto, "1000" no se puede leer.
+ */
+export const unidadMedida = pgEnum("unidad_medida", ["un", "gr", "ml"]);
+
 export const categoriaGasto = pgEnum("categoria_gasto", [
   "alquiler",
   "servicios",
@@ -255,8 +261,10 @@ export const comprasItems = pgTable(
     }),
     /** cuántos bultos entraron (packs, cajas, bolsas… o unidades sueltas) */
     cantidad: integer("cantidad").notNull().default(1),
-    /** cuántas unidades de venta trae cada bulto; 1 si se compra suelto */
+    /** cuánto trae cada bulto, medido en `unidad`; 1 si se compra suelto */
     unidadesPorBulto: integer("unidades_por_bulto").notNull().default(1),
+    /** en qué se mide lo de arriba: unidades, gramos o mililitros */
+    unidad: unidadMedida("unidad").notNull().default("un"),
     /**
      * Lo que se pagó por TODO el renglón, en centavos. Puede faltar: a veces
      * llega el remito sin precios y la factura viene después.

@@ -8,7 +8,7 @@ import {
   productos,
   proveedores,
 } from "@/db/schema";
-import { costoPorUnidad } from "@/lib/negocio";
+import { costoDeReferencia, type Unidad } from "@/lib/negocio";
 import { normalizarNombre } from "@/lib/nombres";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -61,12 +61,15 @@ export type FilaStock = {
   nombre: string;
   proveedor: string | null;
   falta: boolean;
-  /** lo que salió cada unidad la última vez que se compró */
-  costoUnitarioCentavos: number | null;
+  /** lo que salió la unidad, el kilo o el litro, la última vez que se compró */
+  costoCentavos: number | null;
+  /** cómo se lee ese costo: "cada una", "el kilo", "el litro" */
+  porCada: string | null;
   ultimaCompra: string | null;
-  /** cómo venía: 3 packs de 6, por ejemplo */
+  /** cómo venía: 3 packs de 6 unidades, o 2 bolsas de 1000 gr */
   cantidad: number | null;
   unidadesPorBulto: number | null;
+  unidad: Unidad | null;
 };
 
 /**
@@ -99,6 +102,7 @@ export async function listarStock(): Promise<FilaStock[]> {
         productoId: comprasItems.productoId,
         cantidad: comprasItems.cantidad,
         unidadesPorBulto: comprasItems.unidadesPorBulto,
+        unidad: comprasItems.unidad,
         importeCentavos: comprasItems.importeCentavos,
         fecha: compras.fecha,
       })
@@ -115,15 +119,18 @@ export async function listarStock(): Promise<FilaStock[]> {
 
   return catalogo.map((producto) => {
     const compra = ultima.get(producto.id);
+    const costo = compra ? costoDeReferencia(compra) : null;
     return {
       id: producto.id,
       nombre: producto.nombre,
       proveedor: producto.proveedor,
       falta: producto.falta,
-      costoUnitarioCentavos: compra ? costoPorUnidad(compra) : null,
+      costoCentavos: costo?.centavos ?? null,
+      porCada: costo?.porCada ?? null,
       ultimaCompra: compra?.fecha ?? null,
       cantidad: compra?.cantidad ?? null,
       unidadesPorBulto: compra?.unidadesPorBulto ?? null,
+      unidad: compra?.unidad ?? null,
     };
   });
 }

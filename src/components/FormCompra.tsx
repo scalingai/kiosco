@@ -13,9 +13,11 @@ import {
   sumarRenglones,
   type RenglonBorrador,
 } from "@/lib/negocio";
+import { normalizarNombre } from "@/lib/nombres";
 import { centavosAPesos, formatearCentavos, parsearMonto } from "@/lib/plata";
 
 type Proveedor = { id: string; nombre: string };
+type Producto = { id: string; nombre: string };
 
 /**
  * Lo que trajo el proveedor. Las dos fechas están separadas a propósito:
@@ -25,10 +27,13 @@ type Proveedor = { id: string; nombre: string };
 export default function FormCompra({
   fecha,
   proveedores,
+  productos,
   alGuardar,
 }: {
   fecha: string;
   proveedores: Proveedor[];
+  /** los productos que ya existen, para elegir en vez de re-escribir */
+  productos: Producto[];
   alGuardar?: () => void;
 }) {
   const router = useRouter();
@@ -85,10 +90,11 @@ export default function FormCompra({
       return;
     }
 
-    // Si lo escrito coincide exacto con uno de la lista, mandamos su id: así no
-    // se crea "Coca Cola" al lado de "Coca-Cola" por un guion.
+    // Si lo escrito coincide con uno de la lista, mandamos su id. Se compara
+    // normalizado —sin acentos ni signos— así "Coca Cola" encuentra a
+    // "Coca-Cola" en vez de crear un proveedor nuevo por un guion.
     const coincide = proveedores.find(
-      (p) => p.nombre.toLowerCase() === nombre.trim().toLowerCase(),
+      (p) => normalizarNombre(p.nombre) === normalizarNombre(nombre),
     );
 
     setGuardando(true);
@@ -124,6 +130,12 @@ export default function FormCompra({
     alGuardar?.();
   }
 
+  const proveedorNuevo =
+    nombre.trim().length > 0 &&
+    !proveedores.some(
+      (p) => normalizarNombre(p.nombre) === normalizarNombre(nombre),
+    );
+
   const sinPrecioYSinTotal =
     !monto.trim() && renglonesCargados(items).some((i) => !i.importe.trim());
 
@@ -139,9 +151,18 @@ export default function FormCompra({
           onChange={(e) => setNombre(e.target.value)}
           className="mt-1 w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm"
         />
+        {proveedorNuevo && (
+          <span className="mt-1 block text-xs text-tinta-suave">
+            Proveedor nuevo. Si ya le comprabas, elegilo de la lista.
+          </span>
+        )}
       </label>
 
-      <EditorRenglones renglones={items} onCambio={setItems} />
+      <EditorRenglones
+        renglones={items}
+        onCambio={setItems}
+        productos={productos}
+      />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">

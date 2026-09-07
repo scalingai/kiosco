@@ -52,17 +52,30 @@ export type GastoAGuardar = {
   fecha: string;
 };
 
+export const UNIDADES = ["un", "gr", "ml"] as const;
+
+export type Unidad = (typeof UNIDADES)[number];
+
+/** Cómo se nombra la unidad en un desplegable. */
+export const ETIQUETA_UNIDAD: Record<Unidad, string> = {
+  un: "unidades",
+  gr: "gramos",
+  ml: "mililitros",
+};
+
 /**
  * Un renglón de la factura del proveedor. Se guarda lo que dice el papel:
- * cuántos bultos, qué trae cada uno y cuánta plata. El costo por unidad no se
- * guarda porque es una división que casi nunca da redonda.
+ * cuántos bultos, cuánto trae cada uno y en qué se mide, y cuánta plata. El
+ * costo por unidad no se guarda porque es una división que casi nunca da
+ * redonda.
  */
 export type RenglonAGuardar = {
   descripcion: string | null;
-  /** cuántos bultos (packs, cajas) entraron */
+  /** cuántos bultos (packs, cajas, bolsas) entraron */
   cantidad: number;
-  /** cuántas unidades de venta trae cada bulto */
+  /** cuánto trae cada bulto, medido en `unidad` */
   unidadesPorBulto: number;
+  unidad: Unidad;
   /** lo que se pagó por todo el renglón */
   importeCentavos: number | null;
 };
@@ -85,25 +98,65 @@ export function sumarRenglones(lista: RenglonAGuardar[]): number {
   return lista.reduce((total, r) => total + (r.importeCentavos ?? 0), 0);
 }
 
-/** Cuántas unidades de venta entraron por ese renglón. */
-export function unidadesTotales(cantidad: number, unidadesPorBulto: number) {
+/** Cuánto entró en total por ese renglón, en su unidad de medida. */
+export function contenidoTotal(cantidad: number, unidadesPorBulto: number) {
   return Math.max(1, cantidad) * Math.max(1, unidadesPorBulto);
 }
 
+/** "48 unidades", "3 kg", "1,5 L" — cómo se dice lo que entró. */
+export function formatearContenido(total: number, unidad: Unidad): string {
+  if (unidad === "un") {
+    return total === 1 ? "1 unidad" : `${total} unidades`;
+  }
+  const grande = unidad === "gr" ? "kg" : "L";
+  const chico = unidad === "gr" ? "g" : "ml";
+  if (total < 1000) return `${total} ${chico}`;
+  const enGrande = total / 1000;
+  // Sin decimales cuando son justos: "3 kg" y no "3,0 kg".
+  const texto = Number.isInteger(enGrande)
+    ? String(enGrande)
+    : enGrande.toFixed(2).replace(/0+$/, "").replace(/[.,]$/, "").replace(".", ",");
+  return `${texto} ${grande}`;
+}
+
+export type CostoDeReferencia = {
+  centavos: number;
+  /** cómo se lee ese número: "cada una", "el kilo", "el litro" */
+  porCada: string;
+};
+
 /**
- * Lo que te costó cada unidad de las que vas a vender. Es SIEMPRE derivado y
- * puede tener resto: la división se redondea sólo para mostrarla, y por eso el
- * número que se guarda sigue siendo el importe del renglón.
+ * El número con el que se decide a cuánto vender, y el único que sirve para
+ * comparar dos proveedores.
+ *
+ * Es SIEMPRE derivado y puede tener resto: la división se redondea sólo para
+ * mostrarla, y por eso lo que se guarda sigue siendo el importe del renglón.
+ *
+ * Para gramos y mililitros se devuelve el precio por kilo y por litro, no por
+ * gramo: el precio de un gramo son centavos que no se pueden leer, y en el
+ * mayorista los precios se comparan por kilo.
  */
-export function costoPorUnidad(renglon: {
+export function costoDeReferencia(renglon: {
   cantidad: number;
   unidadesPorBulto: number;
+  unidad: Unidad;
   importeCentavos: number | null;
-}): number | null {
+}): CostoDeReferencia | null {
   if (renglon.importeCentavos == null) return null;
-  const unidades = unidadesTotales(renglon.cantidad, renglon.unidadesPorBulto);
-  if (unidades <= 0) return null;
-  return Math.round(renglon.importeCentavos / unidades);
+  const total = contenidoTotal(renglon.cantidad, renglon.unidadesPorBulto);
+  if (total <= 0) return null;
+
+  if (renglon.unidad === "un") {
+    return {
+      centavos: Math.round(renglon.importeCentavos / total),
+      porCada: "cada una",
+    };
+  }
+
+  return {
+    centavos: Math.round((renglon.importeCentavos * 1000) / total),
+    porCada: renglon.unidad === "gr" ? "el kilo" : "el litro",
+  };
 }
 
 /** Lo que se edita en pantalla: todo texto hasta que se confirma. */
@@ -111,11 +164,18 @@ export type RenglonBorrador = {
   descripcion: string;
   cantidad: string;
   unidadesPorBulto: string;
+  unidad: Unidad;
   importe: string;
 };
 
 export function renglonVacio(): RenglonBorrador {
-  return { descripcion: "", cantidad: "1", unidadesPorBulto: "1", importe: "" };
+  return {
+    descripcion: "",
+    cantidad: "1",
+    unidadesPorBulto: "1",
+    unidad: "un",
+    importe: "",
+  };
 }
 
 /** Un renglón cuenta si tiene nombre O importe. Sólo se descarta el vacío. */
@@ -151,7 +211,7 @@ export function aRenglonesAGuardar(
     const unidadesPorBulto = entero(renglon.unidadesPorBulto || "1", 1);
     if (unidadesPorBulto == null) {
       throw new RenglonInvalido(
-        `Revisá cuántas unidades trae ${nombrar(renglon)}.`,
+        `Revisá cuánto trae cada bulto de ${nombrar(renglon)}.`,
       );
     }
 
@@ -168,6 +228,7 @@ export function aRenglonesAGuardar(
       descripcion: renglon.descripcion.trim() || null,
       cantidad,
       unidadesPorBulto,
+      unidad: renglon.unidad,
       importeCentavos,
     };
   });

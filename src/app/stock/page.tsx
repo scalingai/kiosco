@@ -5,6 +5,7 @@ import {
   FormProducto,
 } from "@/components/AccionesStock";
 import { fechaCorta } from "@/lib/fechas";
+import { formatearContenido } from "@/lib/negocio";
 import { formatearCentavos } from "@/lib/plata";
 import { listarStock } from "@/lib/stock";
 
@@ -58,13 +59,13 @@ export default async function Stock() {
                   </span>
                   <span className="text-xs text-tinta-suave">
                     {f.proveedor ?? "sin proveedor"}
-                    {f.costoUnitarioCentavos != null && (
+                    {f.costoCentavos != null && (
                       <>
                         {" · "}
                         <span className="cifra">
-                          {formatearCentavos(f.costoUnitarioCentavos)}
+                          {formatearCentavos(f.costoCentavos)}
                         </span>{" "}
-                        la unidad
+                        {f.porCada}
                       </>
                     )}
                   </span>
@@ -95,9 +96,16 @@ export default async function Stock() {
                     {f.nombre}
                   </span>
                   <span className="cifra shrink-0 text-sm">
-                    {f.costoUnitarioCentavos != null
-                      ? formatearCentavos(f.costoUnitarioCentavos)
-                      : "—"}
+                    {f.costoCentavos != null ? (
+                      <>
+                        {formatearCentavos(f.costoCentavos)}{" "}
+                        <span className="text-xs font-normal text-tinta-suave">
+                          {f.porCada}
+                        </span>
+                      </>
+                    ) : (
+                      "—"
+                    )}
                   </span>
                 </div>
 
@@ -107,8 +115,9 @@ export default async function Stock() {
                     <span>
                       última compra {fechaCorta(f.ultimaCompra)}
                       {f.unidadesPorBulto != null &&
+                        f.unidad != null &&
                         f.unidadesPorBulto > 1 &&
-                        ` · venía de a ${f.unidadesPorBulto}`}
+                        ` · venía de a ${formatearContenido(f.unidadesPorBulto, f.unidad)}`}
                     </span>
                   ) : (
                     <span>nunca se compró desde la app</span>

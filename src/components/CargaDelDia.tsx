@@ -7,6 +7,7 @@ import FormVenta from "@/components/FormVenta";
 import Hoja from "@/components/Hoja";
 
 type Proveedor = { id: string; nombre: string };
+type Producto = { id: string; nombre: string };
 
 type Cual = "venta" | "compra" | "gasto";
 
@@ -23,9 +24,11 @@ const TITULO: Record<Cual, string> = {
 export default function CargaDelDia({
   fecha,
   proveedores,
+  productos,
 }: {
   fecha: string;
   proveedores: Proveedor[];
+  productos: Producto[];
 }) {
   const [abierta, setAbierta] = useState<Cual | null>(null);
   const cerrar = () => setAbierta(null);
@@ -54,7 +57,12 @@ export default function CargaDelDia({
       >
         {abierta === "venta" && <FormVenta fecha={fecha} alGuardar={cerrar} />}
         {abierta === "compra" && (
-          <FormCompra fecha={fecha} proveedores={proveedores} alGuardar={cerrar} />
+          <FormCompra
+            fecha={fecha}
+            proveedores={proveedores}
+            productos={productos}
+            alGuardar={cerrar}
+          />
         )}
         {abierta === "gasto" && <FormGasto fecha={fecha} alGuardar={cerrar} />}
       </Hoja>

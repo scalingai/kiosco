@@ -130,6 +130,7 @@ type RenglonSemilla = {
   descripcion: string;
   cantidad: number;
   unidadesPorBulto?: number;
+  unidad?: "un" | "gr" | "ml";
   importe?: number;
 };
 
@@ -155,6 +156,8 @@ const COMPRAS: CompraSemilla[] = [
     items: [
       { descripcion: "gaseosa 2,25L", cantidad: 8, unidadesPorBulto: 6, importe: 144000 },
       { descripcion: "agua saborizada", cantidad: 3, unidadesPorBulto: 6, importe: 41000 },
+      // Comprado por peso: el precio que sirve es el del kilo, no el del gramo.
+      { descripcion: "yerba", cantidad: 4, unidadesPorBulto: 1000, unidad: "gr", importe: 38000 },
     ],
     total: 185000,
     dias: 1,
@@ -338,6 +341,7 @@ async function main() {
           descripcion: renglon.descripcion,
           cantidad: renglon.cantidad,
           unidadesPorBulto: renglon.unidadesPorBulto ?? 1,
+          unidad: renglon.unidad ?? "un",
           importeCentavos:
             renglon.importe != null ? centavos(renglon.importe) : null,
           posicion,

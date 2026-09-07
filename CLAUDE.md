@@ -46,10 +46,21 @@ servidor arriba. No agregues fallbacks de navegación ni caché de páginas: si 
 hay red, el error lo pone el navegador, que no se equivoca.
 
 **El costo por unidad se calcula, no se carga.** Al proveedor se le compra por
-pack. El renglón de una compra guarda lo que dice la factura —cuántos bultos,
-`unidades_por_bulto` e `importe_centavos`— y el costo unitario sale de dividir,
-al mostrarlo. Guardarlo redondeado hace que el renglón deje de sumar lo que se
-pagó: $41.000 entre 18 unidades no da un número redondo.
+bulto. El renglón de una compra guarda lo que dice la factura —cuántos bultos,
+`unidades_por_bulto`, en qué `unidad` se mide (`un`/`gr`/`ml`) e
+`importe_centavos`— y el costo sale de dividir, al mostrarlo. Guardarlo
+redondeado hace que el renglón deje de sumar lo que se pagó: $41.000 entre 18
+unidades no da un número redondo.
+
+Para `gr` y `ml`, `costoDeReferencia()` devuelve el precio **por kilo y por
+litro**, no por gramo: el precio de un gramo son centavos que nadie puede leer,
+y en el mayorista los precios se comparan por kilo.
+
+**Los nombres se comparan normalizados.** Clientes, proveedores y productos
+pasan todos por `normalizarNombre()` antes de buscar o crear, y cada tabla tiene
+su índice único sobre la columna normalizada. Por eso "coca cola" encuentra a
+"Coca-Cola" en vez de crear un duplicado. Si agregás otra entidad con nombre,
+seguí el mismo patrón: `buscarOCrear…` + `uniqueIndex` sobre `nombre_normalizado`.
 
 **Stock no cuenta unidades.** `productos` es un catálogo de reposición, no un
 inventario: qué se vende, a quién se le compra, a cuánto salió la última vez y

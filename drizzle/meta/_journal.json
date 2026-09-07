@@ -36,6 +36,13 @@
       "when": 1788818690335,
       "tag": "0004_stock",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788819412820,
+      "tag": "0005_unidad-de-medida",
+      "breakpoints": true
     }
   ]
 }
