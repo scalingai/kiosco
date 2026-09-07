@@ -1,9 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
-import Image from "next/image";
-import Link from "next/link";
 import AccionesFlotantes from "@/components/AccionesFlotantes";
-import BotonSalir from "@/components/BotonSalir";
 import RegistrarSW from "@/components/RegistrarSW";
 import { listarCandidatos } from "@/lib/consultas";
 import { pinConfigurado } from "@/lib/sesion";
@@ -54,41 +51,19 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       lang="es-AR"
       className={`${geistSans.variable} ${geistMono.variable} ${serif.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
-        <header className="border-b border-linea bg-papel-hondo/70">
-          <div className="mx-auto flex w-full max-w-5xl items-center gap-2.5 px-4 py-3 sm:px-6">
-            <Link href="/" className="flex items-center gap-2.5">
-              <Image
-                src="/oso.png"
-                alt=""
-                width={36}
-                height={36}
-                priority
-                className="h-9 w-9 object-contain"
-              />
-              <span className="font-display text-2xl leading-none tracking-tight sm:text-3xl">
-                El Osito
-              </span>
-            </Link>
-            <span className="text-xs uppercase tracking-[0.18em] text-tinta-suave">
-              Fiado
-            </span>
-            {/* Sin PIN configurado no hay sesión que cerrar. */}
-            {pinConfigurado() && (
-              <span className="ml-auto">
-                <BotonSalir />
-              </span>
-            )}
-          </div>
-        </header>
+      <body className="min-h-full">
+        {/*
+          El menú es fijo: una columna a la izquierda en pantalla grande y una
+          barra con un solo botón arriba en el celular. El contenido se corre
+          para dejarle el lugar en cada caso.
+        */}
+        <div className="lg:pl-64">
+          <main className="mx-auto w-full max-w-5xl px-4 pb-16 pt-20 sm:px-6 lg:pt-8">
+            {children}
+          </main>
+        </div>
 
-        {/* El padding de abajo deja libre la columna de botones flotantes. */}
-        {/* El padding de abajo deja libre la barra de navegación. */}
-        <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-32 pt-6 sm:px-6">
-          {children}
-        </main>
-
-        <AccionesFlotantes clientes={candidatos} />
+        <AccionesFlotantes clientes={candidatos} conSalir={Boolean(pinConfigurado())} />
         <RegistrarSW />
       </body>
     </html>

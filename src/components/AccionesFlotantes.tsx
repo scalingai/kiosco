@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import BarraNav from "@/components/BarraNav";
+import Menu from "@/components/Menu";
 import { guardarMovimientos } from "@/app/acciones";
 import EditorItems from "@/components/EditorItems";
 import FormMovimiento from "@/components/FormMovimiento";
@@ -103,8 +103,10 @@ function totalEfectivo(b: Borrador): { centavos: number; declarado: boolean } {
 
 export default function AccionesFlotantes({
   clientes,
+  conSalir,
 }: {
   clientes: Candidato[];
+  conSalir: boolean;
 }) {
   const router = useRouter();
   const ruta = usePathname();
@@ -350,7 +352,7 @@ export default function AccionesFlotantes({
     <>
       {/* Los cartelitos van sobre los botones, no adentro de la hoja: se ven
           aunque la hoja ya se haya cerrado. */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-24 z-40 flex justify-center px-4">
+      <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
         {error && (
           <p
             role="alert"
@@ -370,7 +372,8 @@ export default function AccionesFlotantes({
         )}
       </div>
 
-      <BarraNav
+      <Menu
+        conSalir={conSalir}
         grabando={grabando}
         procesando={procesando}
         segundos={segundos}
