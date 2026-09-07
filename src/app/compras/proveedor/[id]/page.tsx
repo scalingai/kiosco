@@ -2,8 +2,10 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import BotonAnularFila from "@/components/BotonAnularFila";
+import BotonCompra from "@/components/BotonCompra";
 import BotonPagarCompra from "@/components/BotonPagarCompra";
 import SelectorMes from "@/components/SelectorMes";
+import { listarProveedores } from "@/lib/caja";
 import {
   agruparPorProducto,
   deudaDelProveedor,
@@ -14,6 +16,7 @@ import {
 import { fechaCorta, fechaLarga, hoyLocal, nombreDeMes } from "@/lib/fechas";
 import { formatearContenido, MEDIO_CORTO } from "@/lib/negocio";
 import { formatearCentavos } from "@/lib/plata";
+import { listarNombresDeProductos } from "@/lib/stock";
 
 export const dynamic = "force-dynamic";
 
@@ -48,9 +51,11 @@ export default async function FichaProveedor({
   const verProductos = leer("ver") !== "compras";
 
   const { desde, hasta } = rangoDelMes(mes);
-  const [lista, deuda] = await Promise.all([
+  const [lista, deuda, proveedores, catalogo] = await Promise.all([
     historialDeCompras({ desde, hasta, proveedorId: id }),
     deudaDelProveedor(id),
+    listarProveedores(),
+    listarNombresDeProductos(),
   ]);
 
   const total = lista.reduce((t, c) => t + c.montoCentavos, 0);
@@ -106,6 +111,13 @@ export default async function FichaProveedor({
           )}
         </p>
       </section>
+
+      <BotonCompra
+        fecha={hoy}
+        proveedores={proveedores}
+        productos={catalogo}
+        proveedorInicial={proveedor.nombre}
+      />
 
       <div className="flex gap-2">
         <Link

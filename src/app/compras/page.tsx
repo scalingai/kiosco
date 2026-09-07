@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import BotonCompra from "@/components/BotonCompra";
 import SelectorMes from "@/components/SelectorMes";
+import { listarProveedores } from "@/lib/caja";
 import {
   agruparPorFecha,
   agruparPorMedio,
@@ -12,6 +14,7 @@ import {
 } from "@/lib/compras";
 import { fechaLarga, hoyLocal } from "@/lib/fechas";
 import { formatearCentavos } from "@/lib/plata";
+import { listarNombresDeProductos } from "@/lib/stock";
 
 export const dynamic = "force-dynamic";
 
@@ -118,7 +121,11 @@ export default async function Compras({ searchParams }: PageProps<"/compras">) {
     : "proveedor";
 
   const { desde, hasta } = rangoDelMes(mes);
-  const lista = await historialDeCompras({ desde, hasta });
+  const [lista, proveedores, productos] = await Promise.all([
+    historialDeCompras({ desde, hasta }),
+    listarProveedores(),
+    listarNombresDeProductos(),
+  ]);
 
   const total = lista.reduce((t, c) => t + c.montoCentavos, 0);
   const impago = lista.reduce(
@@ -165,6 +172,8 @@ export default async function Compras({ searchParams }: PageProps<"/compras">) {
           )}
         </p>
       </section>
+
+      <BotonCompra fecha={hoy} proveedores={proveedores} productos={productos} />
 
       <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
         <div className="flex gap-2">

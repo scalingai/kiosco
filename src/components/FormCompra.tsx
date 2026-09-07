@@ -30,16 +30,19 @@ export default function FormCompra({
   fecha,
   proveedores,
   productos,
+  proveedorInicial,
   alGuardar,
 }: {
   fecha: string;
   proveedores: Proveedor[];
   /** los productos que ya existen, para elegir en vez de re-escribir */
   productos: Producto[];
+  /** cuando el formulario se abre desde la ficha de un proveedor */
+  proveedorInicial?: string;
   alGuardar?: () => void;
 }) {
   const router = useRouter();
-  const [nombre, setNombre] = useState("");
+  const [nombre, setNombre] = useState(proveedorInicial ?? "");
   const [items, setItems] = useState<RenglonBorrador[]>([renglonVacio()]);
   const [monto, setMonto] = useState("");
   const [comprobante, setComprobante] = useState("");
@@ -127,7 +130,7 @@ export default function FormCompra({
       return;
     }
 
-    setNombre("");
+    setNombre(proveedorInicial ?? "");
     setMonto("");
     setComprobante("");
     setNota("");
@@ -151,7 +154,7 @@ export default function FormCompra({
         <span className="text-xs text-tinta-suave">Proveedor</span>
         <input
           value={nombre}
-          autoFocus
+          autoFocus={!proveedorInicial}
           list="lista-proveedores"
           placeholder="Nombre del proveedor"
           onChange={(e) => setNombre(e.target.value)}
