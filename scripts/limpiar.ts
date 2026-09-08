@@ -40,9 +40,16 @@ const PODA: { rubro: string; salvoMarcas?: string[]; porque: string }[] = [
     porque: "no se venden conservas en el kiosco",
   },
   {
+    rubro: "Aguas",
+    salvoMarcas: ["Villa Manaos"],
+    porque: "de agua mineral sólo se vende Villa Manaos",
+  },
+  {
     rubro: "Helados",
-    salvoMarcas: ["Arcor"],
-    porque: "de helados sólo entra Arcor",
+    // Vacío a propósito: lo que trajo el importador eran postres y multipacks
+    // de supermercado, no helados de mostrador. Se van todos y se cargan los
+    // de impulso de Arcor, que son otra cosa.
+    porque: "los que había eran postres de súper, no helados de kiosco",
   },
 ];
 

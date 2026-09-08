@@ -50,7 +50,8 @@ const POR_BUSQUEDA = 24;
 const BUSQUEDAS: { termino: string; rubro: string; soloMarcas?: string[] }[] = [
   { termino: "gaseosa", rubro: "Gaseosas" },
   { termino: "agua saborizada", rubro: "Aguas saborizadas" },
-  { termino: "agua mineral", rubro: "Aguas" },
+  // De agua sólo se vende Villa Manaos: el resto es ruido.
+  { termino: "agua mineral", rubro: "Aguas", soloMarcas: ["Villa Manaos"] },
   { termino: "jugo", rubro: "Jugos" },
   { termino: "cerveza lata", rubro: "Alcohol" },
   { termino: "energizante", rubro: "Energizantes" },
@@ -65,8 +66,6 @@ const BUSQUEDAS: { termino: string; rubro: string; soloMarcas?: string[] }[] = [
   { termino: "pastillas", rubro: "Pastillas" },
   { termino: "gomitas", rubro: "Gomitas" },
   { termino: "leche", rubro: "Leche" },
-  // De helados sólo entra Arcor: es lo único que se vende acá.
-  { termino: "helado", rubro: "Helados", soloMarcas: ["Arcor"] },
   { termino: "papel higienico", rubro: "Papel higiénico" },
   { termino: "jabon en polvo", rubro: "Jabón para la ropa" },
   { termino: "suavizante", rubro: "Suavizante" },

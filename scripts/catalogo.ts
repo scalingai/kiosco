@@ -23,7 +23,12 @@ import { eq } from "drizzle-orm";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
-import { categorias, marcas, productos } from "../src/db/schema.ts";
+import {
+  categorias,
+  marcas,
+  productos,
+  proveedores,
+} from "../src/db/schema.ts";
 import { normalizarNombre } from "../src/lib/nombres.ts";
 
 type Envase = "botella" | "retornable" | "lata" | "tetra" | "otro";
@@ -358,6 +363,39 @@ const SIN_TAMANO: { marca: string; rubro: string; nombre?: string }[] = [
   { marca: "Twistos", rubro: "Snacks salados" },
 ];
 
+/**
+ * Los helados de mostrador de Arcor: los que se venden de a uno.
+ *
+ * NO son los que trae el importador del supermercado. Ahí lo que hay son potes,
+ * multipacks y postres familiares de 637 g, que es otro negocio: el kiosco
+ * vende la unidad del freezer.
+ *
+ * `cc` sale del catálogo del distribuidor, que lista el bulto y la unidad ("40
+ * x 49 cc" es una caja de 40 palitos de 49 cc cada uno). Los que no aparecen
+ * con su medida quedan sin contenido: el gramaje se completa solo cuando se
+ * carga la primera compra.
+ *
+ * La marca es la del envoltorio —Águila, Bon o Bon, Cofler— y el proveedor es
+ * Arcor, que es a quién se le compra. Son dos cosas distintas.
+ */
+const HELADOS_ARCOR: { marca: string; nombre: string; cc?: number }[] = [
+  { marca: "Águila", nombre: "Barrita Águila", cc: 49 },
+  { marca: "Mr Pop's", nombre: "Mr Pop's surtido", cc: 50 },
+  { marca: "Bon o Bon", nombre: "Corazón Bon o Bon", cc: 60 },
+  { marca: "Mogul", nombre: "Mogul Extreme sandía", cc: 50 },
+  { marca: "Bon o Bon", nombre: "Bon o Bon Citos", cc: 180 },
+  { marca: "Cofler", nombre: "Cofler Citos dulce de leche", cc: 200 },
+  { marca: "Cofler", nombre: "Cofler Citos americana", cc: 200 },
+  // De estos el catálogo no da la medida de la unidad.
+  { marca: "Mogul", nombre: "Palito Mogul 50% jugo" },
+  { marca: "Rocklets", nombre: "Palito Rocklets" },
+  { marca: "Cindor", nombre: "Palito Cindor" },
+  { marca: "Butter Toffee", nombre: "Palito Butter Toffee's" },
+];
+
+/** A quién se le compran los helados y las golosinas. */
+const PROVEEDOR_HELADOS = "Arcor";
+
 /** "Coca-Cola" + "zero" + "600 ml" → "Coca-Cola zero 600 ml" */
 function nombrar(marca: string, variante: string, formato: string): string {
   return [marca, variante, formato].filter(Boolean).join(" ");
@@ -488,6 +526,52 @@ async function main() {
       .set({ marcaId, categoriaId: idPorRubro.get(item.rubro) ?? null })
       .where(eq(productos.nombreNormalizado, normalizarNombre(nombre)));
     actualizados += 1;
+  }
+
+  // Helados de impulso: marca del envoltorio, proveedor Arcor.
+  {
+    const normalizado = normalizarNombre(PROVEEDOR_HELADOS);
+    const [creado] = await db
+      .insert(proveedores)
+      .values({ nombre: PROVEEDOR_HELADOS, nombreNormalizado: normalizado })
+      .onConflictDoNothing({ target: proveedores.nombreNormalizado })
+      .returning();
+    let proveedorId = creado?.id ?? null;
+    if (!proveedorId) {
+      const [existente] = await db
+        .select()
+        .from(proveedores)
+        .where(eq(proveedores.nombreNormalizado, normalizado));
+      proveedorId = existente?.id ?? null;
+    }
+
+    for (const helado of HELADOS_ARCOR) {
+      const marcaId = await idDe(marcas, helado.marca);
+      const [nuevo] = await db
+        .insert(productos)
+        .values({
+          nombre: helado.nombre,
+          nombreNormalizado: normalizarNombre(helado.nombre),
+          marcaId,
+          proveedorId,
+          categoriaId: idPorRubro.get("Helados") ?? null,
+          contenido: helado.cc ?? null,
+          contenidoUnidad: helado.cc ? "ml" : null,
+          envase: "otro",
+        })
+        .onConflictDoNothing({ target: productos.nombreNormalizado })
+        .returning();
+
+      if (nuevo) {
+        creados += 1;
+        continue;
+      }
+      await db
+        .update(productos)
+        .set({ marcaId, categoriaId: idPorRubro.get("Helados") ?? null })
+        .where(eq(productos.nombreNormalizado, normalizarNombre(helado.nombre)));
+      actualizados += 1;
+    }
   }
 
   for (const suelto of SUELTOS) {
