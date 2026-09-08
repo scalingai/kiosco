@@ -43,23 +43,32 @@ const POR_BUSQUEDA = 24;
 /**
  * Qué buscar y en qué rubro cae lo que venga.
  *
- * `soloMarcas` filtra: de ese rubro entran únicamente esas marcas. Sirve para
- * los rubros donde el kiosco trabaja con un proveedor y nada más, y evita tener
- * que podar a mano después de cada importación.
+ * `soloEnriquecer` es la diferencia importante entre los dos tipos de rubro:
+ *
+ * - Los que YA están curados a mano (todas las bebidas) saben exactamente qué
+ *   se vende. Ahí el importador no agrega nada: sólo le completa el código de
+ *   barras y la foto a lo que ya existe. Sin esto, cada corrida metía cuarenta
+ *   gaseosas y jugos de marcas que el kiosco no tiene, y había que podarlas
+ *   una por una.
+ * - Los que están vacíos (golosinas, limpieza, librería) sí se llenan con lo
+ *   que venga: ahí traer de más y podar después es más rápido que cargar a
+ *   mano.
+ *
+ * `soloMarcas` es el caso del medio: el rubro se llena, pero sólo con esas
+ * marcas.
  */
-const BUSQUEDAS: { termino: string; rubro: string; soloMarcas?: string[] }[] = [
-  { termino: "gaseosa", rubro: "Gaseosas" },
-  { termino: "agua saborizada", rubro: "Aguas saborizadas" },
-  // De agua sólo se vende Villa Manaos: el resto es ruido.
-  { termino: "agua mineral", rubro: "Aguas", soloMarcas: ["Villa Manaos"] },
-  { termino: "jugo", rubro: "Jugos" },
-  // Sólo las cervezas que se venden acá.
-  {
-    termino: "cerveza lata",
-    rubro: "Alcohol",
-    soloMarcas: ["Brahma", "Isenbeck", "Schneider"],
-  },
-  { termino: "energizante", rubro: "Energizantes" },
+const BUSQUEDAS: {
+  termino: string;
+  rubro: string;
+  soloMarcas?: string[];
+  soloEnriquecer?: boolean;
+}[] = [
+  { termino: "gaseosa", rubro: "Gaseosas", soloEnriquecer: true },
+  { termino: "agua saborizada", rubro: "Aguas saborizadas", soloEnriquecer: true },
+  { termino: "agua mineral", rubro: "Aguas", soloEnriquecer: true },
+  { termino: "jugo", rubro: "Jugos", soloEnriquecer: true },
+  { termino: "cerveza lata", rubro: "Alcohol", soloEnriquecer: true },
+  { termino: "energizante", rubro: "Energizantes", soloEnriquecer: true },
   { termino: "papas fritas", rubro: "Papas fritas" },
   { termino: "palitos snack", rubro: "Snacks salados" },
   { termino: "galletitas", rubro: "Galletitas" },
@@ -438,6 +447,9 @@ async function main() {
         );
         continue;
       }
+
+      // Rubro curado: lo que no está cargado es porque no se vende.
+      if (busqueda.soloEnriquecer) continue;
 
       nuevos += 1;
       nuevosAca += 1;

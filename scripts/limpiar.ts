@@ -44,6 +44,39 @@ const PODA: { rubro: string; salvoMarcas?: string[]; porque: string }[] = [
     salvoMarcas: ["Villa Manaos"],
     porque: "de agua mineral sólo se vende Villa Manaos",
   },
+  /*
+   * Las bebidas están cargadas a mano en `db:catalogo`: ahí está escrito
+   * exactamente qué se vende. Todo lo que el importador metió de más en esos
+   * rubros se va, y no vuelve porque esas búsquedas pasaron a `soloEnriquecer`.
+   */
+  {
+    rubro: "Gaseosas",
+    salvoMarcas: [
+      "Coca-Cola",
+      "Sprite",
+      "Fanta",
+      "Pepsi",
+      "7up",
+      "Manaos",
+      "Cunnington",
+    ],
+    porque: "son las gaseosas que se venden",
+  },
+  {
+    rubro: "Jugos",
+    salvoMarcas: ["Baggio", "Powerade"],
+    porque: "de jugos sólo Baggio, y Powerade que va en el mismo rubro",
+  },
+  {
+    rubro: "Aguas saborizadas",
+    salvoMarcas: ["Levite", "Aquarius", "Placer"],
+    porque: "son las saborizadas que se venden",
+  },
+  {
+    rubro: "Energizantes",
+    salvoMarcas: ["Speed"],
+    porque: "de energizantes sólo Speed (falta cargar Monster)",
+  },
   {
     rubro: "Alcohol",
     salvoMarcas: ["Brahma", "Isenbeck", "Schneider", "Smirnoff"],

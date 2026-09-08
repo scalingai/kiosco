@@ -72,6 +72,17 @@ multiplicar el costo por 1,4 no es ganar 40%, es ganar 28,6% de lo que cobrás.
 1,4 es sólo una sugerencia; si el producto tiene `precio_venta_centavos`
 cargado, la app dice el margen REAL en vez de uno inventado.
 
+**En los rubros de bebidas, `db:catalogo` es la única verdad.** Los que están en
+`RUBROS_PROPIOS` (gaseosas, aguas, saborizadas, jugos, energizantes, alcohol,
+helados, lácteos) se cargan a mano ahí, y al final el script **borra de esos
+rubros lo que no generó**. Sin eso, cada corrida del importador metía marcas y
+formatos que el kiosco no tiene y había que podar rubro por rubro. Los rubros
+que NO están en esa lista se llenan con lo que traiga el importador, porque
+todavía no hay nada curado.
+
+Lo que nunca se borra, aunque sobre: un producto con compras encima o con
+precio de venta cargado. Eso significa que alguien lo usa de verdad.
+
 **El código de barras no se adivina.** `productos.codigo_barras` se valida con
 el dígito verificador del EAN (`codigoValido()` en `src/lib/stock.ts`) antes de
 guardarse. Un código equivocado no falla ruidosamente: escanea y trae otro

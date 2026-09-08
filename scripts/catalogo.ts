@@ -19,12 +19,13 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { eq } from "drizzle-orm";
+import { and, eq, notInArray } from "drizzle-orm";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import {
   categorias,
+  comprasItems,
   marcas,
   productos,
   proveedores,
@@ -403,6 +404,29 @@ const LACTEOS: { marca: string; nombre: string; gr?: number }[] = [
   { marca: "La Serenísima", nombre: "Queso rallado La Serenísima chico" },
 ];
 
+/**
+ * Los rubros donde este archivo es la ÚNICA verdad.
+ *
+ * En estos, lo que no está acá abajo no se vende, y por eso al final se borra
+ * lo que sobre. Es la respuesta al problema que se repitió seis veces: el
+ * importador metía marcas y formatos que el kiosco no tiene —Coca de 1,75 L,
+ * veinte energizantes, cuarenta jugos— y había que podar rubro por rubro
+ * después de cada corrida.
+ *
+ * Los rubros que NO están acá (golosinas, limpieza, librería) se llenan con lo
+ * que traiga el importador, porque ahí todavía no hay nada cargado a mano.
+ */
+const RUBROS_PROPIOS = [
+  "Gaseosas",
+  "Aguas",
+  "Aguas saborizadas",
+  "Jugos",
+  "Energizantes",
+  "Alcohol",
+  "Helados",
+  "Lácteos",
+];
+
 /** A quién se le compran los helados y las golosinas. */
 const PROVEEDOR_HELADOS = "Arcor";
 
@@ -453,6 +477,8 @@ async function main() {
 
   let creados = 0;
   let actualizados = 0;
+  /** Los nombres que genera este archivo: todo lo demás sobra. */
+  const generados = new Set<string>();
 
   async function guardar(
     marcaId: string,
@@ -462,6 +488,7 @@ async function main() {
     formato: Formato,
   ) {
     const nombre = nombrar(marca, variante, formato.etiqueta);
+    generados.add(normalizarNombre(nombre));
     const [producto] = await db
       .insert(productos)
       .values({
@@ -511,6 +538,7 @@ async function main() {
   }
 
   for (const item of SIN_TAMANO) {
+    generados.add(normalizarNombre(item.nombre ?? item.marca));
     const marcaId = item.marca ? await idDe(marcas, item.marca) : null;
     const nombre = item.nombre ?? item.marca;
     const [producto] = await db
@@ -539,6 +567,7 @@ async function main() {
   }
 
   for (const lacteo of LACTEOS) {
+    generados.add(normalizarNombre(lacteo.nombre));
     const marcaId = await idDe(marcas, lacteo.marca);
     const [nuevo] = await db
       .insert(productos)
@@ -581,6 +610,7 @@ async function main() {
     }
 
     for (const helado of HELADOS_ARCOR) {
+      generados.add(normalizarNombre(helado.nombre));
       const marcaId = await idDe(marcas, helado.marca);
       const [nuevo] = await db
         .insert(productos)
@@ -617,6 +647,52 @@ async function main() {
       suelto.marca,
       suelto.variante,
       suelto.formato,
+    );
+  }
+
+  /*
+   * En los rubros propios, lo que no generó este archivo se va.
+   *
+   * Con dos excepciones que no se tocan: si el producto tiene compras encima o
+   * si alguien le puso precio de venta, es porque se usa de verdad. Borrarlo
+   * seria pisarle el trabajo a quien lo cargó.
+   */
+  let sobrantes = 0;
+  for (const rubro of RUBROS_PROPIOS) {
+    const rubroId = idPorRubro.get(rubro);
+    if (!rubroId) continue;
+
+    const deMas = await db
+      .select({
+        id: productos.id,
+        nombre: productos.nombre,
+        precio: productos.precioVentaCentavos,
+      })
+      .from(productos)
+      .where(
+        and(
+          eq(productos.categoriaId, rubroId),
+          notInArray(productos.nombreNormalizado, [...generados]),
+        ),
+      );
+
+    for (const producto of deMas) {
+      if (producto.precio != null) continue;
+
+      const [usado] = await db
+        .select({ id: comprasItems.id })
+        .from(comprasItems)
+        .where(eq(comprasItems.productoId, producto.id))
+        .limit(1);
+      if (usado) continue;
+
+      await db.delete(productos).where(eq(productos.id, producto.id));
+      sobrantes += 1;
+    }
+  }
+  if (sobrantes) {
+    console.log(
+      `${sobrantes} productos sobraban en los rubros propios y se sacaron.`,
     );
   }
 
