@@ -442,6 +442,15 @@ export const productos = pgTable(
     /** cómo viene envasado; es otro eje distinto del rubro */
     envase: tipoEnvase("envase"),
     /**
+     * El EAN del envase. Se carga escaneando: casi todos los lectores USB
+     * escriben los dígitos como si fueran un teclado, así que enfocar el campo
+     * y pasar el producto lo completa de una y sin errores.
+     *
+     * NO se completa de internet. Un código equivocado no falla: escanea y
+     * trae otro producto, que es peor que no tenerlo.
+     */
+    codigoBarras: text("codigo_barras"),
+    /**
      * Cuánto trae UNA unidad de venta: la botella de Coca son 2250 ml, el
      * paquete de papas 120 gr.
      *
@@ -467,6 +476,9 @@ export const productos = pgTable(
   },
   (t) => [
     uniqueIndex("productos_nombre_normalizado_key").on(t.nombreNormalizado),
+    // Postgres deja repetir NULL en un índice único, así que los que todavía
+    // no tienen código conviven sin pelearse.
+    uniqueIndex("productos_codigo_barras_key").on(t.codigoBarras),
     index("productos_falta_idx").on(t.falta),
   ],
 );

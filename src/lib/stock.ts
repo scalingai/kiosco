@@ -21,6 +21,30 @@ import {
 } from "@/lib/negocio";
 import { normalizarNombre } from "@/lib/nombres";
 
+/**
+ * Valida un código de barras por su dígito verificador.
+ *
+ * Los EAN-13 y EAN-8 llevan el último dígito calculado a partir de los otros,
+ * justamente para detectar un dígito mal leído o mal tipeado. Chequearlo es lo
+ * que evita el peor caso: un código que "parece" bien, se guarda, y el día que
+ * se escanee trae otro producto.
+ *
+ * Los EAN argentinos arrancan en 779, pero eso NO se exige: en la góndola hay
+ * importados y productos con código de otro país.
+ */
+export function codigoValido(codigo: string): boolean {
+  if (!/^\d+$/.test(codigo)) return false;
+  if (codigo.length !== 8 && codigo.length !== 13) return false;
+
+  const digitos = [...codigo].map(Number);
+  const verificador = digitos.pop()!;
+  // De derecha a izquierda, uno de cada dos pesa 3 y el otro 1.
+  const suma = digitos
+    .reverse()
+    .reduce((total, d, i) => total + d * (i % 2 === 0 ? 3 : 1), 0);
+  return (10 - (suma % 10)) % 10 === verificador;
+}
+
 /** La misma tabla otra vez, para poder leer la categoría padre en la consulta. */
 const padre = alias(categorias, "categoria_padre");
 
@@ -83,6 +107,7 @@ export type FilaStock = {
   /** el rubro grande, el padre del de arriba: "Bebidas" */
   categoria: string | null;
   envase: Envase | null;
+  codigoBarras: string | null;
   /** cuánto trae una unidad de venta: 2250 (ml) para la Coca grande */
   contenido: number | null;
   contenidoUnidad: Unidad | null;
@@ -131,6 +156,7 @@ export async function listarStock(): Promise<FilaStock[]> {
         subcategoria: categorias.nombre,
         categoria: padre.nombre,
         envase: productos.envase,
+        codigoBarras: productos.codigoBarras,
         contenido: productos.contenido,
         contenidoUnidad: productos.contenidoUnidad,
         precioVentaCentavos: productos.precioVentaCentavos,
@@ -188,6 +214,7 @@ export async function listarStock(): Promise<FilaStock[]> {
       subcategoria: producto.subcategoria,
       categoria: producto.categoria,
       envase: producto.envase,
+      codigoBarras: producto.codigoBarras,
       contenido: producto.contenido,
       contenidoUnidad: producto.contenidoUnidad,
       enBlanco,
@@ -318,6 +345,8 @@ export type FichaProducto = {
   /** la subcategoría; `null` lo deja sin rubro */
   categoriaId?: string | null;
   envase?: Envase | null;
+  /** el EAN del envase; `null` lo borra */
+  codigoBarras?: string | null;
 };
 
 /**
@@ -338,6 +367,7 @@ export async function actualizarProducto(id: string, ficha: FichaProducto) {
     precioVentaCentavos?: number | null;
     categoriaId?: string | null;
     envase?: Envase | null;
+    codigoBarras?: string | null;
   } = {};
 
   if (ficha.nombre != null) {
@@ -383,6 +413,16 @@ export async function actualizarProducto(id: string, ficha: FichaProducto) {
   }
 
   if (ficha.envase !== undefined) cambios.envase = ficha.envase;
+
+  if (ficha.codigoBarras !== undefined) {
+    const limpio = ficha.codigoBarras?.replace(/\D/g, "") ?? "";
+    if (limpio && !codigoValido(limpio)) {
+      throw new Error(
+        "Ese código de barras no cierra. Revisá que esté completo y volvé a escanearlo.",
+      );
+    }
+    cambios.codigoBarras = limpio || null;
+  }
 
   if (!Object.keys(cambios).length) return null;
 

@@ -28,8 +28,27 @@ import { normalizarNombre } from "../src/lib/nombres.ts";
 
 type Envase = "botella" | "retornable" | "lata" | "tetra" | "otro";
 
-/** Un formato de envase: cómo se llama, cuántos ml trae y en qué viene. */
-type Formato = { etiqueta: string; ml: number; envase: Envase };
+/**
+ * Un formato de envase: cómo se llama, cuánto trae y en qué viene. `unidad` es
+ * "ml" salvo que se diga: las bebidas se miden en mililitros y los snacks en
+ * gramos.
+ */
+type Formato = {
+  etiqueta: string;
+  ml: number;
+  envase: Envase;
+  unidad?: "ml" | "gr";
+};
+
+/** Un paquete de snack: N gramos en una bolsa. */
+function bolsa(gramos: number): Formato {
+  return {
+    etiqueta: `${gramos} g`,
+    ml: gramos,
+    envase: "otro",
+    unidad: "gr",
+  };
+}
 
 /**
  * Una línea de productos: una marca, su rubro, sus variantes y sus formatos.
@@ -76,6 +95,7 @@ const SUBCATEGORIAS: Record<string, string> = {
   Gomitas: "Golosinas",
 
   "Papas fritas": "Snacks",
+  "Snacks salados": "Snacks",
   Galletitas: "Snacks",
 
   Leche: "Almacén",
@@ -266,6 +286,39 @@ const CATALOGO: Linea[] = [
       { etiqueta: "710 ml", ml: 710, envase: "botella" },
     ],
   },
+  /*
+   * Snacks. Los gramajes salen del catálogo del distribuidor oficial de
+   * Krachitos y de las fichas de producto de los supermercados; los que no
+   * pude verificar quedan en SIN_TAMANO, sin número inventado.
+   *
+   * Dos correcciones sobre cómo los nombraste: Chizitos y Palitos NO son
+   * marcas, son productos de Krachitos. Y Rueditas es de la marca PEP, no una
+   * marca propia.
+   */
+  {
+    marca: "Krachitos",
+    rubro: "Snacks salados",
+    variantes: ["chizitos queso"],
+    formatos: [bolsa(60), bolsa(125), bolsa(240)],
+  },
+  {
+    marca: "Krachitos",
+    rubro: "Snacks salados",
+    variantes: ["palitos salados"],
+    formatos: [bolsa(70), bolsa(110), bolsa(500)],
+  },
+  {
+    marca: "PEP",
+    rubro: "Snacks salados",
+    variantes: ["rueditas"],
+    formatos: [bolsa(40), bolsa(71), bolsa(120)],
+  },
+  {
+    marca: "Lays",
+    rubro: "Papas fritas",
+    variantes: ["clásicas"],
+    formatos: [bolsa(145)],
+  },
   {
     marca: "Smirnoff",
     rubro: "Alcohol",
@@ -291,6 +344,20 @@ const SUELTOS: {
     variante: "sin azúcar",
     formato: B2000,
   },
+];
+
+/**
+ * Productos de los que sabemos la marca y el rubro pero NO el tamaño.
+ *
+ * Los snacks vienen en tres o cuatro gramajes y cuál se tiene depende del
+ * kiosco, así que poner un número inventado sería peor que dejarlo vacío: el
+ * costo por unidad saldría mal y nadie se daría cuenta. El gramaje se completa
+ * en la ficha, o aparece solo cuando se carga la primera compra.
+ */
+const SIN_TAMANO: { marca: string; rubro: string; nombre?: string }[] = [
+  { marca: "Pringles", rubro: "Papas fritas" },
+  { marca: "Doritos", rubro: "Snacks salados" },
+  { marca: "Twistos", rubro: "Snacks salados" },
 ];
 
 /** "Coca-Cola" + "zero" + "600 ml" → "Coca-Cola zero 600 ml" */
@@ -357,7 +424,7 @@ async function main() {
         marcaId,
         categoriaId: idPorRubro.get(rubro) ?? null,
         contenido: formato.ml,
-        contenidoUnidad: "ml",
+        contenidoUnidad: formato.unidad ?? "ml",
         envase: formato.envase,
       })
       .onConflictDoNothing({ target: productos.nombreNormalizado })
@@ -381,7 +448,7 @@ async function main() {
         marcaId,
         categoriaId: idPorRubro.get(rubro) ?? null,
         contenido: formato.ml,
-        contenidoUnidad: "ml",
+        contenidoUnidad: formato.unidad ?? "ml",
         envase: formato.envase,
       })
       .where(eq(productos.nombreNormalizado, normalizarNombre(nombre)));
@@ -395,6 +462,34 @@ async function main() {
         await guardar(marcaId, linea.rubro, linea.marca, variante, formato);
       }
     }
+  }
+
+  for (const item of SIN_TAMANO) {
+    const marcaId = item.marca ? await idDe(marcas, item.marca) : null;
+    const nombre = item.nombre ?? item.marca;
+    const [producto] = await db
+      .insert(productos)
+      .values({
+        nombre,
+        nombreNormalizado: normalizarNombre(nombre),
+        marcaId,
+        categoriaId: idPorRubro.get(item.rubro) ?? null,
+      })
+      .onConflictDoNothing({ target: productos.nombreNormalizado })
+      .returning();
+
+    if (producto) {
+      creados += 1;
+      continue;
+    }
+
+    // Sin contenido ni envase: acá no se sabe, y pisar con null lo que alguien
+    // completó a mano en la ficha sería borrarle el trabajo.
+    await db
+      .update(productos)
+      .set({ marcaId, categoriaId: idPorRubro.get(item.rubro) ?? null })
+      .where(eq(productos.nombreNormalizado, normalizarNombre(nombre)));
+    actualizados += 1;
   }
 
   for (const suelto of SUELTOS) {

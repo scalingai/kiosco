@@ -247,6 +247,7 @@ export default function TablaStock({
               sugeridoCentavos={editando.sugeridoCentavos}
               categoriaId={editando.categoriaId}
               envase={editando.envase}
+              codigoBarras={editando.codigoBarras}
               marcas={marcas}
               categoriasDisponibles={categorias}
             />

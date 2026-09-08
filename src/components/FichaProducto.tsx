@@ -38,6 +38,7 @@ export default function FichaProducto({
   sugeridoCentavos,
   categoriaId,
   envase,
+  codigoBarras,
   marcas,
   categoriasDisponibles,
 }: {
@@ -51,6 +52,7 @@ export default function FichaProducto({
   sugeridoCentavos: number | null;
   categoriaId: string | null;
   envase: Envase | null;
+  codigoBarras: string | null;
   marcas: Marca[];
   categoriasDisponibles: OpcionCategoria[];
 }) {
@@ -66,6 +68,7 @@ export default function FichaProducto({
   );
   const [rubro, setRubro] = useState(categoriaId ?? "");
   const [envasado, setEnvasado] = useState<Envase | "">(envase ?? "");
+  const [codigo, setCodigo] = useState(codigoBarras ?? "");
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState(false);
   const [pendiente, empezar] = useTransition();
@@ -104,6 +107,7 @@ export default function FichaProducto({
         precioVentaCentavos: venta,
         categoriaId: rubro || null,
         envase: envasado || null,
+        codigoBarras: codigo.trim() || null,
       });
       if (!resultado.ok) {
         setError(resultado.error);
@@ -219,6 +223,22 @@ export default function FichaProducto({
           {/* Sin este dato la app sólo puede sugerir; con él dice el margen
               que estás sacando de verdad. */}
           Poniéndolo, la app te dice el margen real en vez de uno sugerido.
+        </span>
+      </label>
+
+      <label className="block">
+        <span className="text-xs text-tinta-suave">Código de barras</span>
+        <input
+          value={codigo}
+          inputMode="numeric"
+          placeholder="escaneá el producto"
+          onChange={(e) => setCodigo(e.target.value)}
+          className="cifra mt-1 w-56 rounded-lg border border-linea bg-white px-3 py-2 text-sm"
+        />
+        <span className="mt-1 block text-xs text-tinta-suave">
+          {/* El lector USB escribe los dígitos como si fuera un teclado, así
+              que esto se llena sin tocar nada más. */}
+          Poné el cursor acá y pasá el producto por el lector.
         </span>
       </label>
 
