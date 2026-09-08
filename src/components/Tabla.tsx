@@ -38,6 +38,7 @@ export default function Tabla<T>({
   claveDe,
   vacio,
   alClickearFila,
+  seleccion,
 }: {
   columnas: Columna<T>[];
   filas: T[];
@@ -45,6 +46,17 @@ export default function Tabla<T>({
   /** qué decir cuando no hay nada, en vez de una tabla vacía */
   vacio?: ReactNode;
   alClickearFila?: (fila: T) => void;
+  /**
+   * Con esto la tabla dibuja una columna de casillas al principio. La lista de
+   * elegidos vive afuera: así una barra de acciones puede juntar lo marcado en
+   * varias tablas a la vez, que es lo que hace falta cuando el catálogo está
+   * partido en rubros.
+   */
+  seleccion?: {
+    elegidos: Set<string>;
+    alMarcar: (clave: string, marcado: boolean) => void;
+    alMarcarTodas: (claves: string[], marcado: boolean) => void;
+  };
 }) {
   if (filas.length === 0) {
     return (
@@ -55,12 +67,27 @@ export default function Tabla<T>({
   }
 
   const hayTotales = columnas.some((c) => c.total);
+  const claves = filas.map(claveDe);
+  const todasMarcadas =
+    !!seleccion && claves.length > 0 && claves.every((c) => seleccion.elegidos.has(c));
 
   return (
     <div className="-mx-4 overflow-x-auto sm:mx-0">
       <table className="w-full border-collapse text-[0.8rem]">
         <thead>
           <tr className="border-b border-linea">
+            {seleccion && (
+              <th scope="col" className="sticky left-0 z-10 bg-papel px-2 py-2">
+                <input
+                  type="checkbox"
+                  checked={todasMarcadas}
+                  aria-label="Marcar todo lo de esta tabla"
+                  onChange={(e) =>
+                    seleccion.alMarcarTodas(claves, e.target.checked)
+                  }
+                />
+              </th>
+            )}
             {columnas.map((columna, i) => (
               <th
                 key={columna.clave}
@@ -70,7 +97,7 @@ export default function Tabla<T>({
                   (columna.numerica ? "text-right " : "text-left ") +
                   (columna.ancho ?? "") +
                   // La primera se queda quieta mientras el resto se corre.
-                  (i === 0 ? " sticky left-0 z-10 bg-papel" : "")
+                  (i === 0 && !seleccion ? " sticky left-0 z-10 bg-papel" : "")
                 }
               >
                 {columna.titulo}
@@ -94,6 +121,23 @@ export default function Tabla<T>({
                 (alClickearFila ? "cursor-pointer hover:bg-white" : "")
               }
             >
+              {seleccion && (
+                <td
+                  className="sticky left-0 z-10 bg-papel px-2 py-2.5 align-top"
+                  // El click de la fila abre la ficha; marcar no tiene que
+                  // abrir nada.
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    checked={seleccion.elegidos.has(claveDe(fila))}
+                    aria-label="Marcar este producto"
+                    onChange={(e) =>
+                      seleccion.alMarcar(claveDe(fila), e.target.checked)
+                    }
+                  />
+                </td>
+              )}
               {columnas.map((columna, i) => (
                 <td
                   key={columna.clave}
@@ -102,7 +146,7 @@ export default function Tabla<T>({
                     // Un número partido en dos renglones deja de leerse como
                     // número, así que las columnas de plata no cortan.
                     (columna.numerica ? "cifra whitespace-nowrap text-right " : "") +
-                    (i === 0 ? "sticky left-0 z-10 bg-papel" : "")
+                    (i === 0 && !seleccion ? "sticky left-0 z-10 bg-papel" : "")
                   }
                 >
                   {columna.celda(fila)}
@@ -115,6 +159,7 @@ export default function Tabla<T>({
         {hayTotales && (
           <tfoot>
             <tr className="border-t border-linea">
+              {seleccion && <td />}
               {columnas.map((columna, i) => (
                 <td
                   key={columna.clave}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { BotonArchivar, BotonFalta } from "@/components/AccionesStock";
 import FichaProducto from "@/components/FichaProducto";
 import Hoja from "@/components/Hoja";
+import { useSeleccion } from "@/components/SeleccionStock";
 import Tabla, { type Columna } from "@/components/Tabla";
 import { fechaCorta } from "@/lib/fechas";
 import {
@@ -40,6 +41,7 @@ export default function TablaStock({
   categorias: OpcionCategoria[];
 }) {
   const [editando, setEditando] = useState<FilaStock | null>(null);
+  const seleccion = useSeleccion();
 
   const columnas: Columna<FilaStock>[] = [
     {
@@ -211,6 +213,7 @@ export default function TablaStock({
         filas={filas}
         claveDe={(f) => f.id}
         alClickearFila={setEditando}
+        seleccion={seleccion}
         vacio="Todavía no hay productos. La lista se llena sola: cada renglón con nombre de una compra entra acá con su último costo."
       />
 

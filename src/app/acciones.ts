@@ -21,6 +21,7 @@ import {
 import {
   actualizarProducto,
   archivarProducto,
+  archivarProductos,
   crearProducto,
   marcarFalta,
   type FichaProducto,
@@ -233,6 +234,20 @@ export async function editarProducto(
     if (!fila) return { ok: false, error: "No se pudo guardar ese producto" };
     revalidatePath("/", "layout");
     return { ok: true, datos: null };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+/** Sacar de la lista varios productos de una, desde la selección múltiple. */
+export async function archivarVarios(
+  ids: string[],
+): Promise<Resultado<{ archivados: number }>> {
+  try {
+    const archivados = await archivarProductos(ids);
+    if (!archivados) return { ok: false, error: "No se archivó ninguno" };
+    revalidatePath("/", "layout");
+    return { ok: true, datos: { archivados } };
   } catch (error) {
     return { ok: false, error: mensaje(error) };
   }

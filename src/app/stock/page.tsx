@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { FormProducto } from "@/components/AccionesStock";
+import SeleccionStock from "@/components/SeleccionStock";
 import TablaStock from "@/components/TablaStock";
 import {
   listarMarcas,
@@ -84,7 +85,8 @@ export default async function Stock() {
   const arbol = armarArbol(filas);
 
   return (
-    <div className="space-y-4">
+    <SeleccionStock>
+      <div className="space-y-4">
       <div>
         <h1 className="font-display text-3xl leading-none">Stock</h1>
         <p className="mt-1 text-sm text-tinta-suave">
@@ -150,6 +152,7 @@ export default async function Stock() {
           </section>
         ))
       )}
-    </div>
+      </div>
+    </SeleccionStock>
   );
 }

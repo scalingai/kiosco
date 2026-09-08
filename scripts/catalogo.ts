@@ -46,15 +46,6 @@ type Formato = {
   unidad?: "ml" | "gr";
 };
 
-/** Un paquete de snack: N gramos en una bolsa. */
-function bolsa(gramos: number): Formato {
-  return {
-    etiqueta: `${gramos} g`,
-    ml: gramos,
-    envase: "otro",
-    unidad: "gr",
-  };
-}
 
 /**
  * Una línea de productos: una marca, su rubro, sus variantes y sus formatos.
@@ -300,30 +291,6 @@ const CATALOGO: Linea[] = [
    * marca propia.
    */
   {
-    marca: "Krachitos",
-    rubro: "Snacks salados",
-    variantes: ["chizitos queso"],
-    formatos: [bolsa(60), bolsa(125), bolsa(240)],
-  },
-  {
-    marca: "Krachitos",
-    rubro: "Snacks salados",
-    variantes: ["palitos salados"],
-    formatos: [bolsa(70), bolsa(110), bolsa(500)],
-  },
-  {
-    marca: "PEP",
-    rubro: "Snacks salados",
-    variantes: ["rueditas"],
-    formatos: [bolsa(40), bolsa(71), bolsa(120)],
-  },
-  {
-    marca: "Lays",
-    rubro: "Papas fritas",
-    variantes: ["clásicas"],
-    formatos: [bolsa(145)],
-  },
-  {
     marca: "Smirnoff",
     rubro: "Alcohol",
     variantes: ["ice manzana", "ice cherry"],
@@ -406,6 +373,58 @@ const HELADOS_ARCOR: { marca: string; nombre: string; cc?: number }[] = [
  * una cantidad de nada, son un formato de envase con nombre propio. Meterlos
  * como número obligaría a inventar una unidad que no existe.
  */
+/**
+ * Los snacks que se venden, por marca y sabor.
+ *
+ * `gramos` sólo va donde está verificado contra el catálogo del distribuidor;
+ * el resto queda sin tamaño y lo completa la primera compra. Un gramaje
+ * inventado hace que el costo por unidad salga mal sin que nadie lo note.
+ */
+const SNACKS: {
+  marca: string;
+  rubro: string;
+  variantes: string[];
+  gramos?: number[];
+}[] = [
+  {
+    marca: "Lays",
+    rubro: "Papas fritas",
+    variantes: ["clásicas", "jamón serrano", "cebolla"],
+  },
+  {
+    marca: "Krachitos",
+    rubro: "Papas fritas",
+    variantes: ["cheddar", "crema y cebolla"],
+    gramos: [55, 90],
+  },
+  { marca: "Krachitos", rubro: "Papas fritas", variantes: ["ketchup"] },
+  {
+    marca: "Krachitos",
+    rubro: "Snacks salados",
+    variantes: ["chizitos queso"],
+    gramos: [60, 125, 240],
+  },
+  { marca: "PEP", rubro: "Snacks salados", variantes: ["chizitos"] },
+  { marca: "PEP", rubro: "Snacks salados", variantes: ["palitos"] },
+  {
+    marca: "PEP",
+    rubro: "Snacks salados",
+    variantes: ["rueditas"],
+    gramos: [40, 71, 120],
+  },
+];
+
+/**
+ * Las maquinitas. Se compran de a tira y se venden de a una: eso NO es un
+ * producto distinto, es la misma maquinita comprada por bulto, y por eso el
+ * "de a cuántas viene la tira" va en la compra y no acá.
+ */
+const MAQUINITAS: { marca: string; nombre: string }[] = [
+  { marca: "Gillette", nombre: "Maquinita Gillette Prestobarba 3 verde" },
+  { marca: "Gillette", nombre: "Maquinita Gillette Prestobarba 2" },
+  { marca: "Gillette", nombre: "Maquinita Gillette mujer 3 filos" },
+];
+
 const PILAS: { marca: string; tamaños: string[] }[] = [
   { marca: "Duracell", tamaños: ["AA", "AAA", "C", "D"] },
   { marca: "Energizer", tamaños: ["AA", "AAA", "C", "D"] },
@@ -446,6 +465,9 @@ const RUBROS_PROPIOS = [
   "Lácteos",
   "Chupetines",
   "Pilas",
+  "Papas fritas",
+  "Snacks salados",
+  "Maquinitas de afeitar",
 ];
 
 /** A quién se le compran los helados y las golosinas. */
@@ -585,6 +607,70 @@ async function main() {
       .set({ marcaId, categoriaId: idPorRubro.get(item.rubro) ?? null })
       .where(eq(productos.nombreNormalizado, normalizarNombre(nombre)));
     actualizados += 1;
+  }
+
+  for (const linea of SNACKS) {
+    const marcaId = await idDe(marcas, linea.marca);
+    for (const variante of linea.variantes) {
+      // Sin gramaje declarado va un solo producto; con gramajes, uno por cada.
+      const medidas: (number | null)[] = linea.gramos ?? [null];
+      for (const gramos of medidas) {
+        const nombre = [linea.marca, variante, gramos ? `${gramos} g` : ""]
+          .filter(Boolean)
+          .join(" ");
+        generados.add(normalizarNombre(nombre));
+        const [nuevo] = await db
+          .insert(productos)
+          .values({
+            nombre,
+            nombreNormalizado: normalizarNombre(nombre),
+            marcaId,
+            categoriaId: idPorRubro.get(linea.rubro) ?? null,
+            contenido: gramos,
+            contenidoUnidad: gramos ? "gr" : null,
+          })
+          .onConflictDoNothing({ target: productos.nombreNormalizado })
+          .returning();
+
+        if (nuevo) creados += 1;
+        else {
+          await db
+            .update(productos)
+            .set({ marcaId, categoriaId: idPorRubro.get(linea.rubro) ?? null })
+            .where(eq(productos.nombreNormalizado, normalizarNombre(nombre)));
+          actualizados += 1;
+        }
+      }
+    }
+  }
+
+  for (const maquinita of MAQUINITAS) {
+    generados.add(normalizarNombre(maquinita.nombre));
+    const marcaId = await idDe(marcas, maquinita.marca);
+    const [nueva] = await db
+      .insert(productos)
+      .values({
+        nombre: maquinita.nombre,
+        nombreNormalizado: normalizarNombre(maquinita.nombre),
+        marcaId,
+        categoriaId: idPorRubro.get("Maquinitas de afeitar") ?? null,
+      })
+      .onConflictDoNothing({ target: productos.nombreNormalizado })
+      .returning();
+
+    if (nueva) creados += 1;
+    else {
+      await db
+        .update(productos)
+        .set({
+          marcaId,
+          categoriaId: idPorRubro.get("Maquinitas de afeitar") ?? null,
+        })
+        .where(
+          eq(productos.nombreNormalizado, normalizarNombre(maquinita.nombre)),
+        );
+      actualizados += 1;
+    }
   }
 
   for (const linea of PILAS) {

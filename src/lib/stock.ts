@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { getDb, type DB } from "@/db/client";
 import {
@@ -268,6 +268,26 @@ export async function archivarProducto(id: string) {
     .where(and(eq(productos.id, id), isNull(productos.archivadoEn)))
     .returning();
   return fila ?? null;
+}
+
+/**
+ * Archiva varios de una. Se usa desde la selección múltiple del catálogo, que
+ * es la única forma de podar 500 productos importados sin morir de clicks.
+ *
+ * Archiva, no borra: un producto archivado sale de la lista pero sigue
+ * explicando las compras viejas que lo mencionan.
+ */
+export async function archivarProductos(ids: string[]): Promise<number> {
+  const validos = ids.filter((id) => UUID.test(id));
+  if (!validos.length) return 0;
+
+  const db = await getDb();
+  const filas = await db
+    .update(productos)
+    .set({ archivadoEn: new Date() })
+    .where(and(inArray(productos.id, validos), isNull(productos.archivadoEn)))
+    .returning({ id: productos.id });
+  return filas.length;
 }
 
 /** Cuántas cosas están marcadas como faltantes, para el resumen de inicio. */
