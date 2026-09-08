@@ -16,12 +16,8 @@
  *   compra vieja sin poder explicar qué se compró, y esa es la misma regla que
  *   vale para los movimientos del fiado.
  */
-import fs from "node:fs";
-import path from "node:path";
 import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
-import { PGlite } from "@electric-sql/pglite";
-import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
+import { abrirBase } from "./lib/base.ts";
 import {
   categorias,
   comprasItems,
@@ -105,11 +101,8 @@ const PODA: { rubro: string; salvoMarcas?: string[]; porque: string }[] = [
 async function main() {
   const aplicar = process.argv.includes("--aplicar");
 
-  const directorio = path.join(process.cwd(), ".data", "pg");
-  fs.mkdirSync(directorio, { recursive: true });
-  const cliente = new PGlite(directorio);
-  const db = drizzle(cliente);
-  await migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
+  const base = await abrirBase(aplicar);
+  const db = base.db;
 
   console.log(
     aplicar
@@ -228,7 +221,7 @@ async function main() {
   );
   if (!aplicar) console.log("No se tocó nada.");
 
-  await cliente.close();
+  await base.cerrar();
 }
 
 main().catch((error) => {

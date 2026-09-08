@@ -141,6 +141,19 @@ inserten. Un solo lugar por donde entra todo.
   abierto, el script dice que hizo todo y la app sigue mostrando lo de antes.
   No falla, miente. Lo mismo al borrar `.data`: hay que reiniciar el server
   después.
+- **Los scripts de base van a donde apunte `DATABASE_URL`.** `scripts/lib/base.ts`
+  usa la misma regla que la app: si la variable está definida (leyendo `.env.local`
+  y `.env` a mano, porque un script lanzado con `node` no pasa por Next), conecta
+  a ese Postgres; si no, a PGlite. **Siempre imprime a qué base va antes de tocar
+  nada** — la primera línea de la salida es `Base: …`, y si no la leíste no sabés
+  qué estás por modificar.
+- **Escribir en producción pide `--prod` aparte.** `db:catalogo` borra todo lo que
+  no generó dentro de `RUBROS_PROPIOS` y `db:limpiar --aplicar` borra productos:
+  contra producción eso no se deshace y no hay backup del que tirar. Por eso el
+  freno corta **antes de conectar** —ni siquiera corre las migraciones— y por eso
+  son dos banderas y no una: "quiero escribir" y "sé que es producción" son dos
+  decisiones distintas. Sin `--aplicar` contra producción el script sólo lee y ni
+  migra.
 - **Los ids se validan contra un regex de UUID** antes de ir a la base: sin eso,
   una URL con basura sale como 500 en vez de 404.
 

@@ -17,12 +17,8 @@
  * ser único en toda la app y sobre todo tiene que poder tipearse en la carga de
  * una compra, donde no hay marca que ayude a desambiguar.
  */
-import fs from "node:fs";
-import path from "node:path";
 import { and, eq, notInArray } from "drizzle-orm";
-import { PGlite } from "@electric-sql/pglite";
-import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
+import { abrirBase } from "./lib/base.ts";
 import {
   categorias,
   comprasItems,
@@ -507,11 +503,10 @@ function nombrar(marca: string, variante: string, formato: string): string {
 }
 
 async function main() {
-  const directorio = path.join(process.cwd(), ".data", "pg");
-  fs.mkdirSync(directorio, { recursive: true });
-  const cliente = new PGlite(directorio);
-  const db = drizzle(cliente);
-  await migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
+  // Este script no tiene modo "mostrar": siempre escribe. Por eso pasa `true`
+  // y contra produccion va a pedir --prod antes de conectar.
+  const base = await abrirBase(true);
+  const db = base.db;
 
   /** Crea si no está, devuelve el id igual. Sirve para marcas y categorías. */
   async function idDe(
@@ -965,7 +960,7 @@ async function main() {
   console.log(
     `${creados} productos nuevos, ${actualizados} actualizados.`,
   );
-  await cliente.close();
+  await base.cerrar();
 }
 
 main().catch((error) => {

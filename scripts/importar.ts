@@ -23,12 +23,8 @@
  *    no se elige ninguno: se reporta y se sigue de largo. Adivinar acá es
  *    ponerle a un producto el código de barras de otro.
  */
-import fs from "node:fs";
-import path from "node:path";
 import { and, eq, isNull } from "drizzle-orm";
-import { PGlite } from "@electric-sql/pglite";
-import { drizzle, type PgliteDatabase } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
+import { abrirBase, type DB } from "./lib/base.ts";
 import {
   categorias,
   marcas,
@@ -37,7 +33,6 @@ import {
 } from "../src/db/schema.ts";
 import { normalizarNombre } from "../src/lib/nombres.ts";
 
-type DB = PgliteDatabase<Record<string, never>>;
 
 /**
  * Las tiendas donde buscar, en orden.
@@ -565,15 +560,12 @@ async function completar(db: DB, aplicar: boolean) {
 async function main() {
   const aplicar = process.argv.includes("--aplicar");
 
-  const directorio = path.join(process.cwd(), ".data", "pg");
-  fs.mkdirSync(directorio, { recursive: true });
-  const cliente = new PGlite(directorio);
-  const db = drizzle(cliente);
-  await migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
+  const base = await abrirBase(aplicar);
+  const db = base.db;
 
   if (process.argv.includes("--completar")) {
     await completar(db, aplicar);
-    await cliente.close();
+    await base.cerrar();
     return;
   }
 
@@ -804,7 +796,7 @@ async function main() {
   );
   if (!aplicar) console.log("No se escribió nada.");
 
-  await cliente.close();
+  await base.cerrar();
 }
 
 main().catch((error) => {
