@@ -4,9 +4,22 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { editarProducto } from "@/app/acciones";
 import { ETIQUETA_UNIDAD, type Unidad } from "@/lib/negocio";
+import type { Envase, OpcionCategoria } from "@/lib/stock";
 import { centavosAPesos, parsearMonto } from "@/lib/plata";
 
 type Marca = { id: string; nombre: string };
+
+/**
+ * El envase no es el rubro: un producto es de UN rubro pero viene en VARIOS
+ * envases. Por eso son dos campos y no una sola lista.
+ */
+const ENVASES: { clave: Envase; etiqueta: string }[] = [
+  { clave: "botella", etiqueta: "Botella" },
+  { clave: "retornable", etiqueta: "Retornable" },
+  { clave: "lata", etiqueta: "Lata" },
+  { clave: "tetra", etiqueta: "Tetra" },
+  { clave: "otro", etiqueta: "Otro" },
+];
 
 /**
  * Lo que se carga a mano de un producto: su marca y cuánto trae cada unidad.
@@ -23,7 +36,10 @@ export default function FichaProducto({
   contenidoUnidad,
   precioVentaCentavos,
   sugeridoCentavos,
+  categoriaId,
+  envase,
   marcas,
+  categoriasDisponibles,
 }: {
   id: string;
   nombre: string;
@@ -33,7 +49,10 @@ export default function FichaProducto({
   precioVentaCentavos: number | null;
   /** lo que la app propondría; se usa de placeholder */
   sugeridoCentavos: number | null;
+  categoriaId: string | null;
+  envase: Envase | null;
   marcas: Marca[];
+  categoriasDisponibles: OpcionCategoria[];
 }) {
   const router = useRouter();
   const [nuevoNombre, setNuevoNombre] = useState(nombre);
@@ -45,6 +64,8 @@ export default function FichaProducto({
   const [precio, setPrecio] = useState(
     precioVentaCentavos != null ? String(centavosAPesos(precioVentaCentavos)) : "",
   );
+  const [rubro, setRubro] = useState(categoriaId ?? "");
+  const [envasado, setEnvasado] = useState<Envase | "">(envase ?? "");
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState(false);
   const [pendiente, empezar] = useTransition();
@@ -81,6 +102,8 @@ export default function FichaProducto({
         contenido: valor,
         contenidoUnidad: valor ? unidad : null,
         precioVentaCentavos: venta,
+        categoriaId: rubro || null,
+        envase: envasado || null,
       });
       if (!resultado.ok) {
         setError(resultado.error);
@@ -143,6 +166,40 @@ export default function FichaProducto({
           Con esto la app puede decirte el precio por litro o por kilo, que es lo
           único con lo que se comparan dos tamaños de la misma marca.
         </span>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="block">
+          <span className="text-xs text-tinta-suave">Rubro</span>
+          <select
+            value={rubro}
+            onChange={(e) => setRubro(e.target.value)}
+            className={"mt-1 " + campo}
+          >
+            <option value="">— sin rubro —</option>
+            {categoriasDisponibles.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.padre} › {c.nombre}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="text-xs text-tinta-suave">Envase</span>
+          <select
+            value={envasado}
+            onChange={(e) => setEnvasado(e.target.value as Envase | "")}
+            className={"mt-1 " + campo}
+          >
+            <option value="">— sin definir —</option>
+            {ENVASES.map((e) => (
+              <option key={e.clave} value={e.clave}>
+                {e.etiqueta}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <label className="block">

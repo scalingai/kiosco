@@ -11,7 +11,7 @@ import {
   formatearMultiplicador,
 } from "@/lib/negocio";
 import { formatearCentavos } from "@/lib/plata";
-import type { FilaStock } from "@/lib/stock";
+import type { FilaStock, OpcionCategoria } from "@/lib/stock";
 
 type Marca = { id: string; nombre: string };
 
@@ -27,16 +27,17 @@ const SIN = <span className="text-tinta-suave">—</span>;
  * Los números no se explican solos: se explican porque están al lado del
  * anterior.
  *
- * No hay columna de marca: la lista va siempre agrupada por marca y el título
- * de cada grupo ya la dice. Repetirla en cada fila es ancho que le sacás a los
- * números.
+ * El envase no tiene columna: ya está en el nombre ("lata 473 ml", "2 L
+ * retornable") y repetirlo sería gastar ancho en un dato que ya se lee.
  */
 export default function TablaStock({
   filas,
   marcas,
+  categorias,
 }: {
   filas: FilaStock[];
   marcas: Marca[];
+  categorias: OpcionCategoria[];
 }) {
   const [editando, setEditando] = useState<FilaStock | null>(null);
 
@@ -65,6 +66,14 @@ export default function TablaStock({
         f.contenido != null && f.contenidoUnidad != null
           ? formatearContenidoCorto(f.contenido, f.contenidoUnidad)
           : SIN,
+    },
+    {
+      // Vuelve como columna: la lista se agrupa por rubro, no por marca, así
+      // que el título de la sección ya no la dice.
+      clave: "marca",
+      titulo: "Marca",
+      ancho: "min-w-24",
+      celda: (f) => f.marca ?? SIN,
     },
     {
       clave: "proveedor",
@@ -236,7 +245,10 @@ export default function TablaStock({
               contenidoUnidad={editando.contenidoUnidad}
               precioVentaCentavos={editando.precioVentaCentavos}
               sugeridoCentavos={editando.sugeridoCentavos}
+              categoriaId={editando.categoriaId}
+              envase={editando.envase}
               marcas={marcas}
+              categoriasDisponibles={categorias}
             />
 
             {/* Marcar que falta y archivar viven acá adentro y no en una

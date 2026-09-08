@@ -72,6 +72,13 @@ multiplicar el costo por 1,4 no es ganar 40%, es ganar 28,6% de lo que cobrás.
 1,4 es sólo una sugerencia; si el producto tiene `precio_venta_centavos`
 cargado, la app dice el margen REAL en vez de uno inventado.
 
+**Rubro y envase son dos ejes distintos, no uno.** El rubro es qué cosa es
+(`categorias`, en dos niveles con `padre_id`: Bebidas › Gaseosas) y el envase es
+cómo viene (`productos.envase`: botella, retornable, lata, tetra). Un producto
+es de UN rubro pero viene en VARIOS envases: si "lata" fuera una categoría, al
+cargar la Coca en lata habría que elegir entre "gaseosas" y "latas" y se pierde
+una de las dos. No los mezcles en una sola lista.
+
 **La marca agrupa; el cálculo va de bulto a unidad.** Un producto puede tener
 `marca_id` (opcional: el pan no tiene) y `contenido` + `contenido_unidad`, que
 son descriptivos —distinguen la gaseosa de 500 ml de la de 2,25 L en la lista—.

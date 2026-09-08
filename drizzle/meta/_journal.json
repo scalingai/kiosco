@@ -64,6 +64,13 @@
       "when": 1788822816351,
       "tag": "0008_iva-y-margen",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788836178877,
+      "tag": "0009_categorias-y-envase",
+      "breakpoints": true
     }
   ]
 }

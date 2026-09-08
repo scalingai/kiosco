@@ -170,6 +170,22 @@ export type Item = typeof items.$inferSelect;
  */
 export const unidadMedida = pgEnum("unidad_medida", ["un", "gr", "ml"]);
 
+/**
+ * Cómo viene envasado.
+ *
+ * NO es una categoría, y la diferencia importa: un producto es de UN rubro pero
+ * viene en VARIOS envases. La Coca es gaseosa siempre, y hay lata, retornable y
+ * descartable. Si "lata" fuera categoría, al cargar la Coca en lata habría que
+ * elegir entre "gaseosas" y "latas", y se pierde una de las dos.
+ */
+export const tipoEnvase = pgEnum("tipo_envase", [
+  "botella",
+  "retornable",
+  "lata",
+  "tetra",
+  "otro",
+]);
+
 export const categoriaGasto = pgEnum("categoria_gasto", [
   "alquiler",
   "servicios",
@@ -353,6 +369,30 @@ export type CategoriaGasto = (typeof categoriaGasto.enumValues)[number];
 export type MedioPago = (typeof medioPago.enumValues)[number];
 
 /**
+ * El rubro. Se acomoda en dos niveles con `padre_id`: "Bebidas" arriba y
+ * "Gaseosas" adentro. Una sola tabla en vez de dos porque son la misma cosa a
+ * distinta altura, y así agregar un nivel más el día de mañana no es una
+ * migración nueva.
+ */
+export const categorias = pgTable(
+  "categorias",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nombre: text("nombre").notNull(),
+    nombreNormalizado: text("nombre_normalizado").notNull(),
+    /** null = es una categoría de primer nivel */
+    padreId: uuid("padre_id"),
+    creadoEn: timestamp("creado_en", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("categorias_nombre_normalizado_key").on(t.nombreNormalizado),
+    index("categorias_padre_idx").on(t.padreId),
+  ],
+);
+
+/**
  * La marca: Coca-Cola, Lays, Arcor. Agrupa productos que son la misma cosa en
  * distintos tamaños. Es OPCIONAL a propósito —el pan no tiene marca— y por eso
  * `productos.marca_id` es nullable.
@@ -395,6 +435,12 @@ export const productos = pgTable(
     marcaId: uuid("marca_id").references(() => marcas.id, {
       onDelete: "set null",
     }),
+    /** apunta a la subcategoría; el padre de esa da la categoría */
+    categoriaId: uuid("categoria_id").references(() => categorias.id, {
+      onDelete: "set null",
+    }),
+    /** cómo viene envasado; es otro eje distinto del rubro */
+    envase: tipoEnvase("envase"),
     /**
      * Cuánto trae UNA unidad de venta: la botella de Coca son 2250 ml, el
      * paquete de papas 120 gr.
@@ -425,5 +471,6 @@ export const productos = pgTable(
   ],
 );
 
+export type Categoria = typeof categorias.$inferSelect;
 export type Marca = typeof marcas.$inferSelect;
 export type Producto = typeof productos.$inferSelect;

@@ -1,40 +1,75 @@
 import type { Metadata } from "next";
 import { FormProducto } from "@/components/AccionesStock";
 import TablaStock from "@/components/TablaStock";
-import { listarMarcas, listarStock, type FilaStock } from "@/lib/stock";
+import {
+  listarMarcas,
+  listarStock,
+  listarSubcategorias,
+  type FilaStock,
+} from "@/lib/stock";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "Stock — El Osito" };
 
-export default async function Stock() {
-  const [filas, marcas] = await Promise.all([listarStock(), listarMarcas()]);
-  const faltantes = filas.filter((f) => f.falta);
+const SIN_RUBRO = "Sin rubro";
 
-  // Siempre agrupado por marca: es como se compra y como se piensa la góndola.
-  // Los que no tienen van juntos al final, porque el pan no tiene marca y no
-  // por eso deja de estar en la lista.
-  const porNombreDeMarca = new Map<string, FilaStock[]>();
-  const sinMarca: FilaStock[] = [];
+/**
+ * Arma el árbol para dibujarlo: categoría › subcategoría › productos.
+ *
+ * Los que no tienen rubro no se esconden: van juntos al final, porque un
+ * producto sin clasificar sigue siendo un producto que se vende y esconderlo
+ * es la forma más rápida de que nunca se clasifique.
+ */
+function armarArbol(filas: FilaStock[]) {
+  const arbol = new Map<string, Map<string, FilaStock[]>>();
+
   for (const fila of filas) {
-    if (!fila.marca) {
-      sinMarca.push(fila);
-      continue;
-    }
-    const lista = porNombreDeMarca.get(fila.marca) ?? [];
+    const categoria = fila.categoria ?? SIN_RUBRO;
+    const subcategoria = fila.subcategoria ?? SIN_RUBRO;
+    const subs = arbol.get(categoria) ?? new Map<string, FilaStock[]>();
+    const lista = subs.get(subcategoria) ?? [];
     lista.push(fila);
-    porNombreDeMarca.set(fila.marca, lista);
+    subs.set(subcategoria, lista);
+    arbol.set(categoria, subs);
   }
 
-  // Dentro de la marca, del envase más chico al más grande: así se ve la
-  // escalera de tamaños uno abajo del otro.
-  for (const lista of porNombreDeMarca.values()) {
-    lista.sort((a, b) => (a.contenido ?? 0) - (b.contenido ?? 0));
+  // Dentro de cada subcategoría: por marca y, adentro de la marca, del envase
+  // más chico al más grande. Así los tamaños de lo mismo quedan uno abajo del
+  // otro y se ve la escalera de precios.
+  for (const subs of arbol.values()) {
+    for (const lista of subs.values()) {
+      lista.sort(
+        (a, b) =>
+          (a.marca ?? "").localeCompare(b.marca ?? "", "es") ||
+          (a.contenido ?? 0) - (b.contenido ?? 0) ||
+          a.nombre.localeCompare(b.nombre, "es"),
+      );
+    }
   }
 
-  const marcasOrdenadas = [...porNombreDeMarca.entries()].sort(([a], [b]) =>
-    a.localeCompare(b, "es"),
-  );
+  const ordenar = (a: string, b: string) =>
+    a === SIN_RUBRO ? 1 : b === SIN_RUBRO ? -1 : a.localeCompare(b, "es");
+
+  return [...arbol.entries()]
+    .sort(([a], [b]) => ordenar(a, b))
+    .map(([categoria, subs]) => ({
+      categoria,
+      subcategorias: [...subs.entries()]
+        .sort(([a], [b]) => ordenar(a, b))
+        .map(([subcategoria, productos]) => ({ subcategoria, productos })),
+    }));
+}
+
+export default async function Stock() {
+  const [filas, marcas, categorias] = await Promise.all([
+    listarStock(),
+    listarMarcas(),
+    listarSubcategorias(),
+  ]);
+
+  const faltantes = filas.filter((f) => f.falta);
+  const arbol = armarArbol(filas);
 
   return (
     <div className="space-y-4">
@@ -75,31 +110,33 @@ export default async function Stock() {
           nombre de una compra entra acá con su último costo.
         </p>
       ) : (
-        <>
-          {marcasOrdenadas.map(([marca, lista]) => (
-            <section
-              key={marca}
-              className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5"
-            >
-              <h2 className="font-display text-xl leading-none">{marca}</h2>
-              <div className="mt-2">
-                <TablaStock filas={lista} marcas={marcas} />
-              </div>
-            </section>
-          ))}
+        arbol.map(({ categoria, subcategorias }) => (
+          <section
+            key={categoria}
+            className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5"
+          >
+            <h2 className="font-display text-2xl leading-none">{categoria}</h2>
 
-          {sinMarca.length > 0 && (
-            <section className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5">
-              <h2 className="font-display text-xl leading-none">Sin marca</h2>
-              <p className="mt-1 text-xs text-tinta-suave">
-                Tocá uno y ponele la marca para que se agrupe.
-              </p>
-              <div className="mt-2">
-                <TablaStock filas={sinMarca} marcas={marcas} />
+            {subcategorias.map(({ subcategoria, productos }) => (
+              <div key={subcategoria} className="mt-4 first:mt-3">
+                {/* La subcategoría no se repite cuando es la única y se llama
+                    igual que su categoría: sería un título arriba del otro. */}
+                {!(subcategorias.length === 1 && subcategoria === categoria) && (
+                  <h3 className="text-xs uppercase tracking-[0.16em] text-tinta-suave">
+                    {subcategoria}
+                  </h3>
+                )}
+                <div className="mt-1">
+                  <TablaStock
+                    filas={productos}
+                    marcas={marcas}
+                    categorias={categorias}
+                  />
+                </div>
               </div>
-            </section>
-          )}
-        </>
+            ))}
+          </section>
+        ))
       )}
     </div>
   );

@@ -1,8 +1,10 @@
 import "server-only";
 
 import { and, asc, eq, isNull } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { getDb, type DB } from "@/db/client";
 import {
+  categorias,
   compras,
   comprasItems,
   marcas,
@@ -18,6 +20,9 @@ import {
   type Unidad,
 } from "@/lib/negocio";
 import { normalizarNombre } from "@/lib/nombres";
+
+/** La misma tabla otra vez, para poder leer la categoría padre en la consulta. */
+const padre = alias(categorias, "categoria_padre");
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -64,12 +69,20 @@ export async function listarNombresDeProductos() {
     .orderBy(asc(productos.nombre));
 }
 
+export type Envase = "botella" | "retornable" | "lata" | "tetra" | "otro";
+
 export type FilaStock = {
   id: string;
   nombre: string;
   proveedor: string | null;
   marcaId: string | null;
   marca: string | null;
+  categoriaId: string | null;
+  /** el rubro chico: "Gaseosas" */
+  subcategoria: string | null;
+  /** el rubro grande, el padre del de arriba: "Bebidas" */
+  categoria: string | null;
+  envase: Envase | null;
   /** cuánto trae una unidad de venta: 2250 (ml) para la Coca grande */
   contenido: number | null;
   contenidoUnidad: Unidad | null;
@@ -114,6 +127,10 @@ export async function listarStock(): Promise<FilaStock[]> {
         proveedor: proveedores.nombre,
         marcaId: productos.marcaId,
         marca: marcas.nombre,
+        categoriaId: productos.categoriaId,
+        subcategoria: categorias.nombre,
+        categoria: padre.nombre,
+        envase: productos.envase,
         contenido: productos.contenido,
         contenidoUnidad: productos.contenidoUnidad,
         precioVentaCentavos: productos.precioVentaCentavos,
@@ -121,6 +138,10 @@ export async function listarStock(): Promise<FilaStock[]> {
       .from(productos)
       .leftJoin(proveedores, eq(proveedores.id, productos.proveedorId))
       .leftJoin(marcas, eq(marcas.id, productos.marcaId))
+      // La categoría del producto es la subcategoría; el rubro grande es su
+      // padre, y por eso la tabla se junta consigo misma.
+      .leftJoin(categorias, eq(categorias.id, productos.categoriaId))
+      .leftJoin(padre, eq(padre.id, categorias.padreId))
       .where(isNull(productos.archivadoEn))
       .orderBy(asc(productos.nombre)),
 
@@ -163,6 +184,10 @@ export async function listarStock(): Promise<FilaStock[]> {
       proveedor: producto.proveedor,
       marcaId: producto.marcaId,
       marca: producto.marca,
+      categoriaId: producto.categoriaId,
+      subcategoria: producto.subcategoria,
+      categoria: producto.categoria,
+      envase: producto.envase,
       contenido: producto.contenido,
       contenidoUnidad: producto.contenidoUnidad,
       enBlanco,
@@ -290,6 +315,9 @@ export type FichaProducto = {
   contenidoUnidad?: Unidad | null;
   /** a cuánto se vende; `null` lo borra y vuelve a mostrarse el sugerido */
   precioVentaCentavos?: number | null;
+  /** la subcategoría; `null` lo deja sin rubro */
+  categoriaId?: string | null;
+  envase?: Envase | null;
 };
 
 /**
@@ -308,6 +336,8 @@ export async function actualizarProducto(id: string, ficha: FichaProducto) {
     contenido?: number | null;
     contenidoUnidad?: Unidad | null;
     precioVentaCentavos?: number | null;
+    categoriaId?: string | null;
+    envase?: Envase | null;
   } = {};
 
   if (ficha.nombre != null) {
@@ -345,6 +375,15 @@ export async function actualizarProducto(id: string, ficha: FichaProducto) {
     cambios.precioVentaCentavos = precio;
   }
 
+  if (ficha.categoriaId !== undefined) {
+    cambios.categoriaId =
+      ficha.categoriaId && UUID.test(ficha.categoriaId)
+        ? ficha.categoriaId
+        : null;
+  }
+
+  if (ficha.envase !== undefined) cambios.envase = ficha.envase;
+
   if (!Object.keys(cambios).length) return null;
 
   const [fila] = await db
@@ -353,4 +392,25 @@ export async function actualizarProducto(id: string, ficha: FichaProducto) {
     .where(eq(productos.id, id))
     .returning();
   return fila ?? null;
+}
+
+export type OpcionCategoria = { id: string; nombre: string; padre: string };
+
+/**
+ * Las subcategorías con el nombre de su padre. Es lo que se elige en la ficha
+ * de un producto: nadie clasifica algo como "Bebidas" a secas, lo clasifica
+ * como "Bebidas › Gaseosas".
+ */
+export async function listarSubcategorias(): Promise<OpcionCategoria[]> {
+  const db = await getDb();
+  const filas = await db
+    .select({
+      id: categorias.id,
+      nombre: categorias.nombre,
+      padre: padre.nombre,
+    })
+    .from(categorias)
+    .innerJoin(padre, eq(padre.id, categorias.padreId))
+    .orderBy(asc(padre.nombre), asc(categorias.nombre));
+  return filas.map((f) => ({ ...f, padre: f.padre ?? "" }));
 }
