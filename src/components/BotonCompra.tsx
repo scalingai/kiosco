@@ -5,7 +5,12 @@ import FormCompra from "@/components/FormCompra";
 import Hoja from "@/components/Hoja";
 
 type Proveedor = { id: string; nombre: string };
-type Producto = { id: string; nombre: string };
+type Producto = {
+  id: string;
+  nombre: string;
+  precioVentaCentavos: number | null;
+  multiplicadorMilesimas: number | null;
+};
 
 /**
  * Cargar una compra desde donde se están mirando las compras.

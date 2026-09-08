@@ -98,6 +98,17 @@ export type RenglonAGuardar = {
   unidad: Unidad;
   /** lo que se pagó por todo el renglón */
   importeCentavos: number | null;
+  /**
+   * A cuánto se decide venderlo, y con qué multiplicador se llegó a ese
+   * número. Van con la compra porque es EL momento en que se decide: llegó la
+   * mercadería, cambió el costo, hay que ponerle precio. Mandar a la persona a
+   * otra pantalla a hacerlo después es garantizar que no lo haga.
+   *
+   * Los dos en null significan "no lo toqué": la compra no le pisa el precio
+   * al producto.
+   */
+  precioVentaCentavos: number | null;
+  multiplicadorMilesimas: number | null;
 };
 
 export type CompraAGuardar = {
@@ -344,6 +355,10 @@ export type RenglonBorrador = {
   /** cómo hay que leer `importe` */
   modo: ModoPrecio;
   importe: string;
+  /** por cuánto multiplicar el costo; vacío usa el del producto o el general */
+  multiplicador: string;
+  /** a cuánto venderlo; vacío deja el precio que ya tenía */
+  precioVenta: string;
 };
 
 export function renglonVacio(): RenglonBorrador {
@@ -354,6 +369,8 @@ export function renglonVacio(): RenglonBorrador {
     // Por bulto es como viene la factura; el total es la excepción.
     modo: "bulto",
     importe: "",
+    multiplicador: "",
+    precioVenta: "",
   };
 }
 
@@ -379,6 +396,30 @@ export function renglonesCargados(lista: RenglonBorrador[]): RenglonBorrador[] {
 }
 
 export class RenglonInvalido extends Error {}
+
+/** El multiplicador escrito en el renglón, en milésimas. */
+function leerMultiplicador(renglon: RenglonBorrador): number | null {
+  if (!renglon.multiplicador.trim()) return null;
+  const numero = Number(renglon.multiplicador.trim().replace(",", "."));
+  if (!Number.isFinite(numero) || numero < 1 || numero > 10) {
+    throw new RenglonInvalido(
+      `El multiplicador de ${nombrar(renglon)} tiene que estar entre 1 y 10.`,
+    );
+  }
+  return Math.round(numero * MILESIMAS);
+}
+
+/** El precio de venta escrito en el renglón, en centavos. */
+function leerPrecioVenta(renglon: RenglonBorrador): number | null {
+  if (!renglon.precioVenta.trim()) return null;
+  const centavos = parsearMonto(renglon.precioVenta);
+  if (centavos == null || centavos <= 0) {
+    throw new RenglonInvalido(
+      `Revisá el precio de venta de ${nombrar(renglon)}.`,
+    );
+  }
+  return centavos;
+}
 
 function nombrar(renglon: RenglonBorrador): string {
   return renglon.descripcion.trim() || "el renglón sin nombre";
@@ -432,6 +473,8 @@ export function aRenglonesAGuardar(
        */
       unidad: "un",
       importeCentavos: totalDelRenglon(escrito, cantidad, renglon.modo),
+      precioVentaCentavos: leerPrecioVenta(renglon),
+      multiplicadorMilesimas: leerMultiplicador(renglon),
     };
   });
 }

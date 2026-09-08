@@ -207,10 +207,27 @@ export async function registrarCompra(entrada: CompraAGuardar) {
 
         // El proveedor del producto es siempre el de la última compra: si
         // cambiaste de distribuidor, la lista tiene que decir el nuevo.
+        //
+        // El precio y el multiplicador sólo se escriben si el renglón los
+        // trae. Vacío significa "no lo toqué", y pisar con null borraría el
+        // precio que alguien puso a mano en la ficha.
         if (producto) {
+          const cambios: {
+            proveedorId: string;
+            precioVentaCentavos?: number;
+            multiplicadorMilesimas?: number;
+          } = { proveedorId };
+
+          if (renglon.precioVentaCentavos != null) {
+            cambios.precioVentaCentavos = renglon.precioVentaCentavos;
+          }
+          if (renglon.multiplicadorMilesimas != null) {
+            cambios.multiplicadorMilesimas = renglon.multiplicadorMilesimas;
+          }
+
           await tx
             .update(productos)
-            .set({ proveedorId })
+            .set(cambios)
             .where(eq(productos.id, producto.id));
         }
 

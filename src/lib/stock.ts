@@ -84,10 +84,23 @@ export async function buscarOCrearProductoCon(db: Ejecutor, nombre: string) {
   return ganadorDeLaCarrera ?? null;
 }
 
+/**
+ * Los productos para elegir al cargar una compra.
+ *
+ * Van con su precio de venta y su multiplicador porque el renglón los necesita
+ * para dos cosas: sugerir a cuánto venderlo, y avisar si el precio que estás
+ * poniendo hoy es distinto del que tenía. Sin eso, el precio de la góndola
+ * cambia sin que nadie lo note.
+ */
 export async function listarNombresDeProductos() {
   const db = await getDb();
   return db
-    .select({ id: productos.id, nombre: productos.nombre })
+    .select({
+      id: productos.id,
+      nombre: productos.nombre,
+      precioVentaCentavos: productos.precioVentaCentavos,
+      multiplicadorMilesimas: productos.multiplicadorMilesimas,
+    })
     .from(productos)
     .where(isNull(productos.archivadoEn))
     .orderBy(asc(productos.nombre));

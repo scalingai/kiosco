@@ -5,6 +5,8 @@ import {
   costoConIva,
   costoDeReferencia,
   formatearContenido,
+  MARGEN_SUGERIDO_MILESIMAS,
+  MILESIMAS,
   precioSugerido,
   renglonVacio,
   renglonesCargados,
@@ -14,16 +16,31 @@ import {
 } from "@/lib/negocio";
 import SelectorNombre from "@/components/SelectorNombre";
 import { normalizarNombre } from "@/lib/nombres";
-import { formatearCentavos, parsearMonto } from "@/lib/plata";
+import {
+  centavosAPesos,
+  formatearCentavos,
+  parsearMonto,
+} from "@/lib/plata";
 
-type Producto = { id: string; nombre: string };
+type Producto = {
+  id: string;
+  nombre: string;
+  /** lo que hoy dice la góndola; null si nunca se le puso precio */
+  precioVentaCentavos: number | null;
+  multiplicadorMilesimas: number | null;
+};
 
 type Cuentas = {
   total: number;
   costo: { centavos: number; porCada: string } | null;
   real: number | null;
+  /** lo que la app propone cobrar, con el multiplicador que haya */
   sugerido: number | null;
   importeCentavos: number | null;
+  /** en milésimas: el del renglón, el del producto, o el general */
+  multiplicador: number;
+  /** lo que ese producto costaba en la góndola hasta hoy */
+  precioAnterior: number | null;
 };
 
 const CAMPO = "rounded-lg border border-linea bg-white px-2 py-2 text-sm";
@@ -58,6 +75,22 @@ export default function EditorRenglones({
     onCambio(quedan.length ? quedan : [renglonVacio()]);
   }
 
+  /*
+   * El último multiplicador tecleado en esta factura. Se lee de los renglones
+   * y no de un estado aparte: así no hay dos verdades que puedan discrepar.
+   */
+  const ultimoUsado = (() => {
+    for (let i = renglones.length - 1; i >= 0; i--) {
+      const escrito = renglones[i].multiplicador.trim();
+      if (!escrito) continue;
+      const numero = Number(escrito.replace(",", "."));
+      if (Number.isFinite(numero) && numero >= 1 && numero <= 10) {
+        return Math.round(numero * MILESIMAS);
+      }
+    }
+    return null;
+  })();
+
   /** Lo mismo que hace el servidor, pero con lo tipeado, para mostrarlo al vuelo. */
   function cuentas(renglon: RenglonBorrador): Cuentas {
     const cantidad = Number(renglon.cantidad) || 1;
@@ -76,13 +109,51 @@ export default function EditorRenglones({
     });
     // El costo de la factura no es lo que sale: en blanco hay que sumarle IVA.
     const real = costo ? costoConIva(costo.centavos, enBlanco) : null;
+    const producto = productoDe(renglon.descripcion);
+    const multiplicador = multiplicadorDe(renglon, producto);
     return {
       total: contenidoTotal(cantidad, porBulto),
       costo,
       real,
-      sugerido: real != null ? precioSugerido(real) : null,
+      sugerido: real != null ? precioSugerido(real, multiplicador) : null,
       importeCentavos,
+      multiplicador,
+      precioAnterior: producto?.precioVentaCentavos ?? null,
     };
+  }
+
+  /** El producto del catálogo que corresponde a lo escrito, si existe. */
+  function productoDe(nombre: string): Producto | null {
+    const limpio = normalizarNombre(nombre);
+    if (!limpio) return null;
+    return (
+      productos.find((p) => normalizarNombre(p.nombre) === limpio) ?? null
+    );
+  }
+
+  /**
+   * Con qué multiplicador trabajar, en orden: el que escribiste en el renglón,
+   * el que ese producto tiene guardado, el último que usaste en esta misma
+   * factura, y recién ahí el 1,4 de la casa.
+   *
+   * El "último usado" está porque una factura suele ser todo del mismo rubro:
+   * si arrancaste poniendo 1,3 a las gaseosas, las diez siguientes también van
+   * a 1,3 y no tiene sentido escribirlo diez veces.
+   */
+  function multiplicadorDe(
+    renglon: RenglonBorrador,
+    producto: Producto | null,
+  ): number {
+    if (renglon.multiplicador.trim()) {
+      const numero = Number(renglon.multiplicador.trim().replace(",", "."));
+      if (Number.isFinite(numero) && numero >= 1 && numero <= 10) {
+        return Math.round(numero * MILESIMAS);
+      }
+    }
+    if (producto?.multiplicadorMilesimas != null) {
+      return producto.multiplicadorMilesimas;
+    }
+    return ultimoUsado ?? MARGEN_SUGERIDO_MILESIMAS;
   }
 
   /**
@@ -116,13 +187,78 @@ export default function EditorRenglones({
   const campoProducto = (i: number) => (
     <SelectorNombre
       valor={renglones[i].descripcion}
-      alCambiar={(texto) => editar(i, { descripcion: texto })}
+      alCambiar={(texto) => {
+        /*
+         * Al elegir uno que ya existe se traen SU precio y SU multiplicador.
+         * Es lo que hace que el renglón muestre "antes valía $2.900" en vez de
+         * un campo en blanco: sin el precio viejo no hay con qué comparar.
+         */
+        const elegido = productoDe(texto);
+        editar(i, {
+          descripcion: texto,
+          ...(elegido?.precioVentaCentavos != null
+            ? { precioVenta: String(centavosAPesos(elegido.precioVentaCentavos)) }
+            : {}),
+          ...(elegido?.multiplicadorMilesimas != null
+            ? {
+                multiplicador: String(
+                  elegido.multiplicadorMilesimas / MILESIMAS,
+                ).replace(".", ","),
+              }
+            : {}),
+        });
+      }}
       opciones={productos}
       queEs="Producto"
       placeholder="producto"
       etiquetaAria="Producto"
     />
   );
+
+  const campoMultiplicador = (i: number, c: Cuentas) => (
+    <input
+      value={renglones[i].multiplicador}
+      inputMode="decimal"
+      aria-label="Multiplicador del margen"
+      placeholder={String(c.multiplicador / MILESIMAS).replace(".", ",")}
+      onChange={(e) => editar(i, { multiplicador: e.target.value })}
+      className={CAMPO + " cifra w-full text-center"}
+    />
+  );
+
+  const campoPrecioVenta = (i: number, c: Cuentas) => (
+    <input
+      value={renglones[i].precioVenta}
+      inputMode="decimal"
+      aria-label="A cuánto lo vendés"
+      placeholder={c.sugerido != null ? String(centavosAPesos(c.sugerido)) : "—"}
+      onChange={(e) => editar(i, { precioVenta: e.target.value })}
+      className={CAMPO + " cifra w-full text-right"}
+    />
+  );
+
+  /**
+   * Qué cambia respecto de lo que ese producto valía hasta hoy.
+   *
+   * Es el aviso que pidió Agus: el precio de venta puede cambiar entre una
+   * compra y la otra, y si nadie lo dice se cambia sin querer. Muestra la
+   * diferencia contra la góndola, no contra el sugerido.
+   */
+  const avisoDeCambio = (i: number, c: Cuentas) => {
+    const escrito = renglones[i].precioVenta.trim();
+    if (!escrito || c.precioAnterior == null) return null;
+    const nuevo = parsearMonto(escrito);
+    if (nuevo == null || nuevo === c.precioAnterior) return null;
+
+    const diferencia = nuevo - c.precioAnterior;
+    const porciento = Math.round((diferencia / c.precioAnterior) * 100);
+    return (
+      <span className="block text-right text-xs text-deuda">
+        antes {formatearCentavos(c.precioAnterior)} ({diferencia > 0 ? "+" : "−"}
+        {Math.abs(porciento)}%)
+      </span>
+    );
+  };
 
   const campoBultos = (i: number) => (
     <input
@@ -186,9 +322,13 @@ export default function EditorRenglones({
     </button>
   );
 
-  /** La columna que contesta la pregunta: cuánto sale y a cuánto venderlo. */
-  const columnaSale = (c: Cuentas, renglon: RenglonBorrador) => {
-    if (!c.costo || c.real == null || c.sugerido == null) {
+  /**
+   * Cuánto sale UNA unidad. El "a cuánto venderlo" ya no vive acá: pasó a ser
+   * un campo editable, porque el precio se decide en este momento y mirarlo
+   * sin poder tocarlo obligaba a ir a otra pantalla.
+   */
+  const columnaCosto = (c: Cuentas, renglon: RenglonBorrador) => {
+    if (!c.costo || c.real == null) {
       return <span className="text-xs text-tinta-suave">—</span>;
     }
     // Con el precio por bulto, el total del renglón es una multiplicación que
@@ -204,16 +344,7 @@ export default function EditorRenglones({
             total {formatearCentavos(c.importeCentavos!)}
           </span>
         )}
-        <span className="cifra block text-sm">
-          {formatearCentavos(c.real)}
-          <span className="text-xs font-normal text-tinta-suave">
-            {" "}
-            {c.costo.porCada}
-          </span>
-        </span>
-        <span className="cifra block text-xs text-pago">
-          vendé a {formatearCentavos(c.sugerido)}
-        </span>
+        <span className="cifra block text-sm">{formatearCentavos(c.real)}</span>
       </span>
     );
   };
@@ -238,11 +369,13 @@ export default function EditorRenglones({
             <th className={encabezado}>Producto</th>
             <th className={encabezado + " w-14 text-center"}>Bultos</th>
             <th className={encabezado + " w-16 text-center"}>Trae</th>
-            <th className={encabezado + " w-28"}>Precio</th>
-            <th className={encabezado + " w-28 text-right"}>Importe</th>
-            <th className={encabezado + " w-36 text-right"}>
-              {enBlanco ? "Sale con IVA" : "Sale"}
+            <th className={encabezado + " w-24"}>Precio</th>
+            <th className={encabezado + " w-24 text-right"}>Importe</th>
+            <th className={encabezado + " w-24 text-right"}>
+              {enBlanco ? "Costo c/IVA" : "Costo"}
             </th>
+            <th className={encabezado + " w-14 text-center"}>×</th>
+            <th className={encabezado + " w-28 text-right"}>Venta</th>
             <th className="w-8" />
           </tr>
         </thead>
@@ -273,7 +406,14 @@ export default function EditorRenglones({
                   {campoImporte(i)}
                 </td>
                 <td className="p-1 pt-3">
-                  {columnaSale(c, renglon)}
+                  {columnaCosto(c, renglon)}
+                </td>
+                <td className="p-1">
+                  {campoMultiplicador(i, c)}
+                </td>
+                <td className="p-1">
+                  {campoPrecioVenta(i, c)}
+                  {avisoDeCambio(i, c)}
                 </td>
                 <td className="p-1 text-right">
                   {botonSacar(i)}
@@ -320,6 +460,16 @@ export default function EditorRenglones({
 
               <div className="mt-1.5">{campoImporte(i)}</div>
 
+              {/* El precio se decide con la mercadería en la mano, así que en
+                  el celular también tiene que estar acá y no en otra pantalla. */}
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <span className="shrink-0 text-xs text-tinta-suave">×</span>
+                <span className="w-16 shrink-0">{campoMultiplicador(i, c)}</span>
+                <span className="shrink-0 text-xs text-tinta-suave">vendo a</span>
+                <span className="min-w-0 flex-1">{campoPrecioVenta(i, c)}</span>
+              </div>
+              {avisoDeCambio(i, c)}
+
               <p className="mt-1.5 text-xs text-tinta-suave">
                 {formatearContenido(c.total, "un")}
                 {c.costo && renglon.modo === "bulto" && c.importeCentavos != null && (Number(renglon.cantidad) || 1) > 1 && (
@@ -342,20 +492,11 @@ export default function EditorRenglones({
                   " · poné el importe y te digo a cuánto sale"
                 )}
               </p>
-              {c.real != null && c.sugerido != null && c.costo && (
+              {enBlanco && c.real != null && c.costo && (
                 <p className="text-xs text-tinta-suave">
-                  {enBlanco && (
-                    <>
-                      {"con IVA "}
-                      <span className="cifra text-tinta">
-                        {formatearCentavos(c.real)}
-                      </span>
-                      {" · "}
-                    </>
-                  )}
-                  {"vendé a "}
-                  <span className="cifra text-pago">
-                    {formatearCentavos(c.sugerido)}
+                  {"con IVA "}
+                  <span className="cifra text-tinta">
+                    {formatearCentavos(c.real)}
                   </span>{" "}
                   {c.costo.porCada}
                 </p>

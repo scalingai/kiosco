@@ -20,7 +20,12 @@ import { normalizarNombre } from "@/lib/nombres";
 import { centavosAPesos, formatearCentavos, parsearMonto } from "@/lib/plata";
 
 type Proveedor = { id: string; nombre: string };
-type Producto = { id: string; nombre: string };
+type Producto = {
+  id: string;
+  nombre: string;
+  precioVentaCentavos: number | null;
+  multiplicadorMilesimas: number | null;
+};
 
 /**
  * Lo que trajo el proveedor. Las dos fechas están separadas a propósito:

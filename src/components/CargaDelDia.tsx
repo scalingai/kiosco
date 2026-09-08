@@ -7,7 +7,12 @@ import FormVenta from "@/components/FormVenta";
 import Hoja from "@/components/Hoja";
 
 type Proveedor = { id: string; nombre: string };
-type Producto = { id: string; nombre: string };
+type Producto = {
+  id: string;
+  nombre: string;
+  precioVentaCentavos: number | null;
+  multiplicadorMilesimas: number | null;
+};
 
 type Cual = "venta" | "compra" | "gasto";
 
