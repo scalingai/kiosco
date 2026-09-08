@@ -99,8 +99,6 @@ const SUBCATEGORIAS: Record<string, string> = {
   Galletitas: "Snacks",
 
   Leche: "Almacén",
-  // Atún y paté van juntos: son la misma góndola y el mismo proveedor.
-  Conservas: "Almacén",
   Helados: "Almacén",
 
   Cigarrillos: "Tabaquería",

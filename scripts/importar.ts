@@ -27,7 +27,12 @@ import { and, eq, isNull } from "drizzle-orm";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
-import { categorias, marcas, productos } from "../src/db/schema.ts";
+import {
+  categorias,
+  marcas,
+  productos,
+  proveedores,
+} from "../src/db/schema.ts";
 import { normalizarNombre } from "../src/lib/nombres.ts";
 
 const TIENDA = "https://www.jumbo.com.ar";
@@ -35,8 +40,14 @@ const TIENDA = "https://www.jumbo.com.ar";
 /** Cuántos productos traer por búsqueda. Más que esto es más ruido que datos. */
 const POR_BUSQUEDA = 24;
 
-/** Qué buscar y en qué rubro cae lo que venga. */
-const BUSQUEDAS: { termino: string; rubro: string }[] = [
+/**
+ * Qué buscar y en qué rubro cae lo que venga.
+ *
+ * `soloMarcas` filtra: de ese rubro entran únicamente esas marcas. Sirve para
+ * los rubros donde el kiosco trabaja con un proveedor y nada más, y evita tener
+ * que podar a mano después de cada importación.
+ */
+const BUSQUEDAS: { termino: string; rubro: string; soloMarcas?: string[] }[] = [
   { termino: "gaseosa", rubro: "Gaseosas" },
   { termino: "agua saborizada", rubro: "Aguas saborizadas" },
   { termino: "agua mineral", rubro: "Aguas" },
@@ -54,9 +65,8 @@ const BUSQUEDAS: { termino: string; rubro: string }[] = [
   { termino: "pastillas", rubro: "Pastillas" },
   { termino: "gomitas", rubro: "Gomitas" },
   { termino: "leche", rubro: "Leche" },
-  { termino: "atun lata", rubro: "Conservas" },
-  { termino: "pate lata", rubro: "Conservas" },
-  { termino: "helado", rubro: "Helados" },
+  // De helados sólo entra Arcor: es lo único que se vende acá.
+  { termino: "helado", rubro: "Helados", soloMarcas: ["Arcor"] },
   { termino: "papel higienico", rubro: "Papel higiénico" },
   { termino: "jabon en polvo", rubro: "Jabón para la ropa" },
   { termino: "suavizante", rubro: "Suavizante" },
@@ -67,6 +77,24 @@ const BUSQUEDAS: { termino: string; rubro: string }[] = [
   { termino: "cuaderno", rubro: "Cuadernos" },
   { termino: "pilas", rubro: "Pilas" },
 ];
+
+/**
+ * A quién se le compra cada rubro, cuando hay uno claro.
+ *
+ * Es un punto de partida, no la verdad: el proveedor definitivo lo escribe la
+ * primera compra que se cargue. Pero tenerlo puesto de entrada evita arrancar
+ * con 300 productos sin proveedor.
+ */
+const PROVEEDOR_POR_RUBRO: Record<string, string> = {
+  Alfajores: "Arcor",
+  Chocolates: "Arcor",
+  Caramelos: "Arcor",
+  Chupetines: "Arcor",
+  Chicles: "Arcor",
+  Pastillas: "Arcor",
+  Gomitas: "Arcor",
+  Helados: "Arcor",
+};
 
 type ItemVtex = { ean?: string; images?: { imageUrl?: string }[] };
 type ProductoVtex = {
@@ -154,7 +182,11 @@ function acomodarMarca(marca: string): string {
     .trim();
 }
 
-async function bajar(termino: string, rubro: string): Promise<Traido[]> {
+async function bajar(
+  termino: string,
+  rubro: string,
+  soloMarcas?: string[],
+): Promise<Traido[]> {
   const url =
     `${TIENDA}/api/catalog_system/pub/products/search` +
     `?ft=${encodeURIComponent(termino)}&_from=0&_to=${POR_BUSQUEDA - 1}`;
@@ -178,10 +210,20 @@ async function bajar(termino: string, rubro: string): Promise<Traido[]> {
     // Un EAN que no cierra es un dato roto, no un dato incompleto.
     if (!codigoValido(ean)) continue;
 
+    const marcaLimpia = acomodarMarca(marca);
+    if (
+      soloMarcas?.length &&
+      !soloMarcas.some(
+        (m) => normalizarNombre(m) === normalizarNombre(marcaLimpia),
+      )
+    ) {
+      continue;
+    }
+
     const medida = leerContenido(nombre);
     traidos.push({
       nombre,
-      marca: acomodarMarca(marca),
+      marca: marcaLimpia,
       ean,
       imagen: crudo.items?.[0]?.images?.[0]?.imageUrl?.trim() ?? null,
       contenido: medida?.contenido ?? null,
@@ -214,13 +256,45 @@ async function main() {
     rubros.map((r) => [normalizarNombre(r.nombre), r.id]),
   );
 
+  /** Los proveedores que hacen falta según PROVEEDOR_POR_RUBRO. */
+  const idPorProveedor = new Map<string, string>();
+  async function proveedorDe(rubro: string): Promise<string | null> {
+    const nombre = PROVEEDOR_POR_RUBRO[rubro];
+    if (!nombre) return null;
+    const yaEsta = idPorProveedor.get(nombre);
+    if (yaEsta) return yaEsta;
+
+    const normalizado = normalizarNombre(nombre);
+    const [existente] = await db
+      .select()
+      .from(proveedores)
+      .where(eq(proveedores.nombreNormalizado, normalizado));
+    if (existente) {
+      idPorProveedor.set(nombre, existente.id);
+      return existente.id;
+    }
+
+    if (!aplicar) return null;
+    const [creado] = await db
+      .insert(proveedores)
+      .values({ nombre, nombreNormalizado: normalizado })
+      .onConflictDoNothing({ target: proveedores.nombreNormalizado })
+      .returning();
+    if (creado) idPorProveedor.set(nombre, creado.id);
+    return creado?.id ?? null;
+  }
+
   let enriquecidos = 0;
   let nuevos = 0;
   let ambiguos = 0;
   let sinRubro = 0;
 
   for (const busqueda of BUSQUEDAS) {
-    const traidos = await bajar(busqueda.termino, busqueda.rubro);
+    const traidos = await bajar(
+      busqueda.termino,
+      busqueda.rubro,
+      busqueda.soloMarcas,
+    );
     const rubroId = idPorRubro.get(normalizarNombre(busqueda.rubro)) ?? null;
     if (!rubroId) {
       console.log(`  El rubro "${busqueda.rubro}" no existe todavía.`);
@@ -311,6 +385,7 @@ async function main() {
           nombreNormalizado: normalizarNombre(traido.nombre),
           marcaId,
           categoriaId: rubroId,
+          proveedorId: await proveedorDe(busqueda.rubro),
           contenido: traido.contenido,
           contenidoUnidad: traido.unidad,
           envase: traido.envase,
@@ -329,9 +404,43 @@ async function main() {
     await new Promise((seguir) => setTimeout(seguir, 400));
   }
 
+  /*
+   * Los rubros con proveedor conocido que ya estaban cargados sin él: se les
+   * pone ahora. Sólo a los que NO tienen ninguno — si alguien ya le puso uno, o
+   * si lo escribió una compra, ese manda.
+   */
+  let conProveedor = 0;
+  for (const rubro of Object.keys(PROVEEDOR_POR_RUBRO)) {
+    const rubroId = idPorRubro.get(normalizarNombre(rubro));
+    if (!rubroId) continue;
+
+    const sinProveedor = and(
+      eq(productos.categoriaId, rubroId),
+      isNull(productos.proveedorId),
+      isNull(productos.archivadoEn),
+    );
+
+    const huerfanos = await db
+      .select({ id: productos.id })
+      .from(productos)
+      .where(sinProveedor);
+    if (!huerfanos.length) continue;
+
+    conProveedor += huerfanos.length;
+    if (!aplicar) continue;
+
+    const proveedorId = await proveedorDe(rubro);
+    if (!proveedorId) continue;
+    await db.update(productos).set({ proveedorId }).where(sinProveedor);
+    console.log(
+      `${rubro}: ${huerfanos.length} quedaron con ${PROVEEDOR_POR_RUBRO[rubro]}`,
+    );
+  }
+
   console.log(
     `\n${nuevos} productos nuevos, ${enriquecidos} a los que se les completó ` +
       `el código, ${ambiguos} que no se pudieron decidir solos` +
+      (conProveedor ? `, ${conProveedor} con proveedor asignado` : "") +
       (sinRubro ? `, ${sinRubro} búsquedas sin rubro` : "") +
       ".",
   );
