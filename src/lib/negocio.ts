@@ -248,36 +248,28 @@ export const MARGEN_SUGERIDO_MILESIMAS = Math.round(
 );
 
 /**
- * A qué múltiplo se redondea, según cuánto valga la cosa.
+ * A cuánto se redondea el precio sugerido: siempre a los $100.
  *
- * En el kiosco nadie cobra $2.555: se cobra $2.600. Los precios que no son
- * redondos obligan a manotear monedas que no hay, y el vuelto mal dado sale
- * más caro que los cuarenta y cinco pesos que se estaban defendiendo.
- *
- * El paso crece con el precio porque diez pesos son mucho en un caramelo y
- * nada en un cartón de cigarrillos.
+ * En el kiosco los precios son redondos. Nadie cobra $4.357 ni tiene monedas
+ * para el vuelto, y un precio que no se puede cantar de memoria hace más lento
+ * al que atiende.
  */
-const ESCALONES: { hasta: number; paso: number }[] = [
-  { hasta: 50_000, paso: 1_000 }, //  hasta $500  → de a $10
-  { hasta: 200_000, paso: 5_000 }, // hasta $2.000 → de a $50
-  { hasta: 1_000_000, paso: 10_000 }, // hasta $10.000 → de a $100
-];
-/** de ahí para arriba */
-const PASO_GRANDE = 50_000; // $500
+const PASO = 10_000; // $100 en centavos
 
 /**
- * Deja el precio en un número que se pueda cobrar.
+ * Deja el precio en un número que se pueda cobrar: el múltiplo de $100 más
+ * cercano. $480 y $510 son los dos $500; $4.357 es $4.400.
  *
- * Redondea para ARRIBA, no al más cercano. El multiplicador es el margen que
- * querés sacar: bajar el precio para que quede redondo te deja abajo de eso
- * sin avisar, y son cientos de unidades por mes. Para arriba, en el peor caso
- * ganás unos pesos de más.
+ * Va al MÁS CERCANO y no para arriba —regla de Agus, 2026-09-08—. Forzar para
+ * arriba defendía el margen al centavo pero empujaba $510 a $600, que es 18%
+ * más caro por nada: en la góndola el precio lo termina fijando lo que cobra
+ * el de la otra cuadra, no la calculadora.
+ *
+ * Nunca devuelve cero: algo que vale $30 se sugiere a $100, no a nada.
  */
 export function redondearPrecio(centavos: number): number {
   if (centavos <= 0) return 0;
-  const escalon = ESCALONES.find((e) => centavos <= e.hasta);
-  const paso = escalon?.paso ?? PASO_GRANDE;
-  return Math.ceil(centavos / paso) * paso;
+  return Math.max(PASO, Math.round(centavos / PASO) * PASO);
 }
 
 /**

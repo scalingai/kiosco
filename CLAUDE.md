@@ -90,12 +90,16 @@ lo toqué" de "decidí que sea 1,4", y el día que cambie el general, los que na
 ajustó lo siguen. Con un `default 1400` en la columna ese cambio no llegaría a
 ninguno.
 
-**El precio sugerido se redondea para ARRIBA.** Nadie cobra $2.555: se cobra
-$2.600. `redondearPrecio()` lleva el número a un múltiplo cobrable con paso
-según cuánto valga la cosa —diez pesos son mucho en un caramelo y nada en un
-cartón de cigarrillos—. Para arriba y no al más cercano porque el multiplicador
-es el margen que querés sacar: bajar el precio para que quede lindo te deja
-abajo de ese margen sin avisar, y son cientos de unidades por mes.
+**El precio sugerido se redondea a los $100 más cercanos.** Nadie cobra $4.357
+ni tiene monedas para ese vuelto. `redondearPrecio()` va al múltiplo de $100
+más cercano, para los dos lados: $480 y $510 son los dos $500, y $5.235 es
+$5.200.
+
+Al **más cercano** y no para arriba (regla de Agus, 2026-09-08). Forzar para
+arriba defiende el margen al centavo pero empuja $510 a $600 —18% más caro por
+nada—, y en la góndola el precio lo termina fijando lo que cobra el de la otra
+cuadra, no la calculadora. Un paso único de $100 en vez de escalones por
+tamaño, por la misma razón: es la regla que se puede decir en una frase.
 
 **En los rubros de bebidas, `db:catalogo` es la única verdad.** Los que están en
 `RUBROS_PROPIOS` (gaseosas, aguas, saborizadas, jugos, energizantes, alcohol,
