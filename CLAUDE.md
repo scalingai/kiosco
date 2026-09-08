@@ -174,6 +174,12 @@ inserten. Un solo lugar por donde entra todo.
   Si el paso de interpretación tira 404, mirá qué hay disponible con
   `GET https://api.groq.com/openai/v1/models` y actualizá el default de
   `GROQ_MODELO_TEXTO` en `src/lib/voz.ts`.
+- **Después de `db:generate` hay que REINICIAR el dev server.** Las migraciones
+  se aplican al conectar (`migrate()` en `src/db/client.ts`) y `getDb()` cachea
+  la conexión por proceso: un server que ya estaba levantado nunca corre la
+  migración nueva. El código pasa `typecheck`, `lint` y `build` —el SQL se arma
+  en runtime— y la página revienta con `Failed query: column ... does not
+  exist`. Ya pasó con `multiplicador_milesimas`.
 - **Los scripts de base se corren con el dev server APAGADO.** `getDb()` cachea
   la conexión por proceso, y PGlite es un solo escritor por directorio: si
   `db:semilla` o `db:catalogo` escriben mientras el server tiene `.data/pg`
