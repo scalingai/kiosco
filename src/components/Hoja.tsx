@@ -10,11 +10,14 @@ export default function Hoja({
   abierta,
   titulo,
   onCerrar,
+  ancha,
   children,
 }: {
   abierta: boolean;
   titulo: string;
   onCerrar: () => void;
+  /** para lo que adentro es una tabla y necesita columnas legibles */
+  ancha?: boolean;
   children: React.ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -60,7 +63,10 @@ export default function Hoja({
         role="dialog"
         aria-modal="true"
         aria-label={titulo}
-        className="relative flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border border-linea bg-papel shadow-2xl outline-none sm:rounded-3xl"
+        className={
+          "relative flex max-h-[88vh] w-full flex-col overflow-hidden rounded-t-3xl border border-linea bg-papel shadow-2xl outline-none sm:rounded-3xl " +
+          (ancha ? "max-w-5xl" : "max-w-2xl")
+        }
       >
         <div className="flex items-center justify-between border-b border-linea px-5 py-3.5">
           <h2 className="font-display text-xl leading-none">{titulo}</h2>

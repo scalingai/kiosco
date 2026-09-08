@@ -43,6 +43,7 @@ export default function BotonCompra({
       <Hoja
         abierta={abierta}
         titulo="Anotar compra"
+        ancha
         onCerrar={() => setAbierta(false)}
       >
         <FormCompra

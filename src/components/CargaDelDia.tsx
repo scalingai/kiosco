@@ -53,6 +53,8 @@ export default function CargaDelDia({
       <Hoja
         abierta={abierta !== null}
         titulo={abierta ? TITULO[abierta] : ""}
+        // La compra trae una tabla adentro; la venta y el gasto son dos campos.
+        ancha={abierta === "compra"}
         onCerrar={cerrar}
       >
         {abierta === "venta" && <FormVenta fecha={fecha} alGuardar={cerrar} />}
