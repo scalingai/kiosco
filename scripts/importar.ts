@@ -39,7 +39,27 @@ import { normalizarNombre } from "../src/lib/nombres.ts";
 
 type DB = PgliteDatabase<Record<string, never>>;
 
-const TIENDA = "https://www.jumbo.com.ar";
+/**
+ * Las tiendas donde buscar, en orden.
+ *
+ * Todas corren sobre VTEX y exponen el mismo endpoint. Están las cuatro porque
+ * NO tienen el mismo catálogo: el agua Villa Manaos y la soda Manaos no
+ * aparecen en Jumbo y sí en ChangoMas y Carrefour. Un kiosco vende marcas que
+ * el supermercado premium no trabaja, así que con una sola tienda quedaban
+ * afuera justo los productos más nuestros.
+ *
+ * Disco es del mismo grupo que Jumbo y casi siempre repite catálogo; está al
+ * final por si alguna vez aporta algo.
+ */
+const TIENDAS = [
+  { nombre: "Jumbo", base: "https://www.jumbo.com.ar" },
+  { nombre: "Carrefour", base: "https://www.carrefour.com.ar" },
+  { nombre: "ChangoMas", base: "https://www.masonline.com.ar" },
+  { nombre: "Disco", base: "https://www.disco.com.ar" },
+];
+
+/** La que se usa para bajar rubros enteros. */
+const TIENDA = TIENDAS[0].base;
 
 /** Cuántos productos traer por búsqueda. Más que esto es más ruido que datos. */
 const POR_BUSQUEDA = 24;
@@ -91,7 +111,7 @@ const BUSQUEDAS: {
   { termino: "afeitadora descartable", rubro: "Maquinitas de afeitar" },
   { termino: "perfume", rubro: "Perfumes" },
   { termino: "cuaderno", rubro: "Cuadernos" },
-  { termino: "pilas", rubro: "Pilas" },
+  { termino: "pilas", rubro: "Pilas", soloEnriquecer: true },
 ];
 
 /**
@@ -128,6 +148,8 @@ type Traido = {
   envase: "botella" | "retornable" | "lata" | "tetra" | "otro" | null;
   imagen: string | null;
   rubro: string;
+  /** de qué tienda salió; sirve para saber a quién creerle */
+  tienda: string;
 };
 
 /**
@@ -298,6 +320,7 @@ async function bajar(
       unidad: medida?.unidad ?? null,
       envase: leerEnvase(nombre),
       rubro,
+      tienda: TIENDAS[0].nombre,
     });
   }
 
@@ -383,15 +406,38 @@ function esElMismo(
  * suelto— y para terminar de completar el catálogo sin agregar nada.
  */
 async function buscarUno(nombre: string, marca: string): Promise<Traido[]> {
+  const candidatos: Traido[] = [];
+  for (const tienda of TIENDAS) {
+    candidatos.push(...(await buscarEn(tienda, nombre, marca)));
+    // Una pausa por tienda: son catálogos ajenos.
+    await new Promise((seguir) => setTimeout(seguir, 250));
+  }
+  return candidatos;
+}
+
+/** La búsqueda contra una tienda puntual. */
+async function buscarEn(
+  tienda: { nombre: string; base: string },
+  nombre: string,
+  marca: string,
+): Promise<Traido[]> {
   // El nombre tal cual, que ya trae marca, sabor y tamaño.
   const url =
-    `${TIENDA}/api/catalog_system/pub/products/search` +
+    `${tienda.base}/api/catalog_system/pub/products/search` +
     `?ft=${encodeURIComponent(nombre)}&_from=0&_to=9`;
 
-  const respuesta = await fetch(url, { headers: { accept: "application/json" } });
-  if (!respuesta.ok) return [];
-
-  const crudos: ProductoVtex[] = await respuesta.json();
+  let crudos: ProductoVtex[];
+  try {
+    const respuesta = await fetch(url, {
+      headers: { accept: "application/json" },
+      // Una tienda caída no puede frenar la corrida entera.
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!respuesta.ok) return [];
+    crudos = await respuesta.json();
+  } catch {
+    return [];
+  }
   const marcaBuscada = normalizarNombre(marca);
   const candidatos: Traido[] = [];
 
@@ -416,6 +462,7 @@ async function buscarUno(nombre: string, marca: string): Promise<Traido[]> {
       unidad: medida?.unidad ?? null,
       envase: leerEnvase(nombreVtex),
       rubro: "",
+      tienda: tienda.nombre,
     });
   }
 
@@ -452,8 +499,6 @@ async function completar(db: DB, aplicar: boolean) {
 
   for (const producto of pendientes) {
     const candidatos = await buscarUno(producto.nombre, producto.marca ?? "");
-    await new Promise((seguir) => setTimeout(seguir, 350));
-
     if (!candidatos.length) {
       sinSuerte += 1;
       continue;
@@ -463,13 +508,23 @@ async function completar(db: DB, aplicar: boolean) {
       esElMismo(producto, c, producto.marca ?? ""),
     );
 
+    // Dos tiendas que devuelven el MISMO código son la misma coincidencia, no
+    // dos: se cuentan una vez. Que dos catálogos independientes coincidan es
+    // justamente la mejor señal de que el código está bien.
+    const porCodigo = new Map<string, Traido>();
+    for (const igual of iguales) {
+      if (!porCodigo.has(igual.ean)) porCodigo.set(igual.ean, igual);
+    }
+    const unicos = [...porCodigo.values()];
+
     // Uno solo, o ninguno. Si dos pasan el filtro, no hay forma de saber cuál
     // es y elegir sería jugarse el código de un producto a cara o cruz.
-    if (iguales.length !== 1) {
+    if (unicos.length !== 1) {
       descartados += 1;
       continue;
     }
-    const encontrado = iguales[0];
+    const encontrado = unicos[0];
+    const cuantas = iguales.filter((i) => i.ean === encontrado.ean).length;
 
     // Que no se lo lleve otro que ya lo tiene.
     if (tomados.has(encontrado.ean)) {
@@ -488,7 +543,10 @@ async function completar(db: DB, aplicar: boolean) {
 
     tomados.add(encontrado.ean);
     completados += 1;
-    console.log(`  ${producto.nombre} ← ${encontrado.nombre} (${encontrado.ean})`);
+    console.log(
+      `  ${producto.nombre} ← ${encontrado.nombre} (${encontrado.ean})` +
+        ` · ${cuantas > 1 ? `${cuantas} tiendas` : encontrado.tienda}`,
+    );
     if (!aplicar) continue;
 
     await db

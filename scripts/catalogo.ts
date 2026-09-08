@@ -399,6 +399,19 @@ const HELADOS_ARCOR: { marca: string; nombre: string; cc?: number }[] = [
  * hay una heladera con estas dos cosas, así que el rubro tiene dos productos y
  * no cuarenta.
  */
+/**
+ * Las pilas: tres marcas por cuatro tamaños.
+ *
+ * El tamaño va en el nombre y no en `contenido` a propósito: AA y AAA no son
+ * una cantidad de nada, son un formato de envase con nombre propio. Meterlos
+ * como número obligaría a inventar una unidad que no existe.
+ */
+const PILAS: { marca: string; tamaños: string[] }[] = [
+  { marca: "Duracell", tamaños: ["AA", "AAA", "C", "D"] },
+  { marca: "Energizer", tamaños: ["AA", "AAA", "C", "D"] },
+  { marca: "Eveready", tamaños: ["AA", "AAA", "C", "D"] },
+];
+
 const CHUPETINES: { marca: string; nombre: string }[] = [
   { marca: "Pop", nombre: "Chupetín Pop" },
   { marca: "Pop", nombre: "Chupetín Pop con chicle" },
@@ -432,6 +445,7 @@ const RUBROS_PROPIOS = [
   "Helados",
   "Lácteos",
   "Chupetines",
+  "Pilas",
 ];
 
 /** A quién se le compran los helados y las golosinas. */
@@ -571,6 +585,33 @@ async function main() {
       .set({ marcaId, categoriaId: idPorRubro.get(item.rubro) ?? null })
       .where(eq(productos.nombreNormalizado, normalizarNombre(nombre)));
     actualizados += 1;
+  }
+
+  for (const linea of PILAS) {
+    const marcaId = await idDe(marcas, linea.marca);
+    for (const tamaño of linea.tamaños) {
+      const nombre = `Pila ${linea.marca} ${tamaño}`;
+      generados.add(normalizarNombre(nombre));
+      const [nueva] = await db
+        .insert(productos)
+        .values({
+          nombre,
+          nombreNormalizado: normalizarNombre(nombre),
+          marcaId,
+          categoriaId: idPorRubro.get("Pilas") ?? null,
+        })
+        .onConflictDoNothing({ target: productos.nombreNormalizado })
+        .returning();
+
+      if (nueva) creados += 1;
+      else {
+        await db
+          .update(productos)
+          .set({ marcaId, categoriaId: idPorRubro.get("Pilas") ?? null })
+          .where(eq(productos.nombreNormalizado, normalizarNombre(nombre)));
+        actualizados += 1;
+      }
+    }
   }
 
   for (const lacteo of LACTEOS) {
