@@ -45,13 +45,29 @@ const PODA: { rubro: string; salvoMarcas?: string[]; porque: string }[] = [
     porque: "de agua mineral sólo se vende Villa Manaos",
   },
   {
-    rubro: "Helados",
-    // Vacío a propósito: lo que trajo el importador eran postres y multipacks
-    // de supermercado, no helados de mostrador. Se van todos y se cargan los
-    // de impulso de Arcor, que son otra cosa.
-    porque: "los que había eran postres de súper, no helados de kiosco",
+    rubro: "Alcohol",
+    salvoMarcas: ["Brahma", "Isenbeck", "Schneider", "Smirnoff"],
+    porque: "son las únicas cervezas que se venden",
+  },
+  {
+    rubro: "Leche",
+    porque: "el rubro se reemplaza por Lácteos, con los dos que se venden",
   },
 ];
+
+/*
+ * Helados NO está en la lista, y no es un olvido.
+ *
+ * Estuvo, para sacar los postres y multipacks de súper que había traído el
+ * importador. Pero ahora los helados los pone `db:catalogo` —la línea de
+ * impulso de Arcor— y el importador ya no busca helados. Con la regla puesta,
+ * cada corrida de `db:limpiar` borraba los 11 buenos y `db:catalogo` los
+ * volvía a crear, perdiendo por el camino cualquier precio de venta que se les
+ * hubiera cargado a mano.
+ *
+ * Una regla de poda que se cumplió hay que sacarla: sigue disparando sobre lo
+ * que venga después.
+ */
 
 async function main() {
   const aplicar = process.argv.includes("--aplicar");

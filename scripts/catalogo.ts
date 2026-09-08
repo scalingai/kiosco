@@ -103,7 +103,7 @@ const SUBCATEGORIAS: Record<string, string> = {
   "Snacks salados": "Snacks",
   Galletitas: "Snacks",
 
-  Leche: "Almacén",
+  Lácteos: "Almacén",
   Helados: "Almacén",
 
   Cigarrillos: "Tabaquería",
@@ -393,6 +393,16 @@ const HELADOS_ARCOR: { marca: string; nombre: string; cc?: number }[] = [
   { marca: "Butter Toffee", nombre: "Palito Butter Toffee's" },
 ];
 
+/**
+ * Lo único que se vende de lácteos. No hay góndola de lácteos en el kiosco:
+ * hay una heladera con estas dos cosas, así que el rubro tiene dos productos y
+ * no cuarenta.
+ */
+const LACTEOS: { marca: string; nombre: string; gr?: number }[] = [
+  { marca: "Las 3 Niñas", nombre: "Leche Las 3 Niñas" },
+  { marca: "La Serenísima", nombre: "Queso rallado La Serenísima chico" },
+];
+
 /** A quién se le compran los helados y las golosinas. */
 const PROVEEDOR_HELADOS = "Arcor";
 
@@ -526,6 +536,31 @@ async function main() {
       .set({ marcaId, categoriaId: idPorRubro.get(item.rubro) ?? null })
       .where(eq(productos.nombreNormalizado, normalizarNombre(nombre)));
     actualizados += 1;
+  }
+
+  for (const lacteo of LACTEOS) {
+    const marcaId = await idDe(marcas, lacteo.marca);
+    const [nuevo] = await db
+      .insert(productos)
+      .values({
+        nombre: lacteo.nombre,
+        nombreNormalizado: normalizarNombre(lacteo.nombre),
+        marcaId,
+        categoriaId: idPorRubro.get("Lácteos") ?? null,
+        contenido: lacteo.gr ?? null,
+        contenidoUnidad: lacteo.gr ? "gr" : null,
+      })
+      .onConflictDoNothing({ target: productos.nombreNormalizado })
+      .returning();
+
+    if (nuevo) creados += 1;
+    else {
+      await db
+        .update(productos)
+        .set({ marcaId, categoriaId: idPorRubro.get("Lácteos") ?? null })
+        .where(eq(productos.nombreNormalizado, normalizarNombre(lacteo.nombre)));
+      actualizados += 1;
+    }
   }
 
   // Helados de impulso: marca del envoltorio, proveedor Arcor.

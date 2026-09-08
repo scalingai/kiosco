@@ -53,7 +53,12 @@ const BUSQUEDAS: { termino: string; rubro: string; soloMarcas?: string[] }[] = [
   // De agua sólo se vende Villa Manaos: el resto es ruido.
   { termino: "agua mineral", rubro: "Aguas", soloMarcas: ["Villa Manaos"] },
   { termino: "jugo", rubro: "Jugos" },
-  { termino: "cerveza lata", rubro: "Alcohol" },
+  // Sólo las cervezas que se venden acá.
+  {
+    termino: "cerveza lata",
+    rubro: "Alcohol",
+    soloMarcas: ["Brahma", "Isenbeck", "Schneider"],
+  },
   { termino: "energizante", rubro: "Energizantes" },
   { termino: "papas fritas", rubro: "Papas fritas" },
   { termino: "palitos snack", rubro: "Snacks salados" },
@@ -65,7 +70,6 @@ const BUSQUEDAS: { termino: string; rubro: string; soloMarcas?: string[] }[] = [
   { termino: "chicles", rubro: "Chicles" },
   { termino: "pastillas", rubro: "Pastillas" },
   { termino: "gomitas", rubro: "Gomitas" },
-  { termino: "leche", rubro: "Leche" },
   { termino: "papel higienico", rubro: "Papel higiénico" },
   { termino: "jabon en polvo", rubro: "Jabón para la ropa" },
   { termino: "suavizante", rubro: "Suavizante" },
@@ -168,6 +172,58 @@ function leerEnvase(nombre: string): Traido["envase"] {
     return "botella";
   }
   return null;
+}
+
+/**
+ * Palabras que no distinguen un producto de otro: están en todos los nombres
+ * del rubro. Lo que queda después de sacarlas es el sabor, que es justo lo que
+ * diferencia a la Levite de pomelo de la de pera.
+ */
+const RELLENO = new Set([
+  "agua",
+  "aguas",
+  "saborizada",
+  "saborizado",
+  "cero",
+  "sabor",
+  "gaseosa",
+  "jugo",
+  "bebida",
+  "light",
+  "sin",
+  "azucar",
+  "con",
+  "de",
+  "del",
+  "la",
+  "el",
+  "x",
+  "lts",
+  "lt",
+  "l",
+  "ml",
+  "cc",
+  "gr",
+  "grs",
+  "g",
+  "kg",
+]);
+
+/**
+ * Las palabras que de verdad identifican al producto: sin la marca, sin el
+ * relleno del rubro y sin los números del envase.
+ */
+function señas(nombre: string, marca: string): string[] {
+  const marcaPartes = new Set(normalizarNombre(marca).split(" "));
+  return normalizarNombre(nombre)
+    .split(" ")
+    .filter(
+      (palabra) =>
+        palabra.length > 2 &&
+        !RELLENO.has(palabra) &&
+        !marcaPartes.has(palabra) &&
+        !/^\d/.test(palabra),
+    );
 }
 
 /** "COCA COLA" → "Coca Cola"; "LAY´S" → "Lay's". */
@@ -349,8 +405,31 @@ async function main() {
       }
 
       if (candidatos.length > 1) {
-        // Varios del mismo tamaño y marca: la Coca común y la zero son las dos
-        // de 2,25 L. Elegir una sería ponerle el código de la otra.
+        /*
+         * Varios del mismo tamaño y marca. Antes de rendirse, se compara por
+         * sabor: "Agua Saborizada Cero Sabor Pomelo 1.5 Lts Levite" contra
+         * "Levite pomelo 1,5 L" coincide en "pomelo", y las de pera y manzana
+         * no. Sólo vale si queda UNO: si el sabor no alcanza para decidir,
+         * elegir sería ponerle a un producto el código de otro.
+         */
+        const marcas_ = señas(traido.nombre, traido.marca);
+        const porSabor = candidatos.filter((c) => {
+          const suyas = normalizarNombre(c.nombre).split(" ");
+          return marcas_.some((palabra) => suyas.includes(palabra));
+        });
+
+        if (porSabor.length === 1) {
+          enriquecidos += 1;
+          enriquecidosAca += 1;
+          if (aplicar) {
+            await db
+              .update(productos)
+              .set({ codigoBarras: traido.ean, imagenUrl: traido.imagen })
+              .where(eq(productos.id, porSabor[0].id));
+          }
+          continue;
+        }
+
         ambiguos += 1;
         console.log(
           `  ambiguo: "${traido.nombre}" podría ser ${candidatos
