@@ -154,10 +154,16 @@ export async function registrarCompra(entrada: CompraAGuardar) {
       (i) => i.descripcion?.trim() || i.importeCentavos != null,
     );
 
+    /*
+     * El descuento de toda la factura se resta del total: `monto_centavos` es
+     * lo que salió de la caja, no lo que decía la lista de precios. Si el total
+     * lo declaró la factura ya viene neto y no se le resta nada.
+     */
+    const descuentoPedido = Math.max(0, entrada.descuentoCentavos ?? 0);
     const totalDeclarado = entrada.montoCentavos != null;
     const montoCentavos = totalDeclarado
       ? entrada.montoCentavos!
-      : sumarRenglones(lista);
+      : Math.max(0, sumarRenglones(lista) - descuentoPedido);
 
     if (montoCentavos < 0) throw new Error("El monto no puede ser negativo");
     if (montoCentavos === 0 && !lista.length) {
@@ -192,6 +198,8 @@ export async function registrarCompra(entrada: CompraAGuardar) {
         medio: entrada.pagadoEn ? (entrada.medio ?? "efectivo") : null,
         comprobante: entrada.comprobante?.trim() || null,
         nota: entrada.nota?.trim() || null,
+        descuentoCentavos: descuentoPedido || null,
+        descuentoNota: entrada.descuentoNota?.trim() || null,
         enBlanco: entrada.enBlanco,
       })
       .returning();
@@ -267,6 +275,8 @@ export async function registrarCompra(entrada: CompraAGuardar) {
           ),
           unidad: renglon.unidad,
           importeCentavos: renglon.importeCentavos,
+          descuentoCentavos: renglon.descuentoCentavos,
+          descuentoNota: renglon.descuentoNota,
           posicion,
         })),
       );

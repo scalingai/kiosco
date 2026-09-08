@@ -76,6 +76,28 @@ sacarlo contra el importe de la factura infla la ganancia un 21%.
 existiera no declararon nada, y ponerles IVA por default les habría cambiado el
 costo a todas de un día para el otro sin que nadie lo dijera.
 
+**Un descuento baja el costo, no el precio de venta.** Cuando el proveedor
+descuenta —una promo, pago contado— esa mercadería te salió menos y el margen
+sube. Bajar la góndola es otra decisión, y se toma aparte.
+
+Hay dos descuentos y NO son lo mismo:
+
+- El del **renglón** (`compras_items.descuento_centavos`) sí cambia el costo por
+  unidad: `costoDeReferencia()` trabaja sobre el neto. La promo suele ser de un
+  producto —"2x1 en palitos"— y ahí es donde se puede atribuir sin inventar.
+- El de la **factura** (`compras.descuento_centavos`) sólo baja lo que salió de
+  la caja. NO se reparte entre los renglones: prorratearlo sería adivinar a qué
+  producto correspondía, y un costo adivinado se ve igual que uno real.
+
+Los dos guardan una **nota** al lado, y no es decorativa: un costo que bajó de
+golpe tres meses después parece un error de carga. La nota es lo único que
+distingue "hubo promo" de "alguien se equivocó tipeando".
+
+El `importe_centavos` del renglón sigue siendo lo que dice el papel, en bruto.
+El neto se calcula al leer (`netoDelRenglon()`), por la misma razón que el costo
+por unidad: si se guardara neto, el renglón dejaría de coincidir con la factura
+del proveedor, que es contra lo que se controla.
+
 **Margen y multiplicador no son lo mismo**, y se confunden todo el tiempo:
 multiplicar el costo por 1,4 no es ganar 40%, es ganar 28,6% de lo que cobrás.
 `calcularMargen()` devuelve los dos números y la pantalla muestra los dos. El

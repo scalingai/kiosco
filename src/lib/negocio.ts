@@ -96,8 +96,11 @@ export type RenglonAGuardar = {
   /** cuánto trae cada bulto, medido en `unidad` */
   unidadesPorBulto: number;
   unidad: Unidad;
-  /** lo que se pagó por todo el renglón */
+  /** lo que dice la factura por todo el renglón, en bruto */
   importeCentavos: number | null;
+  /** lo que el proveedor descontó de este renglón, y por qué */
+  descuentoCentavos: number | null;
+  descuentoNota: string | null;
   /**
    * A cuánto se decide venderlo, y con qué multiplicador se llegó a ese
    * número. Van con la compra porque es EL momento en que se decide: llegó la
@@ -159,13 +162,32 @@ export type CompraAGuardar = {
   pagos?: PagoDeCompra[];
   comprobante?: string | null;
   nota?: string | null;
+  /** lo que descontaron de TODA la factura, y por qué */
+  descuentoCentavos?: number | null;
+  descuentoNota?: string | null;
   /** con factura: el costo real es el importe por 1,21 */
   enBlanco: boolean;
 };
 
-/** Suma de los renglones que ya tienen importe. Los que no, no suman. */
+/**
+ * Lo que de verdad costó un renglón: lo que dice la factura menos lo que
+ * descontaron.
+ *
+ * Se guardan los dos números por separado y se resta al leer, igual que el
+ * costo por unidad. Guardar sólo el neto haría que el renglón dejara de
+ * coincidir con el papel del proveedor, que es contra lo que se controla.
+ */
+export function netoDelRenglon(renglon: {
+  importeCentavos: number | null;
+  descuentoCentavos?: number | null;
+}): number | null {
+  if (renglon.importeCentavos == null) return null;
+  return Math.max(0, renglon.importeCentavos - (renglon.descuentoCentavos ?? 0));
+}
+
+/** Suma de los renglones que ya tienen importe, ya descontados. */
 export function sumarRenglones(lista: RenglonAGuardar[]): number {
-  return lista.reduce((total, r) => total + (r.importeCentavos ?? 0), 0);
+  return lista.reduce((total, r) => total + (netoDelRenglon(r) ?? 0), 0);
 }
 
 /** Cuánto entró en total por ese renglón, en su unidad de medida. */
@@ -235,20 +257,22 @@ export function costoDeReferencia(renglon: {
   unidadesPorBulto: number;
   unidad: Unidad;
   importeCentavos: number | null;
+  descuentoCentavos?: number | null;
 }): CostoDeReferencia | null {
-  if (renglon.importeCentavos == null) return null;
+  // Sobre el NETO: si te descontaron, esa mercadería te salió menos, y el
+  // margen que muestre la app tiene que ser el de verdad. La resta vive acá y
+  // no en cada pantalla para que ninguna se la olvide.
+  const neto = netoDelRenglon(renglon);
+  if (neto == null) return null;
   const total = contenidoTotal(renglon.cantidad, renglon.unidadesPorBulto);
   if (total <= 0) return null;
 
   if (renglon.unidad === "un") {
-    return {
-      centavos: Math.round(renglon.importeCentavos / total),
-      porCada: "cada una",
-    };
+    return { centavos: Math.round(neto / total), porCada: "cada una" };
   }
 
   return {
-    centavos: Math.round((renglon.importeCentavos * 1000) / total),
+    centavos: Math.round((neto * 1000) / total),
     porCada: renglon.unidad === "gr" ? "el kilo" : "el litro",
   };
 }
@@ -390,6 +414,9 @@ export type RenglonBorrador = {
   /** cómo hay que leer `importe` */
   modo: ModoPrecio;
   importe: string;
+  /** lo que descontaron de este renglón, y por qué */
+  descuento: string;
+  descuentoNota: string;
   /** por cuánto multiplicar el costo; vacío usa el del producto o el general */
   multiplicador: string;
   /** a cuánto venderlo; vacío deja el precio que ya tenía */
@@ -404,6 +431,8 @@ export function renglonVacio(): RenglonBorrador {
     // Por bulto es como viene la factura; el total es la excepción.
     modo: "bulto",
     importe: "",
+    descuento: "",
+    descuentoNota: "",
     multiplicador: "",
     precioVenta: "",
   };
@@ -442,6 +471,22 @@ function leerMultiplicador(renglon: RenglonBorrador): number | null {
     );
   }
   return Math.round(numero * MILESIMAS);
+}
+
+/**
+ * El descuento escrito en el renglón, en centavos.
+ *
+ * Siempre es un monto, nunca un porcentaje: la factura del mayorista dice
+ * pesos, y hacer la regla de tres para volver a pesos al guardar es una vuelta
+ * donde se pierden centavos y después el renglón no cuadra con el papel.
+ */
+function leerDescuento(renglon: RenglonBorrador): number | null {
+  if (!renglon.descuento.trim()) return null;
+  const centavos = parsearMonto(renglon.descuento);
+  if (centavos == null || centavos <= 0) {
+    throw new RenglonInvalido(`Revisá el descuento de ${nombrar(renglon)}.`);
+  }
+  return centavos;
 }
 
 /** El precio de venta escrito en el renglón, en centavos. */
@@ -508,6 +553,8 @@ export function aRenglonesAGuardar(
        */
       unidad: "un",
       importeCentavos: totalDelRenglon(escrito, cantidad, renglon.modo),
+      descuentoCentavos: leerDescuento(renglon),
+      descuentoNota: renglon.descuentoNota.trim() || null,
       precioVentaCentavos: leerPrecioVenta(renglon),
       multiplicadorMilesimas: leerMultiplicador(renglon),
     };

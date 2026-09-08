@@ -68,6 +68,8 @@ export default function FormCompra({
   const [nombre, setNombre] = useState(proveedorInicial ?? "");
   const [items, setItems] = useState<RenglonBorrador[]>([renglonVacio()]);
   const [monto, setMonto] = useState("");
+  const [descuento, setDescuento] = useState("");
+  const [descuentoNota, setDescuentoNota] = useState("");
   const [comprobante, setComprobante] = useState("");
   const [nota, setNota] = useState("");
   const [cuando, setCuando] = useState(fecha);
@@ -107,6 +109,15 @@ export default function FormCompra({
       return;
     }
 
+    let descuentoCentavos: number | null = null;
+    if (descuento.trim()) {
+      descuentoCentavos = parsearMonto(descuento);
+      if (descuentoCentavos == null || descuentoCentavos <= 0) {
+        setError("Revisá el descuento de la factura.");
+        return;
+      }
+    }
+
     let montoCentavos: number | null = null;
     if (monto.trim()) {
       montoCentavos = parsearMonto(monto);
@@ -134,7 +145,9 @@ export default function FormCompra({
      * default). Se valida acá para decirlo con el formulario a la vista; el
      * servidor lo vuelve a validar igual, que es donde no se negocia.
      */
-    const totalReal = montoCentavos ?? sumarRenglones(itemsAGuardar);
+    const totalReal =
+      montoCentavos ??
+      Math.max(0, sumarRenglones(itemsAGuardar) - (descuentoCentavos ?? 0));
     const usados = mediosUsados(montos);
     let medio: MedioPago = usados[0] ?? "efectivo";
     let reparto;
@@ -177,6 +190,8 @@ export default function FormCompra({
         pagos: pago === "ahora" ? reparto : undefined,
         comprobante,
         nota,
+        descuentoCentavos,
+        descuentoNota,
         enBlanco,
       }),
     );
@@ -194,6 +209,8 @@ export default function FormCompra({
     setNombre(proveedorInicial ?? "");
     setMonto("");
     setComprobante("");
+    setDescuento("");
+    setDescuentoNota("");
     setNota("");
     setItems([renglonVacio()]);
     setMontos(montosVacios());
@@ -206,7 +223,12 @@ export default function FormCompra({
    * la suma de los renglones. Es el mismo número que va a guardar el servidor,
    * así que lo que dice la pantalla y lo que valida la base no pueden discrepar.
    */
-  const totalDeLaCompra = monto.trim() ? (parsearMonto(monto) ?? 0) : suma;
+  const descuentoDeLaFactura = descuento.trim()
+    ? (parsearMonto(descuento) ?? 0)
+    : 0;
+  const totalDeLaCompra = monto.trim()
+    ? (parsearMonto(monto) ?? 0)
+    : Math.max(0, suma - descuentoDeLaFactura);
 
   const proveedorNuevo =
     nombre.trim().length > 0 &&
@@ -304,10 +326,40 @@ export default function FormCompra({
           <span className="mt-1 block text-xs text-tinta-suave">
             {monto.trim()
               ? "Vale este total, no la suma."
-              : suma > 0
-                ? "Vacío usa la suma: " + formatearCentavos(suma)
+              : totalDeLaCompra > 0
+                ? "Vacío usa la suma: " + formatearCentavos(totalDeLaCompra)
                 : "Si lo dejás vacío, se usa la suma de los renglones."}
           </span>
+        </label>
+
+        {/* El descuento de toda la factura. El de un producto puntual va en su
+            renglón: son cosas distintas y se cargan donde aparecen. */}
+        <label className="block">
+          <span className="text-xs text-tinta-suave">
+            Descuento de la factura
+          </span>
+          <input
+            value={descuento}
+            inputMode="decimal"
+            placeholder="opcional"
+            onChange={(e) => setDescuento(e.target.value)}
+            className="cifra mt-1 w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm"
+          />
+          {descuento.trim() ? (
+            <input
+              value={descuentoNota}
+              placeholder="por qué: promo, pago contado…"
+              aria-label="Por qué el descuento"
+              onChange={(e) => setDescuentoNota(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm"
+            />
+          ) : (
+            <span className="mt-1 block text-xs text-tinta-suave">
+              {/* No cambia el precio de venta: baja lo que pagaste, así que el
+                  margen sube. Cambiar la góndola es otra decisión. */}
+              Baja el costo, no el precio de venta.
+            </span>
+          )}
         </label>
 
         <label className="block">

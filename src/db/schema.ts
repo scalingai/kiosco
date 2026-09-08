@@ -242,6 +242,16 @@ export const compras = pgTable(
      */
     totalDeclarado: boolean("total_declarado").notNull().default(true),
     fecha: date("fecha").notNull(),
+    /**
+     * Lo que el proveedor descontó de toda la factura, y por qué.
+     *
+     * `monto_centavos` ya viene NETO —es lo que salió de la caja— así que esto
+     * no cambia ninguna cuenta: está para poder contestar "¿por qué este mes
+     * la Coca salió más barata?" tres meses después. Sin la nota, un costo que
+     * bajó de golpe parece un error de carga.
+     */
+    descuentoCentavos: bigint("descuento_centavos", { mode: "number" }),
+    descuentoNota: text("descuento_nota"),
     /** null = impaga, se le debe al proveedor */
     pagadoEn: date("pagado_en"),
     /** con qué se le pagó. Va junto con `pagadoEn`: sin pago no hay medio. */
@@ -353,6 +363,16 @@ export const comprasItems = pgTable(
      * llega el remito sin precios y la factura viene después.
      */
     importeCentavos: bigint("importe_centavos", { mode: "number" }),
+    /**
+     * El descuento de ESTE renglón, y por qué. La promo suele ser de un
+     * producto —"dos por uno en Manaos"— y no de la factura entera.
+     *
+     * `importe_centavos` sigue siendo lo que dice el renglón en bruto. El costo
+     * por unidad sale de restarle esto: es lo que de verdad pagaste por esa
+     * mercadería, y por lo tanto sobre lo que se calcula el margen.
+     */
+    descuentoCentavos: bigint("descuento_centavos", { mode: "number" }),
+    descuentoNota: text("descuento_nota"),
     posicion: integer("posicion").notNull().default(0),
   },
   (t) => [index("compras_items_compra_idx").on(t.compraId)],

@@ -198,6 +198,7 @@ export async function listarStock(): Promise<FilaStock[]> {
         unidadesPorBulto: comprasItems.unidadesPorBulto,
         unidad: comprasItems.unidad,
         importeCentavos: comprasItems.importeCentavos,
+        descuentoCentavos: comprasItems.descuentoCentavos,
         fecha: compras.fecha,
         enBlanco: compras.enBlanco,
       })

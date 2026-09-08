@@ -10,6 +10,7 @@ import {
   precioSugerido,
   renglonVacio,
   renglonesCargados,
+  netoDelRenglon,
   totalDelRenglon,
   type ModoPrecio,
   type RenglonBorrador,
@@ -37,6 +38,9 @@ type Cuentas = {
   /** lo que la app propone cobrar, con el multiplicador que haya */
   sugerido: number | null;
   importeCentavos: number | null;
+  descuentoCentavos: number | null;
+  /** lo que de verdad se pagó por el renglón: importe menos descuento */
+  netoCentavos: number | null;
   /** en milésimas: el del renglón, el del producto, o el general */
   multiplicador: number;
   /** lo que ese producto costaba en la góndola hasta hoy */
@@ -100,12 +104,16 @@ export default function EditorRenglones({
       : null;
     // Lo que se guarda es el total; si el precio vino por bulto, se multiplica.
     const importeCentavos = totalDelRenglon(escrito, cantidad, renglon.modo);
+    const descuentoCentavos = renglon.descuento.trim()
+      ? parsearMonto(renglon.descuento)
+      : null;
     const costo = costoDeReferencia({
       cantidad,
       unidadesPorBulto: porBulto,
       // Al proveedor se le compran unidades; los ml del envase son del producto.
       unidad: "un",
       importeCentavos,
+      descuentoCentavos,
     });
     // El costo de la factura no es lo que sale: en blanco hay que sumarle IVA.
     const real = costo ? costoConIva(costo.centavos, enBlanco) : null;
@@ -117,6 +125,8 @@ export default function EditorRenglones({
       real,
       sugerido: real != null ? precioSugerido(real, multiplicador) : null,
       importeCentavos,
+      descuentoCentavos,
+      netoCentavos: netoDelRenglon({ importeCentavos, descuentoCentavos }),
       multiplicador,
       precioAnterior: producto?.precioVentaCentavos ?? null,
     };
@@ -169,7 +179,7 @@ export default function EditorRenglones({
 
   const cargados = renglonesCargados(renglones);
   const suma = cargados.reduce(
-    (total, r) => total + (cuentas(r).importeCentavos ?? 0),
+    (total, r) => total + (cuentas(r).netoCentavos ?? 0),
     0,
   );
   const sinImporte = cargados.filter((r) => !r.importe.trim()).length;
@@ -213,6 +223,33 @@ export default function EditorRenglones({
       placeholder="producto"
       etiquetaAria="Producto"
     />
+  );
+
+  /**
+   * El descuento del renglón. La nota aparece sólo cuando hay un descuento
+   * puesto: un campo de texto vacío en cada fila es ruido en una tabla que ya
+   * tiene nueve columnas, y esto se usa en una compra de cada diez.
+   */
+  const campoDescuento = (i: number) => (
+    <>
+      <input
+        value={renglones[i].descuento}
+        inputMode="decimal"
+        placeholder="—"
+        aria-label="Descuento del renglón"
+        onChange={(e) => editar(i, { descuento: e.target.value })}
+        className={CAMPO + " cifra w-full text-right"}
+      />
+      {renglones[i].descuento.trim() && (
+        <input
+          value={renglones[i].descuentoNota}
+          placeholder="por qué"
+          aria-label="Por qué el descuento"
+          onChange={(e) => editar(i, { descuentoNota: e.target.value })}
+          className="mt-1 w-full rounded-lg border border-linea bg-white px-2 py-1 text-xs"
+        />
+      )}
+    </>
   );
 
   const campoMultiplicador = (i: number, c: Cuentas) => (
@@ -356,6 +393,11 @@ export default function EditorRenglones({
             total {formatearCentavos(c.importeCentavos!)}
           </span>
         )}
+        {c.descuentoCentavos != null && c.netoCentavos != null && (
+          <span className="cifra block text-xs text-pago">
+            queda {formatearCentavos(c.netoCentavos)}
+          </span>
+        )}
         <span className="cifra block text-sm">{formatearCentavos(c.real)}</span>
       </span>
     );
@@ -384,6 +426,7 @@ export default function EditorRenglones({
             <th className={encabezado + " w-16 text-center"}>Trae</th>
             <th className={encabezado + " w-24"}>Precio</th>
             <th className={encabezado + " w-24 text-right"}>Importe</th>
+            <th className={encabezado + " w-20 text-right"}>Desc.</th>
             <th className={encabezado + " w-24 text-right"}>
               {enBlanco ? "Costo c/IVA" : "Costo"}
             </th>
@@ -417,6 +460,9 @@ export default function EditorRenglones({
                 </td>
                 <td className="p-1">
                   {campoImporte(i)}
+                </td>
+                <td className="p-1">
+                  {campoDescuento(i)}
                 </td>
                 <td className="p-1 pt-3">
                   {columnaCosto(c, renglon)}
@@ -471,7 +517,10 @@ export default function EditorRenglones({
                 <span className="min-w-0 flex-1">{campoModo(i)}</span>
               </div>
 
-              <div className="mt-1.5">{campoImporte(i)}</div>
+              <div className="mt-1.5 flex items-start gap-1.5">
+                <span className="min-w-0 flex-1">{campoImporte(i)}</span>
+                <span className="w-24 shrink-0">{campoDescuento(i)}</span>
+              </div>
 
               {/* El precio se decide con la mercadería en la mano, así que en
                   el celular también tiene que estar acá y no en otra pantalla. */}
