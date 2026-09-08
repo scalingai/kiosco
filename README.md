@@ -21,6 +21,7 @@ No hace falta instalar Postgres. Sin `DATABASE_URL`, la app levanta **PGlite**
 npm run db:semilla   # opcional: carga clientes de ejemplo
 npm run db:catalogo  # carga el catálogo real de bebidas (marcas y productos)
 npm run db:importar  # trae productos con código de barras y foto (dry run)
+npm run db:completar # busca uno por uno los que no tienen código (dry run)
 npm run db:limpiar   # saca del catálogo lo que no se vende (dry run)
 rm -rf .data         # vaciar la base y empezar de cero
 ```
@@ -118,6 +119,7 @@ cuenta corriente para la misma persona.
 | `npm run db:generate` | Genera la migración SQL a partir del schema |
 | `npm run db:semilla` | Carga datos de ejemplo en la base local |
 | `npm run db:importar` | Trae productos reales —nombre, marca, gramaje, **código de barras** y foto— del catálogo público de Jumbo. Por defecto sólo muestra qué haría; con `-- --aplicar` escribe. A los productos que ya existen les completa el código en vez de duplicarlos, y cuando hay más de un candidato posible no elige ninguno. |
+| `npm run db:completar` | Recorre los productos sin código de barras y busca **cada uno** por su nombre. Sólo completa código y foto: no crea ni renombra. Para aceptar una coincidencia exige mismo tamaño, misma variante (la común y la zero son dos productos) y que no sea un pack; si dos candidatos pasan, no elige ninguno. Dry run salvo `-- --aplicar`. |
 | `npm run db:limpiar` | Poda del catálogo lo que no se vende, declarado en `scripts/limpiar.ts`. Los productos sin compras se borran; los que tienen historia se archivan, para no dejar una compra vieja sin poder explicar qué se compró. Dry run salvo `-- --aplicar`. |
 | `npm run db:catalogo` | Carga el catálogo real: marcas y productos con su contenido. No es data de ejemplo y no trae costos —esos los escribe la primera compra—. Se puede correr las veces que haga falta: lo que ya está no se duplica. |
 | `npm run db:studio` | Drizzle Studio |

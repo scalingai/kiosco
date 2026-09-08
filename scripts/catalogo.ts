@@ -399,6 +399,12 @@ const HELADOS_ARCOR: { marca: string; nombre: string; cc?: number }[] = [
  * hay una heladera con estas dos cosas, así que el rubro tiene dos productos y
  * no cuarenta.
  */
+const CHUPETINES: { marca: string; nombre: string }[] = [
+  { marca: "Pop", nombre: "Chupetín Pop" },
+  { marca: "Pop", nombre: "Chupetín Pop con chicle" },
+  { marca: "Pico Dulce", nombre: "Chupetín Pico Dulce" },
+];
+
 const LACTEOS: { marca: string; nombre: string; gr?: number }[] = [
   { marca: "Las 3 Niñas", nombre: "Leche Las 3 Niñas" },
   { marca: "La Serenísima", nombre: "Queso rallado La Serenísima chico" },
@@ -425,6 +431,7 @@ const RUBROS_PROPIOS = [
   "Alcohol",
   "Helados",
   "Lácteos",
+  "Chupetines",
 ];
 
 /** A quién se le compran los helados y las golosinas. */
@@ -607,6 +614,33 @@ async function main() {
         .from(proveedores)
         .where(eq(proveedores.nombreNormalizado, normalizado));
       proveedorId = existente?.id ?? null;
+    }
+
+    for (const chupetin of CHUPETINES) {
+      generados.add(normalizarNombre(chupetin.nombre));
+      const marcaId = await idDe(marcas, chupetin.marca);
+      const [nuevo] = await db
+        .insert(productos)
+        .values({
+          nombre: chupetin.nombre,
+          nombreNormalizado: normalizarNombre(chupetin.nombre),
+          marcaId,
+          proveedorId,
+          categoriaId: idPorRubro.get("Chupetines") ?? null,
+        })
+        .onConflictDoNothing({ target: productos.nombreNormalizado })
+        .returning();
+
+      if (nuevo) creados += 1;
+      else {
+        await db
+          .update(productos)
+          .set({ marcaId, categoriaId: idPorRubro.get("Chupetines") ?? null })
+          .where(
+            eq(productos.nombreNormalizado, normalizarNombre(chupetin.nombre)),
+          );
+        actualizados += 1;
+      }
     }
 
     for (const helado of HELADOS_ARCOR) {

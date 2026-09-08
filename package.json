@@ -13,6 +13,7 @@
     "db:semilla": "node --experimental-strip-types scripts/semilla.ts",
     "db:catalogo": "node --experimental-strip-types scripts/catalogo.ts",
     "db:importar": "node --experimental-strip-types scripts/importar.ts",
+    "db:completar": "node --experimental-strip-types scripts/importar.ts --completar",
     "db:limpiar": "node --experimental-strip-types scripts/limpiar.ts"
   },
   "dependencies": {

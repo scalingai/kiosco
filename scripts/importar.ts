@@ -4,6 +4,8 @@
  *
  *   npm run db:importar              # muestra qué haría, no toca nada
  *   npm run db:importar -- --aplicar # lo escribe
+ *   npm run db:completar             # busca UNO POR UNO los que no tienen código
+ *   npm run db:completar -- --aplicar
  *
  * De dónde salen los datos: los sitios de Cencosud (Jumbo, Disco, Vea) corren
  * sobre VTEX, que expone el catálogo en `/api/catalog_system/pub/products/
@@ -25,7 +27,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { and, eq, isNull } from "drizzle-orm";
 import { PGlite } from "@electric-sql/pglite";
-import { drizzle } from "drizzle-orm/pglite";
+import { drizzle, type PgliteDatabase } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import {
   categorias,
@@ -34,6 +36,8 @@ import {
   proveedores,
 } from "../src/db/schema.ts";
 import { normalizarNombre } from "../src/lib/nombres.ts";
+
+type DB = PgliteDatabase<Record<string, never>>;
 
 const TIENDA = "https://www.jumbo.com.ar";
 
@@ -75,7 +79,7 @@ const BUSQUEDAS: {
   { termino: "alfajor", rubro: "Alfajores" },
   { termino: "chocolate", rubro: "Chocolates" },
   { termino: "caramelos", rubro: "Caramelos" },
-  { termino: "chupetines", rubro: "Chupetines" },
+  { termino: "chupetines", rubro: "Chupetines", soloEnriquecer: true },
   { termino: "chicles", rubro: "Chicles" },
   { termino: "pastillas", rubro: "Pastillas" },
   { termino: "gomitas", rubro: "Gomitas" },
@@ -300,6 +304,206 @@ async function bajar(
   return traidos;
 }
 
+/**
+ * ¿Tiene alguna variante en vez de ser la común?
+ *
+ * La lista arrancó con zero y light y se le fue sumando lo que aparecía: "Life"
+ * se coló en un dry-run y le pegó su código a la Coca común. Cada palabra de
+ * acá es una versión distinta del producto, con su propio envase y su propio
+ * código, y confundirla con la común es justo el error que hay que evitar.
+ */
+function tieneVariante(nombre: string): boolean {
+  const texto = normalizarNombre(nombre);
+  return (
+    /\b(zero|cero|light|diet|life|stevia)\b/.test(texto) ||
+    texto.includes("sin azucar")
+  );
+}
+
+/**
+ * ¿El nombre es de un pack y no de una unidad? "Pack 4", "220x8", "Lata X 12".
+ * Un pack tiene su propio código, distinto al de la unidad que se vende suelta.
+ */
+function esPack(nombre: string): boolean {
+  const texto = normalizarNombre(nombre);
+  return /\bpack\b/.test(texto) || /\d\s*x\s*\d/.test(texto);
+}
+
+/**
+ * Decide si dos nombres son el MISMO producto, y por default dice que no.
+ *
+ * Nació de un dry-run que casi mete códigos cruzados: la Coca común se estaba
+ * quedando con el código de la Light, la zero con el de la original, y la
+ * Sprite común y la zero con el mismo código de un pack de cuatro. Un código
+ * equivocado no falla ruidosamente: escanea y trae otro producto.
+ */
+function esElMismo(
+  local: { nombre: string; contenido: number | null; unidad: string | null },
+  remoto: Traido,
+  marca: string,
+): boolean {
+  // Un pack no es la unidad que se vende suelta.
+  if (esPack(remoto.nombre)) return false;
+
+  // El tamaño tiene que estar y tiene que ser el mismo. Sin esto, la de 600 ml
+  // se queda con el código de la de 2,25.
+  if (local.contenido == null || remoto.contenido == null) return false;
+  if (local.contenido !== remoto.contenido) return false;
+  if (local.unidad !== remoto.unidad) return false;
+
+  // La común y cualquier variante son dos productos distintos, siempre.
+  if (tieneVariante(local.nombre) !== tieneVariante(remoto.nombre)) return false;
+
+  // El sabor: si el nombre local dice algo más que la marca y el tamaño, eso
+  // tiene que aparecer del otro lado.
+  const propias = señas(local.nombre, marca).filter(
+    (palabra) => ![
+        "comun",
+        "zero",
+        "cero",
+        "light",
+        "life",
+        "diet",
+      ].includes(palabra),
+  );
+  if (propias.length) {
+    const suyas = new Set(normalizarNombre(remoto.nombre).split(" "));
+    if (!propias.some((palabra) => suyas.has(palabra))) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Busca en la tienda un producto puntual, por su propio nombre.
+ *
+ * Es el modo lento y preciso: en vez de bajar un rubro entero y ver qué pega,
+ * pregunta por cada producto que todavía no tiene código de barras. Sirve para
+ * lo que nunca apareció en las búsquedas por rubro —una marca chica, un sabor
+ * suelto— y para terminar de completar el catálogo sin agregar nada.
+ */
+async function buscarUno(nombre: string, marca: string): Promise<Traido[]> {
+  // El nombre tal cual, que ya trae marca, sabor y tamaño.
+  const url =
+    `${TIENDA}/api/catalog_system/pub/products/search` +
+    `?ft=${encodeURIComponent(nombre)}&_from=0&_to=9`;
+
+  const respuesta = await fetch(url, { headers: { accept: "application/json" } });
+  if (!respuesta.ok) return [];
+
+  const crudos: ProductoVtex[] = await respuesta.json();
+  const marcaBuscada = normalizarNombre(marca);
+  const candidatos: Traido[] = [];
+
+  for (const crudo of crudos) {
+    const nombreVtex = crudo.productName?.trim();
+    const marcaVtex = crudo.brand?.trim();
+    const ean = crudo.items?.[0]?.ean?.trim();
+    if (!nombreVtex || !marcaVtex || !ean || !codigoValido(ean)) continue;
+
+    // La marca tiene que ser la misma. Sin eso, buscar "Chupetín Pop" trae
+    // cualquier cosa que diga "pop" y se le pega el código de otro producto.
+    const limpia = acomodarMarca(marcaVtex);
+    if (marcaBuscada && normalizarNombre(limpia) !== marcaBuscada) continue;
+
+    const medida = leerContenido(nombreVtex);
+    candidatos.push({
+      nombre: nombreVtex,
+      marca: limpia,
+      ean,
+      imagen: crudo.items?.[0]?.images?.[0]?.imageUrl?.trim() ?? null,
+      contenido: medida?.contenido ?? null,
+      unidad: medida?.unidad ?? null,
+      envase: leerEnvase(nombreVtex),
+      rubro: "",
+    });
+  }
+
+  return candidatos;
+}
+
+/**
+ * Recorre los productos que no tienen código y busca cada uno.
+ *
+ * Sólo completa: no crea ni renombra nada. Y exige que el contenido coincida
+ * cuando los dos lo declaran —una Coca de 600 ml no puede quedarse con el
+ * código de la de 2,25— porque el nombre solo no alcanza para estar seguro.
+ */
+async function completar(db: DB, aplicar: boolean) {
+  const pendientes = await db
+    .select({
+      id: productos.id,
+      nombre: productos.nombre,
+      contenido: productos.contenido,
+      unidad: productos.contenidoUnidad,
+      marca: marcas.nombre,
+    })
+    .from(productos)
+    .leftJoin(marcas, eq(marcas.id, productos.marcaId))
+    .where(and(isNull(productos.codigoBarras), isNull(productos.archivadoEn)));
+
+  console.log(`${pendientes.length} productos sin código. Buscando uno por uno…\n`);
+
+  /** Los códigos tomados en esta corrida: en dry-run todavía no están en la base. */
+  const tomados = new Set<string>();
+  let completados = 0;
+  let sinSuerte = 0;
+  let descartados = 0;
+
+  for (const producto of pendientes) {
+    const candidatos = await buscarUno(producto.nombre, producto.marca ?? "");
+    await new Promise((seguir) => setTimeout(seguir, 350));
+
+    if (!candidatos.length) {
+      sinSuerte += 1;
+      continue;
+    }
+
+    const iguales = candidatos.filter((c) =>
+      esElMismo(producto, c, producto.marca ?? ""),
+    );
+
+    // Uno solo, o ninguno. Si dos pasan el filtro, no hay forma de saber cuál
+    // es y elegir sería jugarse el código de un producto a cara o cruz.
+    if (iguales.length !== 1) {
+      descartados += 1;
+      continue;
+    }
+    const encontrado = iguales[0];
+
+    // Que no se lo lleve otro que ya lo tiene.
+    if (tomados.has(encontrado.ean)) {
+      descartados += 1;
+      continue;
+    }
+    const [ocupado] = await db
+      .select({ id: productos.id })
+      .from(productos)
+      .where(eq(productos.codigoBarras, encontrado.ean))
+      .limit(1);
+    if (ocupado) {
+      descartados += 1;
+      continue;
+    }
+
+    tomados.add(encontrado.ean);
+    completados += 1;
+    console.log(`  ${producto.nombre} ← ${encontrado.nombre} (${encontrado.ean})`);
+    if (!aplicar) continue;
+
+    await db
+      .update(productos)
+      .set({ codigoBarras: encontrado.ean, imagenUrl: encontrado.imagen })
+      .where(eq(productos.id, producto.id));
+  }
+
+  console.log(
+    `\n${completados} completados, ${sinSuerte} que la tienda no tiene, ` +
+      `${descartados} descartados por no coincidir.`,
+  );
+  if (!aplicar) console.log("No se escribió nada.");
+}
+
 async function main() {
   const aplicar = process.argv.includes("--aplicar");
 
@@ -308,6 +512,12 @@ async function main() {
   const cliente = new PGlite(directorio);
   const db = drizzle(cliente);
   await migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
+
+  if (process.argv.includes("--completar")) {
+    await completar(db, aplicar);
+    await cliente.close();
+    return;
+  }
 
   console.log(
     aplicar
