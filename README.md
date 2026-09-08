@@ -19,6 +19,7 @@ No hace falta instalar Postgres. Sin `DATABASE_URL`, la app levanta **PGlite**
 
 ```bash
 npm run db:semilla   # opcional: carga clientes de ejemplo
+npm run db:catalogo  # carga el catálogo real de bebidas (marcas y productos)
 rm -rf .data         # vaciar la base y empezar de cero
 ```
 
@@ -114,6 +115,7 @@ cuenta corriente para la misma persona.
 | `npm run lint` | ESLint |
 | `npm run db:generate` | Genera la migración SQL a partir del schema |
 | `npm run db:semilla` | Carga datos de ejemplo en la base local |
+| `npm run db:catalogo` | Carga el catálogo real: marcas y productos con su contenido. No es data de ejemplo y no trae costos —esos los escribe la primera compra—. Se puede correr las veces que haga falta: lo que ya está no se duplica. |
 | `npm run db:studio` | Drizzle Studio |
 
 Las migraciones viven en `drizzle/` y **se aplican solas al arrancar**, contra

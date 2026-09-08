@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
-    "db:semilla": "node --experimental-strip-types scripts/semilla.ts"
+    "db:semilla": "node --experimental-strip-types scripts/semilla.ts",
+    "db:catalogo": "node --experimental-strip-types scripts/catalogo.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
