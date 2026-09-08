@@ -111,6 +111,33 @@ export type RenglonAGuardar = {
   multiplicadorMilesimas: number | null;
 };
 
+export type PagoDeCompra = { medio: MedioPago; importeCentavos: number };
+
+/**
+ * Reparte el total entre los medios que tengan importe.
+ *
+ * Devuelve `null` cuando alcanza con un solo medio: en ese caso no hace falta
+ * escribir filas de pago y la compra se guarda como siempre. Tira si la suma
+ * no da el total, porque una compra pagada a medias por cada lado deja la caja
+ * diciendo que salió plata de donde no salió.
+ */
+export function repartirPago(
+  pagos: PagoDeCompra[],
+  totalCentavos: number,
+): PagoDeCompra[] | null {
+  const conPlata = pagos.filter((p) => p.importeCentavos > 0);
+  if (conPlata.length <= 1) return null;
+
+  const suma = conPlata.reduce((t, p) => t + p.importeCentavos, 0);
+  if (suma !== totalCentavos) {
+    throw new Error(
+      `Los medios suman ${suma / 100} y la compra es ${totalCentavos / 100}. ` +
+        "Tienen que dar lo mismo.",
+    );
+  }
+  return conPlata;
+}
+
 export type CompraAGuardar = {
   proveedorId?: string;
   nombreProveedor?: string;
@@ -122,6 +149,14 @@ export type CompraAGuardar = {
   pagadoEn: string | null;
   /** Con qué se pagó. Va junto con `pagadoEn`: sin pago no hay medio. */
   medio: MedioPago | null;
+  /**
+   * Cuando se pagó con más de un medio: cuánto por cada uno.
+   *
+   * Al proveedor se le paga como se puede —la mitad en efectivo y el resto por
+   * transferencia es lo normal—, y con un solo medio había que elegir uno y
+   * mentir. Vacío o ausente significa que se pagó todo con `medio`.
+   */
+  pagos?: PagoDeCompra[];
   comprobante?: string | null;
   nota?: string | null;
   /** con factura: el costo real es el importe por 1,21 */

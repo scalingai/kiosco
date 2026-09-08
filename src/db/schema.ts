@@ -288,6 +288,44 @@ export const compras = pgTable(
  * `unidadesPorBulto` es además lo que va a necesitar el stock cuando exista:
  * un pack que entra son N unidades para vender.
  */
+/**
+ * Con qué se pagó una compra. Una fila por medio.
+ *
+ * Existe porque al proveedor se le paga como se puede: la mitad en efectivo y
+ * el resto por transferencia es lo normal, no la excepción. Con un solo
+ * `compras.medio` había que elegir uno y mentir, y la caja del día terminaba
+ * diciendo que salió de un lado plata que salió de otro.
+ *
+ * La suma de estas filas TIENE que dar el total de la compra: si no, la caja
+ * deja de cerrar. Eso lo valida `registrarCompra`.
+ *
+ * `compras.medio` sigue existiendo para las compras cargadas antes de esto.
+ * Al leer, si una compra no tiene filas acá se usa aquel medio único.
+ */
+export const comprasPagos = pgTable(
+  "compras_pagos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    compraId: uuid("compra_id")
+      .notNull()
+      .references(() => compras.id, { onDelete: "cascade" }),
+    medio: medioPago("medio").notNull(),
+    /** siempre positivo y en centavos */
+    importeCentavos: bigint("importe_centavos", { mode: "number" }).notNull(),
+    creadoEn: timestamp("creado_en", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("compras_pagos_compra_idx").on(t.compraId),
+    // Un medio por compra: dos filas de "efectivo" son la misma plata contada
+    // dos veces, y sumarlas da un total que no existió.
+    uniqueIndex("compras_pagos_compra_medio_key").on(t.compraId, t.medio),
+  ],
+);
+
+export type CompraPago = typeof comprasPagos.$inferSelect;
+
 export const comprasItems = pgTable(
   "compras_items",
   {

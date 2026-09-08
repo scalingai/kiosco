@@ -4,7 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { guardarCompra } from "@/app/acciones";
 import EditorRenglones from "@/components/EditorRenglones";
-import SelectorMedio from "@/components/SelectorMedio";
+import RepartoDePago, {
+  mediosUsados,
+  montoDe,
+  montosVacios,
+  sumarMontos,
+  type MontosPorMedio,
+} from "@/components/RepartoDePago";
 import SelectorNombre from "@/components/SelectorNombre";
 import { AVISO_TARDANZA, conLimiteDeTiempo } from "@/lib/espera";
 import {
@@ -12,12 +18,23 @@ import {
   renglonVacio,
   renglonesCargados,
   RenglonInvalido,
+  repartirPago,
   sumarRenglones,
   type MedioPago,
   type RenglonBorrador,
 } from "@/lib/negocio";
 import { normalizarNombre } from "@/lib/nombres";
 import { centavosAPesos, formatearCentavos, parsearMonto } from "@/lib/plata";
+
+/** Lo escrito en cada medio, listo para `repartirPago`. */
+function montosComoPagos(montos: MontosPorMedio) {
+  return (Object.keys(montos) as MedioPago[]).map((medio) => ({
+    medio,
+    importeCentavos: montos[medio].trim()
+      ? (parsearMonto(montos[medio]) ?? 0)
+      : 0,
+  }));
+}
 
 type Proveedor = { id: string; nombre: string };
 type Producto = {
@@ -56,7 +73,7 @@ export default function FormCompra({
   const [cuando, setCuando] = useState(fecha);
   const [pago, setPago] = useState<"ahora" | "cuenta">("ahora");
   const [fechaPago, setFechaPago] = useState(fecha);
-  const [medio, setMedio] = useState<MedioPago>("efectivo");
+  const [montos, setMontos] = useState<MontosPorMedio>(montosVacios());
   const [enBlanco, setEnBlanco] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -110,6 +127,43 @@ export default function FormCompra({
       (p) => normalizarNombre(p.nombre) === normalizarNombre(nombre),
     );
 
+    /*
+     * Con qué se pagó sale de lo escrito en los tres campos, sin ningún modo
+     * que declarar: uno solo con plata es un pago simple, dos o tres es un
+     * reparto, y ninguno es todo en efectivo (lo más común, y por eso el
+     * default). Se valida acá para decirlo con el formulario a la vista; el
+     * servidor lo vuelve a validar igual, que es donde no se negocia.
+     */
+    const totalReal = montoCentavos ?? sumarRenglones(itemsAGuardar);
+    const usados = mediosUsados(montos);
+    let medio: MedioPago = usados[0] ?? "efectivo";
+    let reparto;
+
+    if (pago === "ahora" && usados.length) {
+      if (sumarMontos(montos) !== totalReal) {
+        setError(
+          `Los medios suman ${formatearCentavos(sumarMontos(montos))} y la ` +
+            `compra es ${formatearCentavos(totalReal)}. Tienen que dar lo mismo.`,
+        );
+        return;
+      }
+      if (usados.length > 1) {
+        // El medio de la compra queda en el que más plata movió: es lo que se
+        // muestra de un vistazo cuando no hay lugar para los tres.
+        medio = usados.reduce((mayor, m) =>
+          montoDe(montos, m) > montoDe(montos, mayor) ? m : mayor,
+        );
+        try {
+          reparto = repartirPago(montosComoPagos(montos), totalReal) ?? undefined;
+        } catch (problema) {
+          setError(
+            problema instanceof Error ? problema.message : "Revisá el reparto.",
+          );
+          return;
+        }
+      }
+    }
+
     setGuardando(true);
     const espera = await conLimiteDeTiempo(
       guardarCompra({
@@ -120,6 +174,7 @@ export default function FormCompra({
         fecha: cuando,
         pagadoEn: pago === "ahora" ? fechaPago : null,
         medio: pago === "ahora" ? medio : null,
+        pagos: pago === "ahora" ? reparto : undefined,
         comprobante,
         nota,
         enBlanco,
@@ -141,9 +196,17 @@ export default function FormCompra({
     setComprobante("");
     setNota("");
     setItems([renglonVacio()]);
+    setMontos(montosVacios());
     router.refresh();
     alGuardar?.();
   }
+
+  /*
+   * Contra qué se reparte el pago: el total declarado si lo escribiste, y si no
+   * la suma de los renglones. Es el mismo número que va a guardar el servidor,
+   * así que lo que dice la pantalla y lo que valida la base no pueden discrepar.
+   */
+  const totalDeLaCompra = monto.trim() ? (parsearMonto(monto) ?? 0) : suma;
 
   const proveedorNuevo =
     nombre.trim().length > 0 &&
@@ -175,47 +238,14 @@ export default function FormCompra({
         )}
       </label>
 
-      <EditorRenglones
-        renglones={items}
-        onCambio={setItems}
-        productos={productos}
-        enBlanco={enBlanco}
-      />
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="text-xs text-tinta-suave">Total de la factura</span>
-          <input
-            value={monto}
-            inputMode="decimal"
-            placeholder={suma > 0 ? String(centavosAPesos(suma)) : "opcional"}
-            onChange={(e) => setMonto(e.target.value)}
-            className="cifra mt-1 w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm"
-          />
-          <span className="mt-1 block text-xs text-tinta-suave">
-            {monto.trim()
-              ? "Vale este total, no la suma."
-              : suma > 0
-                ? "Vacío usa la suma: " + formatearCentavos(suma)
-                : "Si lo dejás vacío, se usa la suma de los renglones."}
-          </span>
-        </label>
-
-        <label className="block">
-          <span className="text-xs text-tinta-suave">Llegó el</span>
-          <input
-            type="date"
-            value={cuando}
-            onChange={(e) => setCuando(e.target.value)}
-            className="cifra mt-1 w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm"
-          />
-        </label>
-      </div>
-
       {/*
         Cambia el costo, no un rótulo: en blanco el mayorista factura + IVA, así
-        que lo que sale de verdad cada unidad es el importe por 1,21. Va arriba
-        de los renglones porque el número que se lee abajo depende de esto.
+        que lo que sale de verdad cada unidad es el importe por 1,21.
+
+        Va pegado al proveedor y ANTES de los renglones porque es la decisión de
+        la que dependen todos los números de abajo: el costo por unidad y el
+        precio sugerido de cada producto se leen mientras se carga la factura, y
+        elegirlo después obliga a releer todo lo que ya se había mirado.
       */}
       <fieldset className="rounded-xl border border-linea bg-white/60 px-3 py-2.5">
         <legend className="px-1 text-xs text-tinta-suave">Cómo se compró</legend>
@@ -254,6 +284,44 @@ export default function FormCompra({
         </p>
       </fieldset>
 
+      <EditorRenglones
+        renglones={items}
+        onCambio={setItems}
+        productos={productos}
+        enBlanco={enBlanco}
+      />
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="text-xs text-tinta-suave">Total de la factura</span>
+          <input
+            value={monto}
+            inputMode="decimal"
+            placeholder={suma > 0 ? String(centavosAPesos(suma)) : "opcional"}
+            onChange={(e) => setMonto(e.target.value)}
+            className="cifra mt-1 w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm"
+          />
+          <span className="mt-1 block text-xs text-tinta-suave">
+            {monto.trim()
+              ? "Vale este total, no la suma."
+              : suma > 0
+                ? "Vacío usa la suma: " + formatearCentavos(suma)
+                : "Si lo dejás vacío, se usa la suma de los renglones."}
+          </span>
+        </label>
+
+        <label className="block">
+          <span className="text-xs text-tinta-suave">Llegó el</span>
+          <input
+            type="date"
+            value={cuando}
+            onChange={(e) => setCuando(e.target.value)}
+            className="cifra mt-1 w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm"
+          />
+        </label>
+      </div>
+
+
       <fieldset className="rounded-xl border border-linea bg-white/60 px-3 py-2.5">
         <legend className="px-1 text-xs text-tinta-suave">Cómo se paga</legend>
         <div className="flex flex-wrap gap-4 text-sm">
@@ -288,7 +356,11 @@ export default function FormCompra({
                 className="cifra mt-1 w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm sm:w-48"
               />
             </label>
-            <SelectorMedio valor={medio} onCambio={setMedio} />
+            <RepartoDePago
+              montos={montos}
+              alCambiar={setMontos}
+              totalCentavos={totalDeLaCompra}
+            />
           </div>
         ) : (
           <p className="mt-2 text-xs text-tinta-suave">

@@ -231,7 +231,19 @@ export default function EditorRenglones({
       value={renglones[i].precioVenta}
       inputMode="decimal"
       aria-label="A cuánto lo vendés"
-      placeholder={c.sugerido != null ? String(centavosAPesos(c.sugerido)) : "—"}
+      /*
+       * Primero lo que sugiere el costo de HOY, y si todavía no cargaste el
+       * importe, lo que ese producto vale hoy en la góndola. Un "—" no dice
+       * nada: el precio anterior es el punto de partida real, porque la mayoría
+       * de las veces no se toca.
+       */
+      placeholder={
+        c.sugerido != null
+          ? String(centavosAPesos(c.sugerido))
+          : c.precioAnterior != null
+            ? String(centavosAPesos(c.precioAnterior))
+            : "—"
+      }
       onChange={(e) => editar(i, { precioVenta: e.target.value })}
       className={CAMPO + " cifra w-full text-right"}
     />
@@ -353,8 +365,9 @@ export default function EditorRenglones({
 
   return (
     <div>
-      <div className="flex items-baseline justify-between">
-        <span className="text-xs text-tinta-suave">Qué trajo</span>
+      {/* Sin rótulo: los encabezados de la tabla ya dicen qué es cada cosa, y
+          "Qué trajo" encima de una columna que dice "Producto" era ruido. */}
+      <div className="flex items-baseline justify-end">
         {cargados.length > 0 && (
           <span className="cifra text-xs text-tinta-suave">
             {suma > 0 ? "suman " + formatearCentavos(suma) : "sin importes"}
@@ -506,12 +519,18 @@ export default function EditorRenglones({
         })}
       </ul>
 
+      {/* Se toca una vez por renglón de la factura, así que es un botón de
+          verdad y no un link de 12px: en el mostrador se aprieta con el pulgar
+          y con una caja en la otra mano. */}
       <button
         type="button"
         onClick={() => onCambio([...renglones, renglonVacio()])}
-        className="mt-2 text-xs text-acento underline underline-offset-4"
+        className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-linea bg-white px-3.5 py-2 text-sm text-acento transition-colors hover:border-acento hover:bg-papel-hondo"
       >
-        + otro renglón
+        <span aria-hidden className="text-base leading-none">
+          +
+        </span>
+        otro producto
       </button>
 
       {sinImporte > 0 && (

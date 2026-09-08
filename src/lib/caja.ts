@@ -19,6 +19,7 @@ import {
   clientes,
   compras,
   comprasItems,
+  comprasPagos,
   gastos,
   movimientos,
   productos,
@@ -27,6 +28,7 @@ import {
 } from "@/db/schema";
 import {
   costoDeReferencia,
+  repartirPago,
   restarPorMedio,
   sumarPorMedio,
   sumarRenglones,
@@ -34,6 +36,7 @@ import {
   type CompraAGuardar,
   type GastoAGuardar,
   type MedioPago,
+  type PagoDeCompra,
   type PorMedio,
   type Unidad,
   type VentaAGuardar,
@@ -193,6 +196,24 @@ export async function registrarCompra(entrada: CompraAGuardar) {
       })
       .returning();
 
+    /*
+     * El reparto entre medios. Se valida contra el total REAL de la compra
+     * (el declarado o la suma de renglones), no contra lo que diga el
+     * formulario: si no dan lo mismo, la caja del día deja de cerrar.
+     */
+    if (entrada.pagadoEn && entrada.pagos?.length) {
+      const reparto = repartirPago(entrada.pagos, montoCentavos);
+      if (reparto) {
+        await tx.insert(comprasPagos).values(
+          reparto.map((pago) => ({
+            compraId: fila.id,
+            medio: pago.medio,
+            importeCentavos: pago.importeCentavos,
+          })),
+        );
+      }
+    }
+
     if (lista.length) {
       // Cada renglón con nombre engancha con su producto del catálogo, y lo
       // crea si es la primera vez. Así la lista de reposición se llena sola con
@@ -263,27 +284,56 @@ export async function marcarCompraPagada(
   id: string,
   fecha: string,
   medio: MedioPago,
+  pagos?: PagoDeCompra[],
 ) {
   if (!UUID.test(id)) return null;
   const db = await getDb();
-  const [fila] = await db
-    .update(compras)
-    .set({ pagadoEn: validarFecha(fecha, "La fecha de pago"), medio })
-    .where(and(eq(compras.id, id), isNull(compras.anuladoEn)))
-    .returning();
-  return fila ?? null;
+
+  return db.transaction(async (tx) => {
+    const [fila] = await tx
+      .update(compras)
+      .set({ pagadoEn: validarFecha(fecha, "La fecha de pago"), medio })
+      .where(and(eq(compras.id, id), isNull(compras.anuladoEn)))
+      .returning();
+    if (!fila) return null;
+
+    // Se rehace el reparto entero: pagar de nuevo con otros medios tiene que
+    // pisar lo anterior, no sumarse.
+    await tx.delete(comprasPagos).where(eq(comprasPagos.compraId, id));
+
+    const reparto = pagos?.length
+      ? repartirPago(pagos, fila.montoCentavos)
+      : null;
+    if (reparto) {
+      await tx.insert(comprasPagos).values(
+        reparto.map((pago) => ({
+          compraId: id,
+          medio: pago.medio,
+          importeCentavos: pago.importeCentavos,
+        })),
+      );
+    }
+
+    return fila;
+  });
 }
 
 /** Por si se marcó pagada por error: vuelve a quedar a cuenta del proveedor. */
 export async function marcarCompraImpaga(id: string) {
   if (!UUID.test(id)) return null;
   const db = await getDb();
-  const [fila] = await db
-    .update(compras)
-    .set({ pagadoEn: null, medio: null })
-    .where(and(eq(compras.id, id), isNull(compras.anuladoEn)))
-    .returning();
-  return fila ?? null;
+  return db.transaction(async (tx) => {
+    const [fila] = await tx
+      .update(compras)
+      .set({ pagadoEn: null, medio: null })
+      .where(and(eq(compras.id, id), isNull(compras.anuladoEn)))
+      .returning();
+    if (!fila) return null;
+    // Sin pago no hay reparto: dejarlo colgado haría que la caja siguiera
+    // contando plata que volvió a deberse.
+    await tx.delete(comprasPagos).where(eq(comprasPagos.compraId, id));
+    return fila;
+  });
 }
 
 /** Nada se borra, acá tampoco: se le pone fecha de baja y deja de sumar. */
@@ -344,6 +394,11 @@ export type FilaCompra = {
   fecha: string;
   pagadoEn: string | null;
   medio: MedioPago | null;
+  /**
+   * Con qué se pagó de verdad. Uno solo en el caso normal, varios cuando se
+   * repartió. Vacío si todavía no se pagó.
+   */
+  medios: MedioPago[];
   enBlanco: boolean;
   comprobante: string | null;
   nota: string | null;
@@ -498,7 +553,7 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
     }
   }
 
-  const listaCompras: FilaCompra[] = filasCompras.map((c) => ({
+  const listaCompras = filasCompras.map((c) => ({
     ...c,
     faltanPrecios: sinPrecio.has(c.id),
     renglones: porCompra.get(c.id) ?? [],
@@ -528,6 +583,54 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
   const salioCentavos = gastosCentavos + pagosProveedoresCentavos;
 
   const pagadasHoy = listaCompras.filter((c) => c.pagadoEn === fecha);
+
+  /*
+   * Cómo se repartió cada compra entre los medios. Una compra que se pagó con
+   * uno solo no tiene filas acá, y tampoco las tienen las cargadas antes de
+   * que esto existiera: para esas se usa el `medio` único de la compra.
+   */
+  const repartos = listaCompras.length
+    ? await db
+        .select({
+          compraId: comprasPagos.compraId,
+          medio: comprasPagos.medio,
+          importeCentavos: comprasPagos.importeCentavos,
+        })
+        .from(comprasPagos)
+        .where(
+          inArray(
+            comprasPagos.compraId,
+            listaCompras.map((c) => c.id),
+          ),
+        )
+    : [];
+
+  const repartoDe = new Map<string, { medio: MedioPago; monto: number }[]>();
+  for (const fila of repartos) {
+    const lista = repartoDe.get(fila.compraId) ?? [];
+    lista.push({ medio: fila.medio, monto: fila.importeCentavos });
+    repartoDe.set(fila.compraId, lista);
+  }
+
+  /*
+   * El reparto pegado a cada compra, para que la fila de la pantalla pueda
+   * decir "efvo + banco" en vez de nombrar un solo medio. Mostrar uno cuando
+   * fueron dos no es un detalle: dice que salió de una caja plata que salió de
+   * otra, que es justo lo que este cambio vino a arreglar.
+   */
+  const comprasConReparto: FilaCompra[] = listaCompras.map((c) => ({
+    ...c,
+    medios: repartoDe.get(c.id)?.map((r) => r.medio) ?? (c.medio ? [c.medio] : []),
+  }));
+
+  const salidasDeCompras = pagadasHoy.flatMap(
+    (c) =>
+      repartoDe.get(c.id) ?? [
+        // Una compra pagada siempre tiene medio; el `?? "efectivo"` cubre las
+        // que quedaron cargadas antes de que existieran los medios.
+        { medio: c.medio ?? ("efectivo" as MedioPago), monto: c.montoCentavos },
+      ],
+  );
   const entroPorMedio = sumarPorMedio(
     [...filasVentas, ...cobros],
     (f) => f.medio,
@@ -536,12 +639,7 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
   const salioPorMedio = sumarPorMedio(
     [
       ...filasGastos.map((g) => ({ medio: g.medio, monto: g.montoCentavos })),
-      // Una compra pagada siempre tiene medio; el `?? "efectivo"` cubre las
-      // que quedaron cargadas antes de que existieran los medios.
-      ...pagadasHoy.map((c) => ({
-        medio: c.medio ?? ("efectivo" as MedioPago),
-        monto: c.montoCentavos,
-      })),
+      ...salidasDeCompras,
     ],
     (f) => f.medio,
     (f) => f.monto,
@@ -551,7 +649,7 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
     fecha,
     ventas: filasVentas,
     gastos: filasGastos,
-    compras: listaCompras,
+    compras: comprasConReparto,
     cobros,
     ventasCentavos,
     cobrosCentavos,

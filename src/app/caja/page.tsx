@@ -244,7 +244,11 @@ export default async function Caja({ searchParams }: PageProps<"/caja">) {
                           : c.pagadoEn
                             ? `pagada el ${fechaCorta(c.pagadoEn)}`
                             : "a cuenta, sin pagar"}
-                      {c.medio && ` · ${MEDIO_CORTO[c.medio]}`}
+                      {/* Los que de verdad se usaron. Una compra pagada con
+                          dos cajas dice las dos: nombrar una sola sería decir
+                          que salió de ahí plata que salió de otro lado. */}
+                      {c.medios.length > 0 &&
+                        ` · ${c.medios.map((m) => MEDIO_CORTO[m]).join(" + ")}`}
                     </span>
                     {c.comprobante && <span>N.º {c.comprobante}</span>}
                     {c.nota && <span>{c.nota}</span>}
