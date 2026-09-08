@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { guardarCompra } from "@/app/acciones";
 import EditorRenglones from "@/components/EditorRenglones";
 import SelectorMedio from "@/components/SelectorMedio";
+import SelectorNombre from "@/components/SelectorNombre";
 import { AVISO_TARDANZA, conLimiteDeTiempo } from "@/lib/espera";
 import {
   aRenglonesAGuardar,
@@ -152,14 +153,16 @@ export default function FormCompra({
     <form onSubmit={enviar} className="space-y-3">
       <label className="block">
         <span className="text-xs text-tinta-suave">Proveedor</span>
-        <input
-          value={nombre}
-          autoFocus={!proveedorInicial}
-          list="lista-proveedores"
-          placeholder="Nombre del proveedor"
-          onChange={(e) => setNombre(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm"
-        />
+        <div className="mt-1">
+          <SelectorNombre
+            valor={nombre}
+            alCambiar={(texto) => setNombre(texto)}
+            opciones={proveedores}
+            queEs="Proveedor"
+            placeholder="Nombre del proveedor"
+            autoFocus={!proveedorInicial}
+          />
+        </div>
         {proveedorNuevo && (
           <span className="mt-1 block text-xs text-tinta-suave">
             Proveedor nuevo. Si ya le comprabas, elegilo de la lista.
@@ -332,12 +335,6 @@ export default function FormCompra({
       >
         {guardando ? "Anotando…" : "Anotar compra"}
       </button>
-
-      <datalist id="lista-proveedores">
-        {proveedores.map((p) => (
-          <option key={p.id} value={p.nombre} />
-        ))}
-      </datalist>
     </form>
   );
 }

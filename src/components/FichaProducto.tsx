@@ -3,9 +3,16 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { editarProducto } from "@/app/acciones";
-import { ETIQUETA_UNIDAD, type Unidad } from "@/lib/negocio";
+import SelectorNombre from "@/components/SelectorNombre";
+import {
+  ETIQUETA_UNIDAD,
+  MARGEN_SUGERIDO,
+  MILESIMAS,
+  precioSugerido,
+  type Unidad,
+} from "@/lib/negocio";
 import type { Envase, OpcionCategoria } from "@/lib/stock";
-import { centavosAPesos, parsearMonto } from "@/lib/plata";
+import { centavosAPesos, formatearCentavos, parsearMonto } from "@/lib/plata";
 
 type Marca = { id: string; nombre: string };
 
@@ -36,6 +43,8 @@ export default function FichaProducto({
   contenidoUnidad,
   precioVentaCentavos,
   sugeridoCentavos,
+  multiplicadorMilesimas,
+  costoRealCentavos,
   categoriaId,
   envase,
   codigoBarras,
@@ -50,6 +59,10 @@ export default function FichaProducto({
   precioVentaCentavos: number | null;
   /** lo que la app propondría; se usa de placeholder */
   sugeridoCentavos: number | null;
+  /** el multiplicador propio de este producto; null = usa el general */
+  multiplicadorMilesimas: number | null;
+  /** el costo con IVA de una unidad, para recalcular mientras se escribe */
+  costoRealCentavos: number | null;
   categoriaId: string | null;
   envase: Envase | null;
   codigoBarras: string | null;
@@ -65,6 +78,12 @@ export default function FichaProducto({
   const [unidad, setUnidad] = useState<Unidad>(contenidoUnidad ?? "ml");
   const [precio, setPrecio] = useState(
     precioVentaCentavos != null ? String(centavosAPesos(precioVentaCentavos)) : "",
+  );
+  // Se muestra con coma, como se escribe acá: 1,4 y no 1.4.
+  const [multiplicador, setMultiplicador] = useState(
+    multiplicadorMilesimas != null
+      ? String(multiplicadorMilesimas / MILESIMAS).replace(".", ",")
+      : "",
   );
   const [rubro, setRubro] = useState(categoriaId ?? "");
   const [envasado, setEnvasado] = useState<Envase | "">(envase ?? "");
@@ -98,6 +117,17 @@ export default function FichaProducto({
       }
     }
 
+    // Vacío significa "seguí el general", que no es lo mismo que un 1,4 fijo.
+    let milesimas: number | null = null;
+    if (multiplicador.trim()) {
+      const numero = Number(multiplicador.trim().replace(",", "."));
+      if (!Number.isFinite(numero) || numero < 1 || numero > 10) {
+        setError("El multiplicador tiene que estar entre 1 y 10. Ej: 1,4");
+        return;
+      }
+      milesimas = Math.round(numero * MILESIMAS);
+    }
+
     empezar(async () => {
       const resultado = await editarProducto(id, {
         nombre: nuevoNombre,
@@ -105,6 +135,7 @@ export default function FichaProducto({
         contenido: valor,
         contenidoUnidad: valor ? unidad : null,
         precioVentaCentavos: venta,
+        multiplicadorMilesimas: milesimas,
         categoriaId: rubro || null,
         envase: envasado || null,
         codigoBarras: codigo.trim() || null,
@@ -117,6 +148,21 @@ export default function FichaProducto({
       router.refresh();
     });
   }
+
+  /*
+   * Lo que se sugeriría con el multiplicador que hay escrito AHORA. Si el
+   * número tecleado no sirve todavía ("1," a medio escribir) se cae al que
+   * vino del servidor en vez de parpadear.
+   */
+  const tecleado = Number(multiplicador.trim().replace(",", "."));
+  const sugeridoVivo =
+    costoRealCentavos != null &&
+    multiplicador.trim() &&
+    Number.isFinite(tecleado) &&
+    tecleado >= 1 &&
+    tecleado <= 10
+      ? precioSugerido(costoRealCentavos, Math.round(tecleado * MILESIMAS))
+      : sugeridoCentavos;
 
   const campo =
     "w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm";
@@ -135,13 +181,16 @@ export default function FichaProducto({
 
         <label className="block">
           <span className="text-xs text-tinta-suave">Marca</span>
-          <input
-            value={nuevaMarca}
-            list="lista-marcas"
-            placeholder="opcional: Coca-Cola, Lays…"
-            onChange={(e) => setNuevaMarca(e.target.value)}
-            className={"mt-1 " + campo}
-          />
+          <div className="mt-1">
+            <SelectorNombre
+              valor={nuevaMarca}
+              alCambiar={(texto) => setNuevaMarca(texto)}
+              opciones={marcas}
+              queEs="Marca"
+              placeholder="opcional: Coca-Cola, Lays…"
+              className={campo}
+            />
+          </div>
         </label>
       </div>
 
@@ -206,25 +255,52 @@ export default function FichaProducto({
         </label>
       </div>
 
-      <label className="block">
-        <span className="text-xs text-tinta-suave">A cuánto lo vendés</span>
-        <input
-          value={precio}
-          inputMode="decimal"
-          placeholder={
-            sugeridoCentavos != null
-              ? String(centavosAPesos(sugeridoCentavos))
-              : "opcional"
-          }
-          onChange={(e) => setPrecio(e.target.value)}
-          className="cifra mt-1 w-32 rounded-lg border border-linea bg-white px-3 py-2 text-sm"
-        />
-        <span className="mt-1 block text-xs text-tinta-suave">
-          {/* Sin este dato la app sólo puede sugerir; con él dice el margen
-              que estás sacando de verdad. */}
-          Poniéndolo, la app te dice el margen real en vez de uno sugerido.
-        </span>
-      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="text-xs text-tinta-suave">A cuánto lo vendés</span>
+          <input
+            value={precio}
+            inputMode="decimal"
+            placeholder={
+              sugeridoVivo != null
+                ? String(centavosAPesos(sugeridoVivo))
+                : "opcional"
+            }
+            onChange={(e) => setPrecio(e.target.value)}
+            className="cifra mt-1 w-32 rounded-lg border border-linea bg-white px-3 py-2 text-sm"
+          />
+          <span className="mt-1 block text-xs text-tinta-suave">
+            {/* Sin este dato la app sólo puede sugerir; con él dice el margen
+                que estás sacando de verdad. */}
+            Poniéndolo, la app te dice el margen real en vez de uno sugerido.
+          </span>
+        </label>
+
+        <label className="block">
+          <span className="text-xs text-tinta-suave">Multiplicador</span>
+          <input
+            value={multiplicador}
+            inputMode="decimal"
+            placeholder={String(MARGEN_SUGERIDO).replace(".", ",")}
+            onChange={(e) => setMultiplicador(e.target.value)}
+            className="cifra mt-1 w-24 rounded-lg border border-linea bg-white px-3 py-2 text-sm"
+          />
+          <span className="mt-1 block text-xs text-tinta-suave">
+            {/* El número de la izquierda cambia mientras se escribe: sin verlo
+                hay que guardar y volver para saber si el margen dio bien. */}
+            {sugeridoVivo != null ? (
+              <>
+                Sugiere {formatearCentavos(sugeridoVivo)}, redondeado.
+                {multiplicador.trim() ? "" : " Vacío usa el " + String(MARGEN_SUGERIDO).replace(".", ",") + " de la casa."}
+              </>
+            ) : (
+              "Vacío usa el " +
+              String(MARGEN_SUGERIDO).replace(".", ",") +
+              " de la casa. Cargá una compra para ver el sugerido."
+            )}
+          </span>
+        </label>
+      </div>
 
       <label className="block">
         <span className="text-xs text-tinta-suave">Código de barras</span>
@@ -252,12 +328,6 @@ export default function FichaProducto({
       >
         {pendiente ? "Guardando…" : "Guardar"}
       </button>
-
-      <datalist id="lista-marcas">
-        {marcas.map((m) => (
-          <option key={m.id} value={m.nombre} />
-        ))}
-      </datalist>
     </form>
   );
 }

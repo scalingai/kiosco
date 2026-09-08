@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { guardarMovimientos } from "@/app/acciones";
 import EditorItems from "@/components/EditorItems";
 import SelectorMedio from "@/components/SelectorMedio";
+import SelectorNombre from "@/components/SelectorNombre";
 import { AVISO_TARDANZA, conLimiteDeTiempo } from "@/lib/espera";
 import { hoyLocal } from "@/lib/fechas";
 import {
@@ -164,13 +165,15 @@ export default function FormMovimiento({
         {!clienteFijo && (
           <label className="block">
             <span className="text-xs text-tinta-suave">Cliente</span>
-            <input
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              list="lista-clientes-manual"
-              placeholder="Nombre"
-              className="mt-1 w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm"
-            />
+            <div className="mt-1">
+              <SelectorNombre
+                valor={nombre}
+                alCambiar={(texto) => setNombre(texto)}
+                opciones={clientes}
+                queEs="Cliente"
+                placeholder="Nombre"
+              />
+            </div>
           </label>
         )}
 
@@ -268,13 +271,6 @@ export default function FormMovimiento({
       >
         {guardando ? "Anotando…" : "Anotar"}
       </button>
-
-      {/* La lista la comparte con la carga por voz cuando vive adentro de una hoja. */}
-      <datalist id="lista-clientes-manual">
-        {clientes.map((c) => (
-          <option key={c.id} value={c.nombre} />
-        ))}
-      </datalist>
     </form>
   );
 }

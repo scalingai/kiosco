@@ -4,15 +4,15 @@ import {
   contenidoTotal,
   costoConIva,
   costoDeReferencia,
-  ETIQUETA_UNIDAD,
   formatearContenido,
   precioSugerido,
   renglonVacio,
   renglonesCargados,
-  UNIDADES,
+  totalDelRenglon,
+  type ModoPrecio,
   type RenglonBorrador,
-  type Unidad,
 } from "@/lib/negocio";
+import SelectorNombre from "@/components/SelectorNombre";
 import { normalizarNombre } from "@/lib/nombres";
 import { formatearCentavos, parsearMonto } from "@/lib/plata";
 
@@ -62,13 +62,16 @@ export default function EditorRenglones({
   function cuentas(renglon: RenglonBorrador): Cuentas {
     const cantidad = Number(renglon.cantidad) || 1;
     const porBulto = Number(renglon.unidadesPorBulto) || 1;
-    const importeCentavos = renglon.importe.trim()
+    const escrito = renglon.importe.trim()
       ? parsearMonto(renglon.importe)
       : null;
+    // Lo que se guarda es el total; si el precio vino por bulto, se multiplica.
+    const importeCentavos = totalDelRenglon(escrito, cantidad, renglon.modo);
     const costo = costoDeReferencia({
       cantidad,
       unidadesPorBulto: porBulto,
-      unidad: renglon.unidad,
+      // Al proveedor se le compran unidades; los ml del envase son del producto.
+      unidad: "un",
       importeCentavos,
     });
     // El costo de la factura no es lo que sale: en blanco hay que sumarle IVA.
@@ -111,13 +114,13 @@ export default function EditorRenglones({
    */
 
   const campoProducto = (i: number) => (
-    <input
-      value={renglones[i].descripcion}
-      list="lista-productos"
+    <SelectorNombre
+      valor={renglones[i].descripcion}
+      alCambiar={(texto) => editar(i, { descripcion: texto })}
+      opciones={productos}
+      queEs="Producto"
       placeholder="producto"
-      aria-label="Producto"
-      onChange={(e) => editar(i, { descripcion: e.target.value })}
-      className="w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm"
+      etiquetaAria="Producto"
     />
   );
 
@@ -141,18 +144,23 @@ export default function EditorRenglones({
     />
   );
 
-  const campoMedida = (i: number) => (
+  /**
+   * Cómo leer el importe. Cuando el bulto trae 1 se dice "por unidad": es lo
+   * mismo, pero "por bulto" al lado de un producto suelto se lee como un error.
+   */
+  const campoModo = (i: number) => (
     <select
-      value={renglones[i].unidad}
-      aria-label="Unidad de medida"
-      onChange={(e) => editar(i, { unidad: e.target.value as Unidad })}
+      value={renglones[i].modo}
+      aria-label="El importe es por bulto o el total"
+      onChange={(e) => editar(i, { modo: e.target.value as ModoPrecio })}
       className={CAMPO + " w-full"}
     >
-      {UNIDADES.map((u) => (
-        <option key={u} value={u}>
-          {ETIQUETA_UNIDAD[u]}
-        </option>
-      ))}
+      <option value="bulto">
+        {(Number(renglones[i].unidadesPorBulto) || 1) > 1
+          ? "por bulto"
+          : "por unidad"}
+      </option>
+      <option value="total">total</option>
     </select>
   );
 
@@ -160,7 +168,7 @@ export default function EditorRenglones({
     <input
       value={renglones[i].importe}
       inputMode="decimal"
-      placeholder="importe"
+      placeholder={renglones[i].modo === "bulto" ? "precio" : "total"}
       aria-label="Importe del renglón"
       onChange={(e) => editar(i, { importe: e.target.value })}
       className={CAMPO + " cifra w-full text-right"}
@@ -179,12 +187,23 @@ export default function EditorRenglones({
   );
 
   /** La columna que contesta la pregunta: cuánto sale y a cuánto venderlo. */
-  const columnaSale = (c: Cuentas) => {
+  const columnaSale = (c: Cuentas, renglon: RenglonBorrador) => {
     if (!c.costo || c.real == null || c.sugerido == null) {
       return <span className="text-xs text-tinta-suave">—</span>;
     }
+    // Con el precio por bulto, el total del renglón es una multiplicación que
+    // el proveedor ya hizo en su papel: mostrarlo es lo que deja controlarlo.
+    const multiplica =
+      renglon.modo === "bulto" &&
+      (Number(renglon.cantidad) || 1) > 1 &&
+      c.importeCentavos != null;
     return (
       <span className="block text-right">
+        {multiplica && (
+          <span className="cifra block text-xs text-tinta-suave">
+            total {formatearCentavos(c.importeCentavos!)}
+          </span>
+        )}
         <span className="cifra block text-sm">
           {formatearCentavos(c.real)}
           <span className="text-xs font-normal text-tinta-suave">
@@ -219,7 +238,7 @@ export default function EditorRenglones({
             <th className={encabezado}>Producto</th>
             <th className={encabezado + " w-14 text-center"}>Bultos</th>
             <th className={encabezado + " w-16 text-center"}>Trae</th>
-            <th className={encabezado + " w-28"}>Medida</th>
+            <th className={encabezado + " w-28"}>Precio</th>
             <th className={encabezado + " w-28 text-right"}>Importe</th>
             <th className={encabezado + " w-36 text-right"}>
               {enBlanco ? "Sale con IVA" : "Sale"}
@@ -248,13 +267,13 @@ export default function EditorRenglones({
                   {campoPorBulto(i)}
                 </td>
                 <td className="p-1">
-                  {campoMedida(i)}
+                  {campoModo(i)}
                 </td>
                 <td className="p-1">
                   {campoImporte(i)}
                 </td>
                 <td className="p-1 pt-3">
-                  {columnaSale(c)}
+                  {columnaSale(c, renglon)}
                 </td>
                 <td className="p-1 text-right">
                   {botonSacar(i)}
@@ -296,13 +315,21 @@ export default function EditorRenglones({
                 <span className="w-12 shrink-0">{campoBultos(i)}</span>
                 <span className="shrink-0 text-xs text-tinta-suave">×</span>
                 <span className="w-16 shrink-0">{campoPorBulto(i)}</span>
-                <span className="min-w-0 flex-1">{campoMedida(i)}</span>
+                <span className="min-w-0 flex-1">{campoModo(i)}</span>
               </div>
 
               <div className="mt-1.5">{campoImporte(i)}</div>
 
               <p className="mt-1.5 text-xs text-tinta-suave">
-                {formatearContenido(c.total, renglon.unidad)}
+                {formatearContenido(c.total, "un")}
+                {c.costo && renglon.modo === "bulto" && c.importeCentavos != null && (Number(renglon.cantidad) || 1) > 1 && (
+                  <>
+                    {" · total "}
+                    <span className="cifra">
+                      {formatearCentavos(c.importeCentavos)}
+                    </span>
+                  </>
+                )}
                 {c.costo ? (
                   <>
                     {" · factura "}
@@ -354,12 +381,6 @@ export default function EditorRenglones({
           Si no ponés el total de la factura, no suman al costo.
         </p>
       )}
-
-      <datalist id="lista-productos">
-        {productos.map((p) => (
-          <option key={p.id} value={p.nombre} />
-        ))}
-      </datalist>
     </div>
   );
 }
