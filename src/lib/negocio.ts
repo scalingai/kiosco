@@ -232,12 +232,68 @@ export function costoConIva(centavos: number, enBlanco: boolean): number {
   return enBlanco ? Math.round(centavos * IVA) : centavos;
 }
 
-/** El precio que sugiere la app: el costo real por el margen. */
+/**
+ * El multiplicador se guarda en milésimas: 1400 es 1,4.
+ *
+ * Entero a propósito, igual que la plata. Un `numeric` leído como float de JS
+ * convierte 1,4 en 1,4000000000000001 y después el precio sugerido baila un
+ * centavo según el día. Milésimas dan de sobra: nadie afina el margen más allá
+ * de la tercera cifra.
+ */
+export const MILESIMAS = 1000;
+
+/** El 1,4 de arriba, en milésimas, para guardar y comparar. */
+export const MARGEN_SUGERIDO_MILESIMAS = Math.round(
+  MARGEN_SUGERIDO * MILESIMAS,
+);
+
+/**
+ * A qué múltiplo se redondea, según cuánto valga la cosa.
+ *
+ * En el kiosco nadie cobra $2.555: se cobra $2.600. Los precios que no son
+ * redondos obligan a manotear monedas que no hay, y el vuelto mal dado sale
+ * más caro que los cuarenta y cinco pesos que se estaban defendiendo.
+ *
+ * El paso crece con el precio porque diez pesos son mucho en un caramelo y
+ * nada en un cartón de cigarrillos.
+ */
+const ESCALONES: { hasta: number; paso: number }[] = [
+  { hasta: 50_000, paso: 1_000 }, //  hasta $500  → de a $10
+  { hasta: 200_000, paso: 5_000 }, // hasta $2.000 → de a $50
+  { hasta: 1_000_000, paso: 10_000 }, // hasta $10.000 → de a $100
+];
+/** de ahí para arriba */
+const PASO_GRANDE = 50_000; // $500
+
+/**
+ * Deja el precio en un número que se pueda cobrar.
+ *
+ * Redondea para ARRIBA, no al más cercano. El multiplicador es el margen que
+ * querés sacar: bajar el precio para que quede redondo te deja abajo de eso
+ * sin avisar, y son cientos de unidades por mes. Para arriba, en el peor caso
+ * ganás unos pesos de más.
+ */
+export function redondearPrecio(centavos: number): number {
+  if (centavos <= 0) return 0;
+  const escalon = ESCALONES.find((e) => centavos <= e.hasta);
+  const paso = escalon?.paso ?? PASO_GRANDE;
+  return Math.ceil(centavos / paso) * paso;
+}
+
+/**
+ * El precio que sugiere la app: el costo real por el multiplicador, redondeado
+ * a algo cobrable.
+ *
+ * `multiplicadorMilesimas` es lo que tenga cargado ESE producto. Cuando viene
+ * en null se usa el 1,4 general: es una sugerencia inicial, no una regla, y la
+ * gracia es poder correrla producto por producto sin tocar el resto.
+ */
 export function precioSugerido(
   costoCentavos: number,
-  margen = MARGEN_SUGERIDO,
+  multiplicadorMilesimas: number | null = null,
 ): number {
-  return Math.round(costoCentavos * margen);
+  const milesimas = multiplicadorMilesimas ?? MARGEN_SUGERIDO_MILESIMAS;
+  return redondearPrecio(Math.round((costoCentavos * milesimas) / MILESIMAS));
 }
 
 export type Margen = {
@@ -275,12 +331,26 @@ export function formatearMultiplicador(valor: number): string {
   return "×" + valor.toFixed(2).replace(".", ",");
 }
 
+/**
+ * Cómo está escrito el precio en la factura del proveedor.
+ *
+ * El mayorista casi siempre lista el precio DEL BULTO —"cajón de gaseosa
+ * $18.400"— y no el total de la partida. Tenerlo al revés obligaba a
+ * multiplicar de cabeza antes de anotar, que es justo la cuenta que la app
+ * tendría que estar haciendo.
+ *
+ * Cuando el producto viene suelto (un bulto trae 1) "por bulto" es lo mismo
+ * que "por unidad", y la pantalla lo dice así.
+ */
+export type ModoPrecio = "bulto" | "total";
+
 /** Lo que se edita en pantalla: todo texto hasta que se confirma. */
 export type RenglonBorrador = {
   descripcion: string;
   cantidad: string;
   unidadesPorBulto: string;
-  unidad: Unidad;
+  /** cómo hay que leer `importe` */
+  modo: ModoPrecio;
   importe: string;
 };
 
@@ -289,9 +359,26 @@ export function renglonVacio(): RenglonBorrador {
     descripcion: "",
     cantidad: "1",
     unidadesPorBulto: "1",
-    unidad: "un",
+    // Por bulto es como viene la factura; el total es la excepción.
+    modo: "bulto",
     importe: "",
   };
+}
+
+/**
+ * De lo escrito al total del renglón, que es lo único que se guarda.
+ *
+ * Guardar el total y no el precio unitario es lo que hace que la suma de los
+ * renglones siga dando lo que dice la factura. Con el precio del bulto
+ * guardado, el total sería una multiplicación más a rehacer en cada pantalla.
+ */
+export function totalDelRenglon(
+  importeCentavos: number | null,
+  cantidad: number,
+  modo: ModoPrecio,
+): number | null {
+  if (importeCentavos == null) return null;
+  return modo === "bulto" ? importeCentavos * Math.max(1, cantidad) : importeCentavos;
 }
 
 /** Un renglón cuenta si tiene nombre O importe. Sólo se descarta el vacío. */
@@ -331,21 +418,28 @@ export function aRenglonesAGuardar(
       );
     }
 
-    let importeCentavos: number | null = null;
+    let escrito: number | null = null;
     if (renglon.importe.trim()) {
       const centavos = parsearMonto(renglon.importe);
       if (centavos == null || centavos <= 0) {
         throw new RenglonInvalido(`Revisá el importe de ${nombrar(renglon)}.`);
       }
-      importeCentavos = centavos;
+      escrito = centavos;
     }
 
     return {
       descripcion: renglon.descripcion.trim() || null,
       cantidad,
       unidadesPorBulto,
-      unidad: renglon.unidad,
-      importeCentavos,
+      /*
+       * Siempre "un". Al proveedor se le compran UNIDADES —tres cajones de
+       * seis botellas son dieciocho botellas— y los ml o gramos son del
+       * producto, no de la compra: eso vive en `productos.contenido`. Tenerlo
+       * en los dos lados hacía elegir dos veces la misma cosa y permitía que
+       * no coincidieran. La columna queda porque las compras viejas la usaron.
+       */
+      unidad: "un",
+      importeCentavos: totalDelRenglon(escrito, cantidad, renglon.modo),
     };
   });
 }

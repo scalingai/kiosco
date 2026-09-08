@@ -123,7 +123,9 @@ export type FilaStock = {
   costoRealCentavos: number | null;
   /** a cuánto se vende hoy, si alguien lo cargó */
   precioVentaCentavos: number | null;
-  /** a cuánto habría que venderlo con el margen de la casa */
+  /** el multiplicador propio de este producto; null = usa el general */
+  multiplicadorMilesimas: number | null;
+  /** a cuánto habría que venderlo con SU multiplicador, ya redondeado */
   sugeridoCentavos: number | null;
   /** el margen que sale de verdad; sólo existe si hay precio de venta */
   margen: Margen | null;
@@ -162,6 +164,7 @@ export async function listarStock(): Promise<FilaStock[]> {
         contenido: productos.contenido,
         contenidoUnidad: productos.contenidoUnidad,
         precioVentaCentavos: productos.precioVentaCentavos,
+        multiplicadorMilesimas: productos.multiplicadorMilesimas,
       })
       .from(productos)
       .leftJoin(proveedores, eq(proveedores.id, productos.proveedorId))
@@ -223,7 +226,11 @@ export async function listarStock(): Promise<FilaStock[]> {
       enBlanco,
       costoRealCentavos: costoReal,
       precioVentaCentavos: producto.precioVentaCentavos,
-      sugeridoCentavos: costoReal != null ? precioSugerido(costoReal) : null,
+      multiplicadorMilesimas: producto.multiplicadorMilesimas,
+      sugeridoCentavos:
+        costoReal != null
+          ? precioSugerido(costoReal, producto.multiplicadorMilesimas)
+          : null,
       margen:
         costoReal != null && producto.precioVentaCentavos != null
           ? calcularMargen(costoReal, producto.precioVentaCentavos)
@@ -365,6 +372,8 @@ export type FichaProducto = {
   contenidoUnidad?: Unidad | null;
   /** a cuánto se vende; `null` lo borra y vuelve a mostrarse el sugerido */
   precioVentaCentavos?: number | null;
+  /** el multiplicador propio; `null` lo devuelve al general */
+  multiplicadorMilesimas?: number | null;
   /** la subcategoría; `null` lo deja sin rubro */
   categoriaId?: string | null;
   envase?: Envase | null;
@@ -388,6 +397,7 @@ export async function actualizarProducto(id: string, ficha: FichaProducto) {
     contenido?: number | null;
     contenidoUnidad?: Unidad | null;
     precioVentaCentavos?: number | null;
+    multiplicadorMilesimas?: number | null;
     categoriaId?: string | null;
     envase?: Envase | null;
     codigoBarras?: string | null;
@@ -426,6 +436,16 @@ export async function actualizarProducto(id: string, ficha: FichaProducto) {
       throw new Error("El precio de venta tiene que ser mayor a cero");
     }
     cambios.precioVentaCentavos = precio;
+  }
+
+  if (ficha.multiplicadorMilesimas !== undefined) {
+    const m = ficha.multiplicadorMilesimas;
+    // Abajo de 1 estarías vendiendo a pérdida y arriba de 10 es un cero de más:
+    // las dos son tipeos, no decisiones.
+    if (m != null && (m < 1000 || m > 10_000)) {
+      throw new Error("El multiplicador tiene que estar entre 1 y 10");
+    }
+    cambios.multiplicadorMilesimas = m;
   }
 
   if (ficha.categoriaId !== undefined) {

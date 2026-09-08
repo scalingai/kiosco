@@ -476,6 +476,19 @@ export const productos = pgTable(
      * cuánto estás ganando.
      */
     precioVentaCentavos: bigint("precio_venta_centavos", { mode: "number" }),
+    /**
+     * Por cuánto multiplicar el costo para sugerir el precio de ESTE producto,
+     * en milésimas: 1400 es 1,4.
+     *
+     * En null usa el 1,4 general. Queda nullable a propósito y no con
+     * `default 1400`: así se distingue "nunca lo toqué" de "decidí que sea
+     * 1,4", y el día que el general cambie, los que nadie ajustó lo siguen.
+     * Con un default en la columna, ese cambio no llegaría a ninguno.
+     *
+     * La bebida se vende con menos margen que la golosina, y el cigarrillo con
+     * casi nada: un solo número para todo el kiosco no existe.
+     */
+    multiplicadorMilesimas: integer("multiplicador_milesimas"),
     /** marcado a mano cuando se ve el hueco en la góndola */
     falta: boolean("falta").notNull().default(false),
     archivadoEn: timestamp("archivado_en", { withTimezone: true }),
