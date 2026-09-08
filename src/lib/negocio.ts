@@ -143,6 +143,30 @@ export function formatearContenido(total: number, unidad: Unidad): string {
   return `${texto} ${grande}`;
 }
 
+/**
+ * Lo mismo que `formatearContenido` pero abreviado: "6 un.", "1 kg", "500 ml".
+ * En una planilla, "unidades" escrito entero parte la celda en dos renglones y
+ * se come el ancho que necesitan los números.
+ */
+export function formatearContenidoCorto(
+  total: number,
+  unidad: Unidad,
+): string {
+  if (unidad === "un") return `${total} un.`;
+  const grande = unidad === "gr" ? "kg" : "L";
+  const chico = unidad === "gr" ? "g" : "ml";
+  if (total < 1000) return `${total} ${chico}`;
+  const enGrande = total / 1000;
+  const texto = Number.isInteger(enGrande)
+    ? String(enGrande)
+    : enGrande
+        .toFixed(2)
+        .replace(/0+$/, "")
+        .replace(/[.,]$/, "")
+        .replace(".", ",");
+  return `${texto} ${grande}`;
+}
+
 export type CostoDeReferencia = {
   centavos: number;
   /** cómo se lee ese número: "cada una", "el kilo", "el litro" */
@@ -180,42 +204,6 @@ export function costoDeReferencia(renglon: {
   return {
     centavos: Math.round((renglon.importeCentavos * 1000) / total),
     porCada: renglon.unidad === "gr" ? "el kilo" : "el litro",
-  };
-}
-
-/**
- * El costo por kilo o por litro cuando lo que se compró viene por unidad y el
- * producto tiene declarado cuánto trae cada una.
- *
- * Es el número que hace comparables dos tamaños de la misma marca: la Coca de
- * 2,25 L y la de 500 ml tienen precios por botella que no se pueden mirar uno
- * al lado del otro, pero sí por litro.
- *
- * Devuelve `null` cuando no hay con qué calcularlo. Si el renglón ya venía en
- * gramos o mililitros tampoco calcula nada: ese precio por kilo lo da
- * `costoDeReferencia`, y repetirlo acá sería tener dos fuentes para el mismo
- * número.
- */
-export function costoPorContenido(renglon: {
-  cantidad: number;
-  unidadesPorBulto: number;
-  unidad: Unidad;
-  importeCentavos: number | null;
-  contenido: number | null;
-  contenidoUnidad: Unidad | null;
-}): CostoDeReferencia | null {
-  if (renglon.unidad !== "un") return null;
-  if (renglon.importeCentavos == null) return null;
-  if (!renglon.contenido || renglon.contenido <= 0) return null;
-  if (!renglon.contenidoUnidad || renglon.contenidoUnidad === "un") return null;
-
-  const unidades = contenidoTotal(renglon.cantidad, renglon.unidadesPorBulto);
-  const volumen = unidades * renglon.contenido;
-  if (volumen <= 0) return null;
-
-  return {
-    centavos: Math.round((renglon.importeCentavos * 1000) / volumen),
-    porCada: renglon.contenidoUnidad === "gr" ? "el kilo" : "el litro",
   };
 }
 

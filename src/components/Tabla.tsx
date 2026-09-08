@@ -24,9 +24,10 @@ export type Columna<T> = {
  *
  * Dos decisiones que la hacen usable en el mostrador:
  *
- * - **Scrollea al costado en vez de achicarse.** Doce columnas no entran en un
- *   celular, y apretarlas hasta que entren las vuelve ilegibles. Se scrollea,
- *   como una planilla de verdad.
+ * - **Se reparte el ancho disponible.** No crece a su ancho natural: si lo
+ *   hiciera, en una pantalla grande igual aparecería una barra de scroll al
+ *   costado con espacio de sobra al lado. El scroll queda sólo como red para
+ *   pantallas chicas, donde no hay ancho que repartir.
  * - **La primera columna queda fija.** Sin eso, al correrse a la derecha se
  *   pierde de qué fila es cada número, que es exactamente cuando el dato deja
  *   de servir.
@@ -57,7 +58,7 @@ export default function Tabla<T>({
 
   return (
     <div className="-mx-4 overflow-x-auto sm:mx-0">
-      <table className="w-full min-w-max border-collapse text-sm">
+      <table className="w-full border-collapse text-[0.8rem]">
         <thead>
           <tr className="border-b border-linea">
             {columnas.map((columna, i) => (
@@ -65,7 +66,7 @@ export default function Tabla<T>({
                 key={columna.clave}
                 scope="col"
                 className={
-                  "px-3 py-2 align-bottom text-xs font-normal text-tinta-suave " +
+                  "px-2 py-2 align-bottom text-xs font-normal text-tinta-suave " +
                   (columna.numerica ? "text-right " : "text-left ") +
                   (columna.ancho ?? "") +
                   // La primera se queda quieta mientras el resto se corre.
@@ -97,8 +98,10 @@ export default function Tabla<T>({
                 <td
                   key={columna.clave}
                   className={
-                    "px-3 py-2.5 align-top " +
-                    (columna.numerica ? "cifra text-right " : "") +
+                    "px-2 py-2.5 align-top " +
+                    // Un número partido en dos renglones deja de leerse como
+                    // número, así que las columnas de plata no cortan.
+                    (columna.numerica ? "cifra whitespace-nowrap text-right " : "") +
                     (i === 0 ? "sticky left-0 z-10 bg-papel" : "")
                   }
                 >
@@ -116,8 +119,8 @@ export default function Tabla<T>({
                 <td
                   key={columna.clave}
                   className={
-                    "px-3 py-2 text-sm font-medium " +
-                    (columna.numerica ? "cifra text-right " : "") +
+                    "px-2 py-2 text-sm font-medium " +
+                    (columna.numerica ? "cifra whitespace-nowrap text-right " : "") +
                     (i === 0 ? "sticky left-0 z-10 bg-papel" : "")
                   }
                 >

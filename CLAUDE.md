@@ -72,50 +72,16 @@ multiplicar el costo por 1,4 no es ganar 40%, es ganar 28,6% de lo que cobrás.
 1,4 es sólo una sugerencia; si el producto tiene `precio_venta_centavos`
 cargado, la app dice el margen REAL en vez de uno inventado.
 
-**La marca agrupa, el contenido compara.** Un producto puede tener `marca_id`
-(opcional: el pan no tiene) y `contenido` + `contenido_unidad` — cuánto trae UNA
-unidad de venta, 2250 ml la Coca grande. El contenido es lo que hace comparables
-dos tamaños de la misma marca: por botella, $3.000 y $2.000 son dos precios
-sueltos; por litro son $1.333 y $4.000, y ahí se ve cuál conviene. Ese número lo
-da `costoPorContenido()` y sólo se calcula cuando el renglón vino por unidad —
-si ya venía en gramos, el precio por kilo lo da `costoDeReferencia()` y tener
-dos fuentes para el mismo número es peor que no tenerlo.
+**La marca agrupa; el cálculo va de bulto a unidad.** Un producto puede tener
+`marca_id` (opcional: el pan no tiene) y `contenido` + `contenido_unidad`, que
+son descriptivos —distinguen la gaseosa de 500 ml de la de 2,25 L en la lista—.
+El cálculo que importa es otro: de lo que dice la factura a lo que sale UNA
+unidad, `costoDeReferencia()` sobre `cantidad × unidades_por_bulto`.
 
-Marca y contenido NO salen de la factura (ahí dice "8 packs", no "cada botella
-trae 2,25 L"): se cargan a mano en `/stock`. El costo y el proveedor, al revés,
-NO se editan a mano — los escribe la última compra.
-
-**Los nombres se comparan normalizados.** Clientes, proveedores y productos
-pasan todos por `normalizarNombre()` antes de buscar o crear, y cada tabla tiene
-su índice único sobre la columna normalizada. Por eso "coca cola" encuentra a
-"Coca-Cola" en vez de crear un duplicado. Si agregás otra entidad con nombre,
-seguí el mismo patrón: `buscarOCrear…` + `uniqueIndex` sobre
-`nombre_normalizado`. Hoy lo cumplen `clientes`, `proveedores`, `productos` y
-`marcas`.
-
-**Stock no cuenta unidades.** `productos` es un catálogo de reposición, no un
-inventario: qué se vende, a quién se le compra, a cuánto salió la última vez y
-si falta. No agregues una columna de unidades en existencia — sin cargar cada
-venta se desincroniza en días, y un número que miente es peor que no tenerlo. El
-último costo tampoco se guarda: se lee del último renglón de compra enganchado a
-ese producto. El catálogo se llena solo desde `registrarCompra`, que engancha
-cada renglón con nombre a su producto.
-
-**Hay tres cajas, no una.** Efectivo, Mercado Pago y banco son plata distinta:
-"quedó $300.000" no contesta si mañana se le puede pagar en efectivo al
-proveedor. Toda entrada y toda salida lleva `medio`, y el día se muestra
-repartido en los tres. El medio de una compra va **atado a `pagado_en`**: una
-compra a cuenta no se pagó con nada todavía, y guardarle un medio sería
-inventar por dónde salió.
-
-Los pagos de fiado cargados por audio quedan en efectivo, que es como se paga en
-el mostrador. Si fue por otro medio, se anula y se recarga a mano.
-
-**Una compra impaga no toca la caja.** `compras.fecha` es cuándo llegó la
-mercadería; `compras.pagado_en` es cuándo salió la plata, y en null significa
-que se le debe al proveedor. La salida del día se cuenta por `pagado_en`, nunca
-por `fecha`: el pedido que te dejan el martes y pagás el viernes salió el
-viernes.
+**No hay precio por litro ni por kilo derivado del contenido.** Existió y se
+sacó (2026-09-07, pedido de Agus): en un kiosco no se decide nada con eso, y un
+número que nadie mira es código que hay que mantener igual. Si vuelve a pedirse,
+el dato para calcularlo sigue estando en `productos.contenido`.
 
 **Un audio nunca escribe directo.** `/api/voz` devuelve una propuesta; la
 escritura pasa siempre por `src/app/acciones.ts` después de que alguien confirmó.

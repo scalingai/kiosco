@@ -8,21 +8,6 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "Stock — El Osito" };
 
-/**
- * Marca el más barato por litro o kilo dentro de un conjunto. Sólo compara los
- * que se miden igual: poner en la misma carrera "$X el litro" y "$X el kilo"
- * daría un ganador inventado.
- */
-function idMasBarato(filas: FilaStock[]): string | null {
-  const comparables = filas.filter((f) => f.porContenidoCentavos != null);
-  if (comparables.length < 2) return null;
-  const unidad = comparables[0].porContenido;
-  if (comparables.some((f) => f.porContenido !== unidad)) return null;
-  return comparables.reduce((mejor, f) =>
-    f.porContenidoCentavos! < mejor.porContenidoCentavos! ? f : mejor,
-  ).id;
-}
-
 export default async function Stock({ searchParams }: PageProps<"/stock">) {
   const params = await searchParams;
   const valor = params.por;
@@ -102,28 +87,17 @@ export default async function Stock({ searchParams }: PageProps<"/stock">) {
 
       {porMarca ? (
         <>
-          {[...porNombreDeMarca.entries()].map(([marca, lista]) => {
-            const barato = idMasBarato(lista);
-            return (
-              <section
-                key={marca}
-                className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5"
-              >
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <h2 className="font-display text-xl leading-none">{marca}</h2>
-                  {barato && (
-                    <span className="text-xs text-pago">
-                      el más barato por medida:{" "}
-                      {lista.find((f) => f.id === barato)!.nombre}
-                    </span>
-                  )}
-                </div>
-                <div className="mt-2">
-                  <TablaStock filas={lista} marcas={marcas} />
-                </div>
-              </section>
-            );
-          })}
+          {[...porNombreDeMarca.entries()].map(([marca, lista]) => (
+            <section
+              key={marca}
+              className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5"
+            >
+              <h2 className="font-display text-xl leading-none">{marca}</h2>
+              <div className="mt-2">
+                <TablaStock filas={lista} marcas={marcas} />
+              </div>
+            </section>
+          ))}
 
           {sinMarca.length > 0 && (
             <section className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5">

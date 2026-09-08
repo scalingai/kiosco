@@ -13,7 +13,6 @@ import {
   calcularMargen,
   costoConIva,
   costoDeReferencia,
-  costoPorContenido,
   precioSugerido,
   type Margen,
   type Unidad,
@@ -90,12 +89,6 @@ export type FilaStock = {
   /** el margen que sale de verdad; sólo existe si hay precio de venta */
   margen: Margen | null;
   ultimaCompra: string | null;
-  /**
-   * Lo mismo llevado a kilo o litro, cuando el producto declara su contenido.
-   * Es el único número con el que se pueden comparar dos tamaños entre sí.
-   */
-  porContenidoCentavos: number | null;
-  porContenido: string | null;
   /** cómo venía: 3 packs de 6 unidades, o 2 bolsas de 1000 gr */
   cantidad: number | null;
   unidadesPorBulto: number | null;
@@ -157,23 +150,12 @@ export async function listarStock(): Promise<FilaStock[]> {
   return catalogo.map((producto) => {
     const compra = ultima.get(producto.id);
     const costo = compra ? costoDeReferencia(compra) : null;
-    const porContenido = compra
-      ? costoPorContenido({
-          ...compra,
-          contenido: producto.contenido,
-          contenidoUnidad: producto.contenidoUnidad,
-        })
-      : null;
     // La factura no dice lo que sale: comprando en blanco hay que sumarle el
     // IVA. Sobre ESE número se calcula el precio sugerido y el margen, porque
     // sacar el margen contra el importe de la factura infla la ganancia un 21%.
     const enBlanco = compra?.enBlanco ?? false;
     const costoReal =
       costo != null ? costoConIva(costo.centavos, enBlanco) : null;
-    const porContenidoReal =
-      porContenido != null
-        ? costoConIva(porContenido.centavos, enBlanco)
-        : null;
 
     return {
       id: producto.id,
@@ -194,8 +176,6 @@ export async function listarStock(): Promise<FilaStock[]> {
       falta: producto.falta,
       costoCentavos: costo?.centavos ?? null,
       porCada: costo?.porCada ?? null,
-      porContenidoCentavos: porContenidoReal,
-      porContenido: porContenido?.porCada ?? null,
       ultimaCompra: compra?.fecha ?? null,
       cantidad: compra?.cantidad ?? null,
       unidadesPorBulto: compra?.unidadesPorBulto ?? null,

@@ -6,7 +6,10 @@ import FichaProducto from "@/components/FichaProducto";
 import Hoja from "@/components/Hoja";
 import Tabla, { type Columna } from "@/components/Tabla";
 import { fechaCorta } from "@/lib/fechas";
-import { formatearContenido, formatearMultiplicador } from "@/lib/negocio";
+import {
+  formatearContenidoCorto,
+  formatearMultiplicador,
+} from "@/lib/negocio";
 import { formatearCentavos } from "@/lib/plata";
 import type { FilaStock } from "@/lib/stock";
 
@@ -36,7 +39,7 @@ export default function TablaStock({
     {
       clave: "nombre",
       titulo: "Producto",
-      ancho: "min-w-44",
+      ancho: "min-w-36",
       celda: (f) => (
         <span className="block">
           <span className="font-medium">{f.nombre}</span>
@@ -51,21 +54,24 @@ export default function TablaStock({
     {
       clave: "marca",
       titulo: "Marca",
+      ancho: "min-w-24",
       celda: (f) => f.marca ?? SIN,
     },
     {
       clave: "proveedor",
       titulo: "Proveedor",
+      ancho: "min-w-24",
       celda: (f) => f.proveedor ?? SIN,
     },
     {
       clave: "bulto",
       titulo: "Bulto",
       ayuda: "última compra",
+      ancho: "min-w-24",
       celda: (f) =>
         f.cantidad != null && f.unidadesPorBulto != null && f.unidad != null ? (
           <span className="cifra">
-            {f.cantidad} × {formatearContenido(f.unidadesPorBulto, f.unidad)}
+            {f.cantidad} × {formatearContenidoCorto(f.unidadesPorBulto, f.unidad)}
           </span>
         ) : (
           SIN
@@ -78,7 +84,7 @@ export default function TablaStock({
       numerica: true,
       celda: (f) =>
         f.contenido != null && f.contenidoUnidad != null
-          ? formatearContenido(f.contenido, f.contenidoUnidad)
+          ? formatearContenidoCorto(f.contenido, f.contenidoUnidad)
           : SIN,
     },
     {
@@ -91,22 +97,30 @@ export default function TablaStock({
       celda: (f) => (f.ultimaCompra ? fechaCorta(f.ultimaCompra) : SIN),
     },
     {
+      // El IVA va acá abajo y no en su propia columna: es un dato de la
+      // factura, no un número que se compare en columna, y una columna menos
+      // es el ancho que necesitan los nombres para no partirse al medio.
       clave: "factura",
       titulo: "Factura",
       ayuda: "sin IVA",
       numerica: true,
-      celda: (f) =>
-        f.costoCentavos != null ? formatearCentavos(f.costoCentavos) : SIN,
-    },
-    {
-      clave: "iva",
-      titulo: "IVA",
-      ayuda: "21% si va",
-      numerica: true,
-      celda: (f) =>
-        f.costoCentavos != null && f.costoRealCentavos != null && f.enBlanco
-          ? formatearCentavos(f.costoRealCentavos - f.costoCentavos)
-          : SIN,
+      celda: (f) => {
+        if (f.costoCentavos == null) return SIN;
+        const iva =
+          f.costoRealCentavos != null && f.enBlanco
+            ? f.costoRealCentavos - f.costoCentavos
+            : null;
+        return (
+          <span className="block">
+            {formatearCentavos(f.costoCentavos)}
+            {iva != null && (
+              <span className="block text-[0.65rem] text-tinta-suave">
+                +{formatearCentavos(iva)} IVA
+              </span>
+            )}
+          </span>
+        );
+      },
     },
     {
       clave: "costo",
@@ -121,16 +135,6 @@ export default function TablaStock({
         ) : (
           SIN
         ),
-    },
-    {
-      clave: "porContenido",
-      titulo: "Por litro",
-      ayuda: "o por kilo",
-      numerica: true,
-      celda: (f) =>
-        f.porContenidoCentavos != null
-          ? formatearCentavos(f.porContenidoCentavos)
-          : SIN,
     },
     {
       clave: "precio",
@@ -170,19 +174,6 @@ export default function TablaStock({
         ) : (
           SIN
         ),
-    },
-    {
-      clave: "acciones",
-      titulo: "",
-      celda: (f) => (
-        <span
-          className="flex items-center gap-2"
-          // El click de la fila abre la ficha; acá adentro no tiene que hacerlo.
-          onClick={(e) => e.stopPropagation()}
-        >
-          <BotonFalta id={f.id} falta={f.falta} />
-        </span>
-      ),
     },
   ];
 
@@ -249,10 +240,11 @@ export default function TablaStock({
               marcas={marcas}
             />
 
-            {/* Archivar vive acá adentro y no en la fila: saca el producto de
-                la lista, y eso no es algo para tener a un toque de distancia
-                mientras se scrollea la planilla. */}
-            <div className="mt-3 border-t border-linea pt-3">
+            {/* Marcar que falta y archivar viven acá adentro y no en una
+                columna: la planilla es para leer, y cada columna de botones es
+                ancho que le sacás a los números. */}
+            <div className="mt-3 flex items-center gap-3 border-t border-linea pt-3">
+              <BotonFalta id={editando.id} falta={editando.falta} />
               <BotonArchivar id={editando.id} />
             </div>
           </>
