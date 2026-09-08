@@ -174,7 +174,7 @@ const CATALOGO: Linea[] = [
     marca: "Sprite",
     rubro: "Gaseosas",
     variantes: ["común", "zero"],
-    formatos: [B600, B2250, RET_2000, LATA_CHICA, LATA_MEDIANA],
+    formatos: [B600, B1500, B2250, RET_2000, LATA_CHICA, LATA_MEDIANA],
   },
   {
     marca: "Fanta",
@@ -327,7 +327,6 @@ const SUELTOS: {
  */
 const SIN_TAMANO: { marca: string; rubro: string; nombre?: string }[] = [
   { marca: "Pringles", rubro: "Papas fritas" },
-  { marca: "Doritos", rubro: "Snacks salados" },
   { marca: "Twistos", rubro: "Snacks salados" },
 ];
 
@@ -419,6 +418,35 @@ const SNACKS: {
  * producto distinto, es la misma maquinita comprada por bulto, y por eso el
  * "de a cuántas viene la tira" va en la compra y no acá.
  */
+/**
+ * Los energizantes y los nachos, que se nombran por color o por tamaño y no por
+ * el nombre comercial.
+ *
+ * Monster va con 473 ml, que es la única lata que se vende acá. La verde, la
+ * blanca (Ultra) y Mango Loco están verificadas contra el catálogo de las
+ * tiendas; la roja y la rosa no aparecen en ninguna, así que van igual pero sin
+ * que nadie les invente un código.
+ *
+ * De Doritos sólo el de queso tiene gramaje verificado: 40 g el chico y 77 g el
+ * mediano. El de jamón NO figura en ningún catálogo online —hay queso, sweet
+ * chili, pizza y flamin' hot— así que va sin tamaño hasta que lo diga una
+ * factura.
+ */
+const MONSTER: { nombre: string; ml: number }[] = [
+  { nombre: "Monster común 473 ml", ml: 473 },
+  { nombre: "Monster Ultra blanca 473 ml", ml: 473 },
+  { nombre: "Monster Mango Loco 473 ml", ml: 473 },
+  { nombre: "Monster roja 473 ml", ml: 473 },
+  { nombre: "Monster rosa 473 ml", ml: 473 },
+];
+
+const DORITOS: { nombre: string; gr?: number }[] = [
+  { nombre: "Doritos queso 40 g", gr: 40 },
+  { nombre: "Doritos queso 77 g", gr: 77 },
+  { nombre: "Doritos jamón chico" },
+  { nombre: "Doritos jamón mediano" },
+];
+
 const MAQUINITAS: { marca: string; nombre: string }[] = [
   { marca: "Gillette", nombre: "Maquinita Gillette Prestobarba 3 verde" },
   { marca: "Gillette", nombre: "Maquinita Gillette Prestobarba 2" },
@@ -641,6 +669,47 @@ async function main() {
           actualizados += 1;
         }
       }
+    }
+  }
+
+  {
+    const marcaMonster = await idDe(marcas, "Monster");
+    for (const lata of MONSTER) {
+      generados.add(normalizarNombre(lata.nombre));
+      const [nueva] = await db
+        .insert(productos)
+        .values({
+          nombre: lata.nombre,
+          nombreNormalizado: normalizarNombre(lata.nombre),
+          marcaId: marcaMonster,
+          categoriaId: idPorRubro.get("Energizantes") ?? null,
+          contenido: lata.ml,
+          contenidoUnidad: "ml",
+          envase: "lata",
+        })
+        .onConflictDoNothing({ target: productos.nombreNormalizado })
+        .returning();
+      if (nueva) creados += 1;
+      else actualizados += 1;
+    }
+
+    const marcaDoritos = await idDe(marcas, "Doritos");
+    for (const bolsa of DORITOS) {
+      generados.add(normalizarNombre(bolsa.nombre));
+      const [nueva] = await db
+        .insert(productos)
+        .values({
+          nombre: bolsa.nombre,
+          nombreNormalizado: normalizarNombre(bolsa.nombre),
+          marcaId: marcaDoritos,
+          categoriaId: idPorRubro.get("Snacks salados") ?? null,
+          contenido: bolsa.gr ?? null,
+          contenidoUnidad: bolsa.gr ? "gr" : null,
+        })
+        .onConflictDoNothing({ target: productos.nombreNormalizado })
+        .returning();
+      if (nueva) creados += 1;
+      else actualizados += 1;
     }
   }
 
