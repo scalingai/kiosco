@@ -451,6 +451,15 @@ export const productos = pgTable(
      */
     codigoBarras: text("codigo_barras"),
     /**
+     * La foto del envase. Es un link a la CDN del supermercado de donde salió
+     * el producto, no una copia: reconocer algo de un vistazo vale, guardar
+     * cientos de fotos ajenas en el repo no.
+     *
+     * Si el link se rompe, la fila se dibuja sin imagen y nada más. La app no
+     * depende de esto para funcionar.
+     */
+    imagenUrl: text("imagen_url"),
+    /**
      * Cuánto trae UNA unidad de venta: la botella de Coca son 2250 ml, el
      * paquete de papas 120 gr.
      *

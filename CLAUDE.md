@@ -72,6 +72,13 @@ multiplicar el costo por 1,4 no es ganar 40%, es ganar 28,6% de lo que cobrás.
 1,4 es sólo una sugerencia; si el producto tiene `precio_venta_centavos`
 cargado, la app dice el margen REAL en vez de uno inventado.
 
+**El código de barras no se adivina.** `productos.codigo_barras` se valida con
+el dígito verificador del EAN (`codigoValido()` en `src/lib/stock.ts`) antes de
+guardarse. Un código equivocado no falla ruidosamente: escanea y trae otro
+producto, que es peor que no tenerlo. Por lo mismo, cuando `db:importar`
+encuentra más de un producto que podría corresponder a un EAN, **no elige
+ninguno**: lo reporta y sigue.
+
 **Rubro y envase son dos ejes distintos, no uno.** El rubro es qué cosa es
 (`categorias`, en dos niveles con `padre_id`: Bebidas › Gaseosas) y el envase es
 cómo viene (`productos.envase`: botella, retornable, lata, tetra). Un producto

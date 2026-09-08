@@ -11,7 +11,8 @@
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
     "db:semilla": "node --experimental-strip-types scripts/semilla.ts",
-    "db:catalogo": "node --experimental-strip-types scripts/catalogo.ts"
+    "db:catalogo": "node --experimental-strip-types scripts/catalogo.ts",
+    "db:importar": "node --experimental-strip-types scripts/importar.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",

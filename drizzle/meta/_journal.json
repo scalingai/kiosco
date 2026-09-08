@@ -78,6 +78,13 @@
       "when": 1788838588445,
       "tag": "0010_codigo-de-barras",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788839295485,
+      "tag": "0011_imagen",
+      "breakpoints": true
     }
   ]
 }

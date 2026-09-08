@@ -108,6 +108,7 @@ export type FilaStock = {
   categoria: string | null;
   envase: Envase | null;
   codigoBarras: string | null;
+  imagenUrl: string | null;
   /** cuánto trae una unidad de venta: 2250 (ml) para la Coca grande */
   contenido: number | null;
   contenidoUnidad: Unidad | null;
@@ -157,6 +158,7 @@ export async function listarStock(): Promise<FilaStock[]> {
         categoria: padre.nombre,
         envase: productos.envase,
         codigoBarras: productos.codigoBarras,
+        imagenUrl: productos.imagenUrl,
         contenido: productos.contenido,
         contenidoUnidad: productos.contenidoUnidad,
         precioVentaCentavos: productos.precioVentaCentavos,
@@ -215,6 +217,7 @@ export async function listarStock(): Promise<FilaStock[]> {
       categoria: producto.categoria,
       envase: producto.envase,
       codigoBarras: producto.codigoBarras,
+      imagenUrl: producto.imagenUrl,
       contenido: producto.contenido,
       contenidoUnidad: producto.contenidoUnidad,
       enBlanco,

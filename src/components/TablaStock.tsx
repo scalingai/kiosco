@@ -47,13 +47,32 @@ export default function TablaStock({
       titulo: "Producto",
       ancho: "min-w-36",
       celda: (f) => (
-        <span className="block">
-          <span className="font-medium">{f.nombre}</span>
-          {f.falta && (
-            <span className="ml-2 rounded-full bg-deuda-tenue px-1.5 py-0.5 text-[0.65rem] text-deuda">
-              falta
-            </span>
+        <span className="flex items-start gap-2">
+          {/*
+            <img> a secas y no next/image: las fotos viven en la CDN del
+            supermercado, y optimizarlas obligaría a declarar cada dominio y a
+            sumar sharp al contenedor para nada. Si el link se rompe, queda el
+            hueco y la fila se sigue leyendo igual.
+          */}
+          {f.imagenUrl && (
+            // eslint-disable-next-line @next/next/no-img-element -- ver arriba
+            <img
+              src={f.imagenUrl}
+              alt=""
+              loading="lazy"
+              width={28}
+              height={28}
+              className="mt-0.5 h-7 w-7 shrink-0 rounded object-contain"
+            />
           )}
+          <span className="min-w-0">
+            <span className="font-medium">{f.nombre}</span>
+            {f.falta && (
+              <span className="ml-2 rounded-full bg-deuda-tenue px-1.5 py-0.5 text-[0.65rem] text-deuda">
+                falta
+              </span>
+            )}
+          </span>
         </span>
       ),
     },
