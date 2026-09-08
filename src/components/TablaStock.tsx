@@ -20,11 +20,16 @@ const SIN = <span className="text-tinta-suave">—</span>;
 /**
  * El catálogo como planilla.
  *
- * El orden de las columnas es el del razonamiento: primero qué es y de dónde
- * viene, después cómo viene, y recién al final la plata, que se lee de
- * izquierda a derecha como la cuenta que es —factura, IVA, costo, precio,
- * margen—. Los números no se explican solos: se explican porque están al lado
- * del anterior.
+ * El orden de las columnas es el del razonamiento: primero qué es —el nombre y
+ * el tamaño juntos, porque "gaseosa" y "gaseosa de 2,25 L" no son la misma
+ * cosa— después de dónde viene, después cómo viene, y recién al final la plata, que se lee de
+ * izquierda a derecha como la cuenta que es —factura, costo, precio, margen—.
+ * Los números no se explican solos: se explican porque están al lado del
+ * anterior.
+ *
+ * No hay columna de marca: la lista va siempre agrupada por marca y el título
+ * de cada grupo ya la dice. Repetirla en cada fila es ancho que le sacás a los
+ * números.
  */
 export default function TablaStock({
   filas,
@@ -52,10 +57,14 @@ export default function TablaStock({
       ),
     },
     {
-      clave: "marca",
-      titulo: "Marca",
-      ancho: "min-w-24",
-      celda: (f) => f.marca ?? SIN,
+      clave: "contenido",
+      titulo: "Contenido",
+      ayuda: "por unidad",
+      numerica: true,
+      celda: (f) =>
+        f.contenido != null && f.contenidoUnidad != null
+          ? formatearContenidoCorto(f.contenido, f.contenidoUnidad)
+          : SIN,
     },
     {
       clave: "proveedor",
@@ -76,16 +85,6 @@ export default function TablaStock({
         ) : (
           SIN
         ),
-    },
-    {
-      clave: "contenido",
-      titulo: "Contenido",
-      ayuda: "por unidad",
-      numerica: true,
-      celda: (f) =>
-        f.contenido != null && f.contenidoUnidad != null
-          ? formatearContenidoCorto(f.contenido, f.contenidoUnidad)
-          : SIN,
     },
     {
       // Acá NO va un número de unidades en existencia: la app no las cuenta.

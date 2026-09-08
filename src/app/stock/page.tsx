@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 import { FormProducto } from "@/components/AccionesStock";
 import TablaStock from "@/components/TablaStock";
@@ -8,40 +7,34 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "Stock — El Osito" };
 
-export default async function Stock({ searchParams }: PageProps<"/stock">) {
-  const params = await searchParams;
-  const valor = params.por;
-  const porMarca = (Array.isArray(valor) ? valor[0] : valor) === "marca";
-
+export default async function Stock() {
   const [filas, marcas] = await Promise.all([listarStock(), listarMarcas()]);
   const faltantes = filas.filter((f) => f.falta);
 
-  // Los que tienen marca se agrupan; los sueltos van juntos al final, porque
-  // el pan no tiene marca y no por eso deja de estar en la lista.
+  // Siempre agrupado por marca: es como se compra y como se piensa la góndola.
+  // Los que no tienen van juntos al final, porque el pan no tiene marca y no
+  // por eso deja de estar en la lista.
   const porNombreDeMarca = new Map<string, FilaStock[]>();
   const sinMarca: FilaStock[] = [];
-  if (porMarca) {
-    for (const fila of filas) {
-      if (!fila.marca) {
-        sinMarca.push(fila);
-        continue;
-      }
-      const lista = porNombreDeMarca.get(fila.marca) ?? [];
-      lista.push(fila);
-      porNombreDeMarca.set(fila.marca, lista);
+  for (const fila of filas) {
+    if (!fila.marca) {
+      sinMarca.push(fila);
+      continue;
     }
-    // Dentro de la marca, del envase más chico al más grande: así se ve la
-    // escalera de tamaños y cuál conviene.
-    for (const lista of porNombreDeMarca.values()) {
-      lista.sort((a, b) => (a.contenido ?? 0) - (b.contenido ?? 0));
-    }
+    const lista = porNombreDeMarca.get(fila.marca) ?? [];
+    lista.push(fila);
+    porNombreDeMarca.set(fila.marca, lista);
   }
 
-  const chip = (activo: boolean) =>
-    "rounded-full border px-3 py-1.5 text-xs " +
-    (activo
-      ? "border-acento bg-acento text-white"
-      : "border-linea bg-white/70 text-tinta");
+  // Dentro de la marca, del envase más chico al más grande: así se ve la
+  // escalera de tamaños uno abajo del otro.
+  for (const lista of porNombreDeMarca.values()) {
+    lista.sort((a, b) => (a.contenido ?? 0) - (b.contenido ?? 0));
+  }
+
+  const marcasOrdenadas = [...porNombreDeMarca.entries()].sort(([a], [b]) =>
+    a.localeCompare(b, "es"),
+  );
 
   return (
     <div className="space-y-4">
@@ -76,18 +69,14 @@ export default async function Stock({ searchParams }: PageProps<"/stock">) {
         </section>
       )}
 
-      <div className="flex gap-2">
-        <Link href="/stock" className={chip(!porMarca)}>
-          Sin agrupar
-        </Link>
-        <Link href="/stock?por=marca" className={chip(porMarca)}>
-          Por marca
-        </Link>
-      </div>
-
-      {porMarca ? (
+      {filas.length === 0 ? (
+        <p className="text-sm text-tinta-suave">
+          Todavía no hay productos. La lista se llena sola: cada renglón con
+          nombre de una compra entra acá con su último costo.
+        </p>
+      ) : (
         <>
-          {[...porNombreDeMarca.entries()].map(([marca, lista]) => (
+          {marcasOrdenadas.map(([marca, lista]) => (
             <section
               key={marca}
               className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5"
@@ -111,13 +100,6 @@ export default async function Stock({ searchParams }: PageProps<"/stock">) {
             </section>
           )}
         </>
-      ) : (
-        <section className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5">
-          <h2 className="font-display text-xl leading-none">Productos</h2>
-          <div className="mt-2">
-            <TablaStock filas={filas} marcas={marcas} />
-          </div>
-        </section>
       )}
     </div>
   );
