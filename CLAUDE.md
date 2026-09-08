@@ -47,14 +47,24 @@ hay red, el error lo pone el navegador, que no se equivoca.
 
 **El costo por unidad se calcula, no se carga.** Al proveedor se le compra por
 bulto. El renglón de una compra guarda lo que dice la factura —cuántos bultos,
-`unidades_por_bulto`, en qué `unidad` se mide (`un`/`gr`/`ml`) e
-`importe_centavos`— y el costo sale de dividir, al mostrarlo. Guardarlo
-redondeado hace que el renglón deje de sumar lo que se pagó: $41.000 entre 18
-unidades no da un número redondo.
+`unidades_por_bulto` e `importe_centavos`— y el costo sale de dividir, al
+mostrarlo. Guardarlo redondeado hace que el renglón deje de sumar lo que se
+pagó: $41.000 entre 18 unidades no da un número redondo.
 
-Para `gr` y `ml`, `costoDeReferencia()` devuelve el precio **por kilo y por
-litro**, no por gramo: el precio de un gramo son centavos que nadie puede leer,
-y en el mayorista los precios se comparan por kilo.
+**Una compra se mide SIEMPRE en unidades.** Tres cajones de seis botellas son
+dieciocho botellas, y punto. Los `ml` o `gr` son del envase, no de la compra, y
+viven en `productos.contenido`. El renglón llegó a tener su propio selector de
+unidad y estaba mal: hacía elegir dos veces la misma cosa y permitía que las
+dos no coincidieran. `compras_items.unidad` quedó en `un` fijo; la columna
+sigue existiendo porque las compras viejas la usaron.
+
+**El importe del renglón se escribe por bulto, y eso es el default.** El
+mayorista lista el precio del cajón, no el total de la partida, así que pedir
+el total obligaba a multiplicar de cabeza antes de anotar — justo la cuenta que
+la app tendría que hacer. Se puede cambiar a total renglón por renglón
+(`RenglonBorrador.modo`), pero lo que se GUARDA es siempre el total
+(`totalDelRenglon()`): con el precio del bulto guardado, la suma de los
+renglones dejaría de dar lo que dice la factura.
 
 **El importe de la factura NO es el costo.** Comprando en blanco el mayorista
 factura + IVA, así que lo que sale de verdad cada unidad es el importe por 1,21
@@ -71,6 +81,21 @@ multiplicar el costo por 1,4 no es ganar 40%, es ganar 28,6% de lo que cobrás.
 `calcularMargen()` devuelve los dos números y la pantalla muestra los dos. El
 1,4 es sólo una sugerencia; si el producto tiene `precio_venta_centavos`
 cargado, la app dice el margen REAL en vez de uno inventado.
+
+**Y el 1,4 se ajusta por producto.** La bebida se vende con menos margen que la
+golosina y el cigarrillo con casi nada: un solo número para todo el kiosco no
+existe. Va en `productos.multiplicador_milesimas` (1400 = 1,4), entero por la
+misma razón que la plata. Es **nullable y sin default**: así se distingue "nunca
+lo toqué" de "decidí que sea 1,4", y el día que cambie el general, los que nadie
+ajustó lo siguen. Con un `default 1400` en la columna ese cambio no llegaría a
+ninguno.
+
+**El precio sugerido se redondea para ARRIBA.** Nadie cobra $2.555: se cobra
+$2.600. `redondearPrecio()` lleva el número a un múltiplo cobrable con paso
+según cuánto valga la cosa —diez pesos son mucho en un caramelo y nada en un
+cartón de cigarrillos—. Para arriba y no al más cercano porque el multiplicador
+es el margen que querés sacar: bajar el precio para que quede lindo te deja
+abajo de ese margen sin avisar, y son cientos de unidades por mes.
 
 **En los rubros de bebidas, `db:catalogo` es la única verdad.** Los que están en
 `RUBROS_PROPIOS` (gaseosas, aguas, saborizadas, jugos, energizantes, alcohol,
@@ -120,6 +145,16 @@ constante, no con `===`.
 **El middleware sólo deja pasar sin PIN lo que la PWA necesita** para poder
 instalarse: manifest, iconos, `sw.js` y `/sin-conexion`. Nada que muestre datos.
 
+**Los nombres que se normalizan se eligen con `SelectorNombre`.** Proveedor,
+marca, producto y cliente comparten ese campo, y no es cosmético: filtra con
+`normalizarNombre()`, la MISMA función que la base usa en su índice único, y
+muestra el alta como una fila aparte ("Crear X, no estaba en la lista"). Que la
+pantalla y el servidor compartan esa función es lo que hace que lo que ves sea
+lo que va a pasar. No vuelvas a `<datalist>`: lo dibuja el sistema operativo
+—en Windows es un cuadro negro—, compara el texto crudo (así "coca cola" no
+encontraba "Coca-Cola") y no distingue elegir de crear, que es como se termina
+con el mismo proveedor cargado tres veces.
+
 **Toda escritura pasa por `src/app/acciones.ts`.** No agregar route handlers que
 inserten. Un solo lugar por donde entra todo.
 
@@ -154,6 +189,12 @@ inserten. Un solo lugar por donde entra todo.
   son dos banderas y no una: "quiero escribir" y "sé que es producción" son dos
   decisiones distintas. Sin `--aplicar` contra producción el script sólo lee y ni
   migra.
+- **El catálogo se lleva a producción con `db:sincronizar`, no con el
+  importador.** `db:importar` sale a buscar a catálogos ajenos que cambian y
+  vuelve a meter lo que ya se podó: contra prod no da lo mismo. Lo que hay que
+  llevar es el estado aprobado, no repetir el proceso que lo produjo. El script
+  no borra nada y sólo completa campos en `null`, así que un precio cargado
+  desde el celular le gana al catálogo de referencia.
 - **Los ids se validan contra un regex de UUID** antes de ir a la base: sin eso,
   una URL con basura sale como 500 en vez de 404.
 
