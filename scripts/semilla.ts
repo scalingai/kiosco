@@ -245,18 +245,22 @@ const FICHAS: {
   marca?: string;
   contenido?: number;
   contenidoUnidad?: "gr" | "ml";
+  /** a cuánto se vende; sin esto la app sólo puede sugerir un precio */
+  precioVenta?: number;
 }[] = [
   {
     producto: "gaseosa grande",
     marca: "Coca-Cola",
     contenido: 2250,
     contenidoUnidad: "ml",
+    precioVenta: 4500,
   },
   {
     producto: "gaseosa chica",
     marca: "Coca-Cola",
     contenido: 500,
     contenidoUnidad: "ml",
+    precioVenta: 3500,
   },
   {
     producto: "agua saborizada",
@@ -264,7 +268,7 @@ const FICHAS: {
     contenido: 1500,
     contenidoUnidad: "ml",
   },
-  { producto: "yerba", marca: "Playadito" },
+  { producto: "yerba", marca: "Playadito", precioVenta: 14000 },
 ];
 
 function fechaHace(dias: number): string {
@@ -463,6 +467,8 @@ async function main() {
           marcaId,
           contenido: ficha.contenido ?? null,
           contenidoUnidad: ficha.contenidoUnidad ?? null,
+          precioVentaCentavos:
+            ficha.precioVenta != null ? centavos(ficha.precioVenta) : null,
         })
         .where(eq(productos.nombreNormalizado, normalizado));
     }
