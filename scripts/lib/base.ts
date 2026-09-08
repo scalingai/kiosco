@@ -136,22 +136,3 @@ export async function abrirBase(aplicar = false): Promise<Base> {
     esProduccion: false,
   };
 }
-
-/**
- * Frena si se va a escribir en producción sin decirlo. Se llama al principio,
- * antes de tocar nada.
- */
-export function permitirEscritura(base: Base, aplicar: boolean) {
-  console.log(`Base: ${base.destino}\n`);
-
-  if (!aplicar) return;
-  if (!base.esProduccion) return;
-  if (process.argv.includes("--prod")) return;
-
-  console.error(
-    "Esto va a ESCRIBIR en producción.\n" +
-      "Si es lo que querés, agregá --prod además de --aplicar.\n" +
-      "Si no, sacá DATABASE_URL del entorno y corre contra la base local.",
-  );
-  process.exit(1);
-}
