@@ -117,9 +117,12 @@ inserten. Un solo lugar por donde entra todo.
   Si el paso de interpretación tira 404, mirá qué hay disponible con
   `GET https://api.groq.com/openai/v1/models` y actualizá el default de
   `GROQ_MODELO_TEXTO` en `src/lib/voz.ts`.
-- **Borrar `.data` con el dev server prendido lo deja roto.** `getDb()` cachea
-  la conexión por proceso y sigue apuntando a la base que ya no está. Hay que
-  reiniciar el server después de vaciarla.
+- **Los scripts de base se corren con el dev server APAGADO.** `getDb()` cachea
+  la conexión por proceso, y PGlite es un solo escritor por directorio: si
+  `db:semilla` o `db:catalogo` escriben mientras el server tiene `.data/pg`
+  abierto, el script dice que hizo todo y la app sigue mostrando lo de antes.
+  No falla, miente. Lo mismo al borrar `.data`: hay que reiniciar el server
+  después.
 - **Los ids se validan contra un regex de UUID** antes de ir a la base: sin eso,
   una URL con basura sale como 500 en vez de 404.
 

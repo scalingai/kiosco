@@ -34,15 +34,27 @@ function armarArbol(filas: FilaStock[]) {
     arbol.set(categoria, subs);
   }
 
-  // Dentro de cada subcategoría: por marca y, adentro de la marca, del envase
-  // más chico al más grande. Así los tamaños de lo mismo quedan uno abajo del
-  // otro y se ve la escalera de precios.
+  /*
+   * Dentro de cada subcategoría se ordena por CONTENIDO y después por marca.
+   *
+   * Así todas las de 2,25 L quedan una abajo de la otra sin importar la marca,
+   * que es la comparación que sirve: con costo, precio y margen en columnas, la
+   * pregunta es cuál de las gaseosas de 2,25 conviene tener.
+   *
+   * Se ordena en vez de agrupar a propósito. Agrupar por tamaño metería un
+   * tercer nivel de títulos —categoría, subcategoría, tamaño— y la pantalla
+   * pasaría a ser más títulos que datos. Ordenando queda el mismo bloque sin
+   * ese costo, porque la columna de contenido está pegada al nombre.
+   *
+   * Lo que se pierde es ver junta toda una marca; para eso está la ficha del
+   * proveedor en Compras.
+   */
   for (const subs of arbol.values()) {
     for (const lista of subs.values()) {
       lista.sort(
         (a, b) =>
-          (a.marca ?? "").localeCompare(b.marca ?? "", "es") ||
           (a.contenido ?? 0) - (b.contenido ?? 0) ||
+          (a.marca ?? "").localeCompare(b.marca ?? "", "es") ||
           a.nombre.localeCompare(b.nombre, "es"),
       );
     }

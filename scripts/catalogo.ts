@@ -59,11 +59,13 @@ const SUBCATEGORIAS: Record<string, string> = {
   Gaseosas: "Bebidas",
   Aguas: "Bebidas",
   "Aguas saborizadas": "Bebidas",
+  // Los isotónicos van con jugos: en la góndola están al lado y se compran al
+  // mismo proveedor.
   Jugos: "Bebidas",
-  Isotónicas: "Bebidas",
   Energizantes: "Bebidas",
-  Cervezas: "Bebidas",
-  "Listos para tomar": "Bebidas",
+  // Todo lo que lleva alcohol junto: cerveza y listos para tomar se venden
+  // igual, se guardan igual y tienen las mismas restricciones.
+  Alcohol: "Bebidas",
 
   Alfajores: "Golosinas",
   Chocolates: "Golosinas",
@@ -233,7 +235,7 @@ const CATALOGO: Linea[] = [
   },
   {
     marca: "Powerade",
-    rubro: "Isotónicas",
+    rubro: "Jugos",
     // Los colores son como se piden en el mostrador; el sabor va al lado para
     // que se entienda cuál es cuando llega la factura del proveedor.
     variantes: ["azul (mountain blast)", "rojo (frutas tropicales)", "manzana"],
@@ -248,16 +250,16 @@ const CATALOGO: Linea[] = [
       LATA_473,
     ],
   },
-  { marca: "Brahma", rubro: "Cervezas", variantes: [""], formatos: [LATA_473] },
+  { marca: "Brahma", rubro: "Alcohol", variantes: [""], formatos: [LATA_473] },
   {
     marca: "Isenbeck",
-    rubro: "Cervezas",
+    rubro: "Alcohol",
     variantes: [""],
     formatos: [LATA_473],
   },
   {
     marca: "Schneider",
-    rubro: "Cervezas",
+    rubro: "Alcohol",
     variantes: [""],
     formatos: [
       LATA_473,
@@ -266,7 +268,7 @@ const CATALOGO: Linea[] = [
   },
   {
     marca: "Smirnoff",
-    rubro: "Listos para tomar",
+    rubro: "Alcohol",
     variantes: ["ice manzana", "ice cherry"],
     formatos: [LATA_473],
   },
@@ -337,7 +339,7 @@ async function main() {
   }
 
   let creados = 0;
-  let existentes = 0;
+  let actualizados = 0;
 
   async function guardar(
     marcaId: string,
@@ -361,8 +363,29 @@ async function main() {
       .onConflictDoNothing({ target: productos.nombreNormalizado })
       .returning();
 
-    if (producto) creados += 1;
-    else existentes += 1;
+    if (producto) {
+      creados += 1;
+      return;
+    }
+
+    // Ya existía: se le corrige la clasificación, porque este archivo es la
+    // fuente de verdad de eso. Cambiar un rubro acá y volver a correr tiene que
+    // mover los productos, si no la única forma de reclasificar es a mano uno
+    // por uno.
+    //
+    // Lo que NO se toca es lo que se carga desde la app: el precio de venta, la
+    // marca de "falta" y el proveedor. Eso lo sabe el mostrador, no el archivo.
+    await db
+      .update(productos)
+      .set({
+        marcaId,
+        categoriaId: idPorRubro.get(rubro) ?? null,
+        contenido: formato.ml,
+        contenidoUnidad: "ml",
+        envase: formato.envase,
+      })
+      .where(eq(productos.nombreNormalizado, normalizarNombre(nombre)));
+    actualizados += 1;
   }
 
   for (const linea of CATALOGO) {
@@ -385,7 +408,45 @@ async function main() {
     );
   }
 
-  console.log(`${creados} productos nuevos, ${existentes} que ya estaban.`);
+  /*
+   * Los rubros que se sacaron del archivo quedan colgados: sin productos, pero
+   * apareciendo en el desplegable de la ficha. Se borran, con una condición que
+   * no se negocia: SÓLO si no les quedó ningún producto adentro.
+   *
+   * Si todavía tienen alguno, se avisa y no se toca. Borrar un rubro con
+   * productos los dejaría sin clasificar en silencio, que es peor que un ítem
+   * de más en una lista.
+   */
+  const vivas = new Set(
+    [...Object.keys(SUBCATEGORIAS), ...Object.values(SUBCATEGORIAS)].map(
+      normalizarNombre,
+    ),
+  );
+
+  const todas = await db.select().from(categorias);
+  for (const categoria of todas) {
+    if (vivas.has(categoria.nombreNormalizado)) continue;
+
+    const usada = await db
+      .select({ id: productos.id })
+      .from(productos)
+      .where(eq(productos.categoriaId, categoria.id))
+      .limit(1);
+
+    if (usada.length) {
+      console.log(
+        `"${categoria.nombre}" ya no está en el archivo pero tiene productos: se deja.`,
+      );
+      continue;
+    }
+
+    await db.delete(categorias).where(eq(categorias.id, categoria.id));
+    console.log(`"${categoria.nombre}" quedó vacío y se sacó.`);
+  }
+
+  console.log(
+    `${creados} productos nuevos, ${actualizados} actualizados.`,
+  );
   await cliente.close();
 }
 
