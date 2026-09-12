@@ -8,6 +8,22 @@ import "./etiquetas.css";
 
 export type ProductoEtiqueta = { id: string; nombre: string; precio: number | null; sugerido: boolean };
 
+function agruparVariantes(productos: ProductoEtiqueta[]): ProductoEtiqueta[] {
+  const grupos = new Map<string, ProductoEtiqueta>();
+  for (const producto of productos) {
+    // Agrupa sólo tonos de la misma tintura y con el mismo precio; el decolorante es otro producto.
+    const tonoIssue = /^(?:tintura\s+)?issue\s+n[°º.\s]*\d+$/i.test(producto.nombre.trim());
+    const clave = tonoIssue && producto.precio != null ? `tintura-issue-${producto.precio}` : producto.id;
+    const previo = grupos.get(clave);
+    if (previo) {
+      previo.sugerido ||= producto.sugerido;
+    } else {
+      grupos.set(clave, { ...producto, nombre: tonoIssue && producto.precio != null ? "Tintura Issue" : producto.nombre });
+    }
+  }
+  return [...grupos.values()];
+}
+
 export default function EtiquetasCompra({ productos }: { productos: ProductoEtiqueta[] }) {
   const [abierto, setAbierto] = useState(false);
   return <>
@@ -17,7 +33,7 @@ export default function EtiquetasCompra({ productos }: { productos: ProductoEtiq
 }
 
 function EditorEtiquetas({ productos, cerrar }: { productos: ProductoEtiqueta[]; cerrar: () => void }) {
-  const [filas, setFilas] = useState(() => productos.map(p => ({ ...p, corto: nombreParaEtiqueta(p.nombre), seleccionada: true })));
+  const [filas, setFilas] = useState(() => agruparVariantes(productos).map(p => ({ ...p, corto: p.nombre === "Tintura Issue" ? p.nombre : nombreParaEtiqueta(p.nombre), seleccionada: true })));
   const elegidas = filas.filter(p => p.seleccionada && p.precio && p.corto.trim());
   const hojas = Array.from({ length: Math.ceil(elegidas.length / 65) }, (_, i) => elegidas.slice(i * 65, (i + 1) * 65));
   const sugeridas = elegidas.filter(p => p.sugerido).length;
@@ -27,7 +43,7 @@ function EditorEtiquetas({ productos, cerrar }: { productos: ProductoEtiqueta[];
         <div><h2 className="text-xl font-semibold">Etiquetas para recortar</h2><p className="mt-1 text-sm text-tinta-suave">A4 apaisada · 5 × 1,5 cm · 65 por hoja</p></div>
         <button autoFocus type="button" onClick={cerrar} className="rounded-lg border border-linea px-4 py-2">Volver a la compra</button>
       </header>
-      <p className="my-4 text-sm">Todos los productos vienen marcados. Desmarcá los que no querés imprimir. Los nombres tienen hasta 14 caracteres y podés ajustarlos. Si no hay precio guardado, se usa el sugerido.</p>
+      <p className="my-4 text-sm">Todos vienen marcados. Los tonos de Tintura Issue con el mismo precio comparten una etiqueta. Desmarcá lo que no querés imprimir. Podés ajustar los nombres, hasta 14 caracteres. Si no hay precio guardado, se usa el sugerido.</p>
       <div className="flex flex-wrap gap-2">
         <button type="button" className="rounded-lg border border-linea px-3 py-2 text-sm" onClick={() => setFilas(f => f.map(p => ({ ...p, seleccionada: true })))}>Marcar todos</button>
         <button type="button" className="rounded-lg border border-linea px-3 py-2 text-sm" onClick={() => setFilas(f => f.map(p => ({ ...p, seleccionada: false })))}>Desmarcar todos</button>
@@ -50,7 +66,7 @@ function EditorEtiquetas({ productos, cerrar }: { productos: ProductoEtiqueta[];
       {!hojas.length && <p className="p-8 text-center">Elegí productos para armar la hoja.</p>}
       {hojas.map((hoja, i) => <div className="etiquetas-hoja" key={i}>
         {hoja.map((p, n) => <div className="etiqueta-precio" key={n}>
-          <div className="etiqueta-valor" style={{ fontSize: p.precio! >= 10000000 ? "14pt" : "17pt" }}>{formatearCentavos(p.precio!)}</div>
+          <div className="etiqueta-valor" style={{ fontSize: p.precio! >= 10000000 ? "15pt" : "18pt" }}>{formatearCentavos(p.precio!)}</div>
           <div className="etiqueta-nombre">{p.corto}</div>
         </div>)}
       </div>)}

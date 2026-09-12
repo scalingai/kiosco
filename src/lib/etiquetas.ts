@@ -1,5 +1,12 @@
 /** Nombres para góndola: marca, variante y tamaño, en hasta 14 caracteres. */
 export function nombreParaEtiqueta(nombre: string): string {
+  if (/sedal/i.test(nombre)) {
+    if (/acondicionador/i.test(nombre)) return "Acond. Sedal";
+    if (/crecimiento/i.test(nombre)) return "Sedal Crecim.";
+    if (/col[aá]geno/i.test(nombre)) return "Sedal Colágeno";
+    if (/hialur[oó]nico/i.test(nombre)) return "Sedal Hialur.";
+    return "Shampoo Sedal";
+  }
   let corto = nombre.trim().replace(/\s+/g, " ");
   const cambios: [RegExp, string][] = [
     [/papel higi[eé]nico/gi, ""], [/protector femenino/gi, ""],

@@ -312,12 +312,12 @@ export default function Menu({
   return (
     <>
       {/* Pantalla grande: la columna vive siempre, no se despliega. */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-linea bg-papel-hondo/60 lg:block">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-linea bg-papel-hondo/60 escritorio:block">
         {panel}
       </aside>
 
       {/* Celular: arriba queda un solo botón, y todo lo demás sale de ahí. */}
-      <header className="fixed inset-x-0 top-0 z-40 flex h-14 items-center gap-2 border-b border-linea bg-papel/95 px-3 backdrop-blur lg:hidden">
+      <header className="fixed inset-x-0 top-0 z-40 flex h-14 items-center gap-2 border-b border-linea bg-papel/95 px-3 backdrop-blur escritorio:hidden">
         <button
           type="button"
           onClick={() => setAbierto(true)}
@@ -370,7 +370,7 @@ export default function Menu({
       </header>
 
       {abierto && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-50 escritorio:hidden">
           <button
             type="button"
             aria-label="Cerrar el menú"

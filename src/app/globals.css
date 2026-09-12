@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Tablet: planilla al acostarla, navegación móvil al ponerla vertical. */
+@custom-variant escritorio {
+  @media (min-width: 1280px), (min-width: 768px) and (orientation: landscape) {
+    @slot;
+  }
+}
+
 @theme {
   /* Paleta de cuaderno de kiosco: papel tibio, tinta azul oscura, rojo de deuda. */
   --color-papel: #faf7f0;

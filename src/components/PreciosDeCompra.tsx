@@ -45,7 +45,7 @@ export default function PreciosDeCompra({ compras }: { compras: CompraDelHistori
       <div className="px-4 pb-3 pt-2 text-xs leading-relaxed text-tinta-suave sm:px-6">
         Sugerido: multiplicador del producto o 40% inicial. Desde $10 sobre una centena, sube a la siguiente. {compra.enBlanco ? "Costo con IVA, sin percepciones." : "Costo de esta compra."} Al guardar, se actualiza también en Stock.
       </div>
-      <div className="hidden grid-cols-[minmax(0,1fr)_130px_120px_160px] gap-4 border-y border-linea bg-papel/60 px-6 py-3 text-xs font-semibold text-tinta-suave md:grid">
+      <div className="hidden grid-cols-[minmax(0,1fr)_110px_120px_150px] gap-4 border-y border-linea bg-papel/60 px-6 py-3 text-xs font-semibold text-tinta-suave escritorio:grid">
         <span>Producto</span><span>Costo {compra.enBlanco ? "con IVA" : "unitario"}</span><span title="Porcentaje que agregás al costo">Multiplicador</span><span>Precio de venta</span>
       </div>
       <div className="divide-y divide-linea">
@@ -97,33 +97,33 @@ function PrecioRenglon({ renglon: r, enBlanco, precio, alGuardar }: { renglon: R
     });
   }
   return (
-    <div className="grid grid-cols-3 items-start gap-x-3 gap-y-3 px-4 py-4 md:grid-cols-[minmax(0,1fr)_130px_120px_160px] md:gap-4 md:px-6">
-      <div className="col-span-3 min-w-0 md:col-span-1">
-        <h3 className="text-sm font-semibold leading-snug">{r.descripcion || "Producto sin nombre"}</h3>
+    <div className="grid grid-cols-3 items-start gap-x-3 gap-y-3 px-4 py-4 escritorio:grid-cols-[minmax(0,1fr)_110px_120px_150px] escritorio:gap-4 escritorio:px-6">
+      <div className="col-span-3 min-w-0 escritorio:col-span-1">
+        <h3 className="text-base font-semibold leading-snug">{r.descripcion || "Producto sin nombre"}</h3>
         <p className="mt-1 text-xs text-tinta-suave">{formatearContenido(r.cantidad * r.unidadesPorBulto, r.unidad)} compradas</p>
       </div>
       <div>
-        <span className="mb-1 block text-[11px] text-tinta-suave md:hidden">Costo {enBlanco ? "con IVA" : "unitario"}</span>
+        <span className="mb-1 block text-xs text-tinta-suave escritorio:hidden">Costo {enBlanco ? "con IVA" : "unitario"}</span>
         <p className="text-sm font-medium tabular-nums">{costo == null ? "Sin costo" : formatearCentavos(costo)}</p>
-        <p className="mt-1 text-[11px] text-tinta-suave">{r.porCada}</p>
+        <p className="mt-1 text-xs text-tinta-suave">{r.porCada}</p>
       </div>
       <div>
-        <label htmlFor={`multiplicador-${r.id}`} className="mb-1 block text-[11px] text-tinta-suave md:sr-only">Multiplicador<span className="sr-only"> de {r.descripcion}</span></label>
+        <label htmlFor={`multiplicador-${r.id}`} className="mb-1 block text-xs text-tinta-suave escritorio:sr-only">Multiplicador<span className="sr-only"> de {r.descripcion}</span></label>
         <div className="flex items-center rounded-lg border border-linea bg-white focus-within:border-acento focus-within:ring-1 focus-within:ring-acento">
-          <input id={`multiplicador-${r.id}`} form={`precio-form-${r.id}`} inputMode="decimal" autoComplete="off" placeholder="—" value={porcentajeVisible} disabled={!r.productoId || guardando || !costo} onChange={e => cambiarPorcentaje(e.target.value)} aria-label={`Multiplicador de ${r.descripcion}`} className="min-w-0 w-full bg-transparent px-2 py-2 text-base tabular-nums outline-none md:text-sm" />
+          <input id={`multiplicador-${r.id}`} form={`precio-form-${r.id}`} inputMode="decimal" autoComplete="off" placeholder="—" value={porcentajeVisible} disabled={!r.productoId || guardando || !costo} onChange={e => cambiarPorcentaje(e.target.value)} aria-label={`Multiplicador de ${r.descripcion}`} className="min-w-0 w-full bg-transparent px-2 py-2 text-base tabular-nums outline-none escritorio:text-base" />
           <span className="pr-2 text-sm text-tinta-suave">%</span>
         </div>
-        <p className="mt-1 text-[11px] leading-snug text-tinta-suave">Sobre el costo, antes del redondeo</p>
+        <p className="mt-1 text-xs leading-snug text-tinta-suave">Sobre el costo, antes del redondeo</p>
       </div>
       <form id={`precio-form-${r.id}`} onSubmit={e => { e.preventDefault(); guardar(); }}>
-        <label htmlFor={`venta-${r.id}`} className="mb-1 block text-[11px] text-tinta-suave md:sr-only">Precio de venta<span className="sr-only"> de {r.descripcion}</span></label>
+        <label htmlFor={`venta-${r.id}`} className="mb-1 block text-xs text-tinta-suave escritorio:sr-only">Precio de venta<span className="sr-only"> de {r.descripcion}</span></label>
         <div className="flex items-center rounded-lg border border-linea bg-white focus-within:border-acento focus-within:ring-1 focus-within:ring-acento">
           <span className="pl-2 text-sm text-tinta-suave">$</span>
-          <input id={`venta-${r.id}`} inputMode="decimal" autoComplete="off" placeholder="Sin precio" value={textoVisible} disabled={!r.productoId || guardando} aria-invalid={error} aria-describedby={`estado-${r.id}`} onChange={e => { setTexto(e.target.value); setPorcentaje(null); setVentaManual(true); setMensaje(""); setError(false); }} className="min-w-0 w-full bg-transparent px-2 py-2 text-base tabular-nums outline-none md:text-sm" />
+          <input id={`venta-${r.id}`} inputMode="decimal" autoComplete="off" placeholder="Sin precio" value={textoVisible} disabled={!r.productoId || guardando} aria-invalid={error} aria-describedby={`estado-${r.id}`} onChange={e => { setTexto(e.target.value); setPorcentaje(null); setVentaManual(true); setMensaje(""); setError(false); }} className="min-w-0 w-full bg-transparent px-2 py-2 text-base tabular-nums outline-none escritorio:text-base" />
         </div>
         {cambio && <button type="submit" disabled={guardando || !r.productoId} className="mt-2 w-full rounded-lg bg-acento px-2 py-1.5 text-xs font-medium text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar"}</button>}
-        <p id={`estado-${r.id}`} role="status" className={`mt-1 text-[11px] ${error ? "text-deuda" : !cambio && precio != null ? "text-pago" : "text-tinta-suave"}`}>{!r.productoId ? "Sin vínculo al catálogo" : mensaje || (cambio ? "Sin guardar" : precio != null ? "Guardado" : sugerido != null ? "Sugerido" : "Sin precio")}</p>
-        <p className="mt-1 text-[11px] leading-snug text-tinta-suave">{margen ? `${formatearCentavos(margen.gananciaCentavos)} ${margen.gananciaCentavos < 0 ? "de pérdida" : "te quedan"}` : costo === 0 ? "Sin costo" : "Poné un precio"}</p>
+        <p id={`estado-${r.id}`} role="status" className={`mt-1 text-xs ${error ? "text-deuda" : !cambio && precio != null ? "text-pago" : "text-tinta-suave"}`}>{!r.productoId ? "Sin vínculo al catálogo" : mensaje || (cambio ? "Sin guardar" : precio != null ? "Guardado" : sugerido != null ? "Sugerido" : "Sin precio")}</p>
+        <p className="mt-1 text-xs leading-snug text-tinta-suave">{margen ? `${formatearCentavos(margen.gananciaCentavos)} ${margen.gananciaCentavos < 0 ? "de pérdida" : "te quedan"}` : costo === 0 ? "Sin costo" : "Poné un precio"}</p>
       </form>
     </div>
   );

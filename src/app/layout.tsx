@@ -58,14 +58,14 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           barra con un solo botón arriba en el celular. El contenido se corre
           para dejarle el lugar en cada caso.
         */}
-        <div className="lg:pl-64">
+        <div className="escritorio:pl-64">
           {/*
             Antes esto estaba capado en 5xl (1024px) y las planillas no
             entraban: con el menú al costado sobraba pantalla y la tabla igual
             scrolleaba. 7xl usa lo que hay sin volver ilegibles las pantallas
             de lectura.
           */}
-          <main className="mx-auto w-full max-w-7xl px-4 pb-16 pt-20 sm:px-6 lg:pt-8">
+          <main className="mx-auto w-full max-w-7xl px-4 pb-16 pt-20 sm:px-6 escritorio:pt-8">
             {children}
           </main>
         </div>
