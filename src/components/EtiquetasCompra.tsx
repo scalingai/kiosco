@@ -1,12 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { formatearCentavos } from "@/lib/plata";
 import { nombreParaEtiqueta } from "@/lib/etiquetas";
 import "./etiquetas.css";
 
 export type ProductoEtiqueta = { id: string; nombre: string; precio: number | null; sugerido: boolean };
+
+function TextoEtiqueta({ texto, clase }: { texto: string; clase: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const elemento = ref.current;
+    if (!elemento?.parentElement) return;
+    // Conserva la altura grande y comprime sólo los textos que exceden el ancho.
+    const contenedor = elemento.parentElement;
+    const ajustar = () => {
+      const escala = Math.min(1, contenedor.clientWidth / elemento.scrollWidth);
+      elemento.style.transform = `scaleX(${escala})`;
+    };
+    ajustar();
+    const observador = new ResizeObserver(ajustar);
+    observador.observe(contenedor);
+    observador.observe(elemento);
+    return () => observador.disconnect();
+  }, [texto]);
+  return <div className={clase}><span ref={ref} className="etiqueta-texto">{texto}</span></div>;
+}
 
 function agruparVariantes(productos: ProductoEtiqueta[]): ProductoEtiqueta[] {
   const grupos = new Map<string, ProductoEtiqueta>();
@@ -69,8 +89,8 @@ function EditorEtiquetas({ productos, cerrar }: { productos: ProductoEtiqueta[];
       {!hojas.length && <p className="p-8 text-center">Elegí productos para armar la hoja.</p>}
       {hojas.map((hoja, i) => <div className="etiquetas-hoja" key={i}>
         {hoja.map((p, n) => <div className="etiqueta-precio" key={n}>
-          <div className="etiqueta-valor" style={{ fontSize: p.precio! >= 10000000 ? "26pt" : "34pt" }}>{formatearCentavos(p.precio!)}</div>
-          <div className="etiqueta-nombre">{p.corto}</div>
+          <TextoEtiqueta clase="etiqueta-valor" texto={formatearCentavos(p.precio!)} />
+          <TextoEtiqueta clase="etiqueta-nombre" texto={p.corto} />
         </div>)}
       </div>)}
     </div>
