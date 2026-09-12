@@ -232,12 +232,19 @@ export function costoConIva(centavos: number, enBlanco: boolean): number {
   return enBlanco ? Math.round(centavos * IVA) : centavos;
 }
 
-/** El precio que sugiere la app: el costo real por el margen. */
+/** Desde $10 sobre una centena, sube a la siguiente. Nunca sugiere cero para un costo positivo. */
+export function redondearPrecio(centavos: number): number {
+  if (centavos <= 0) return 0;
+  const base = Math.floor(centavos / 10_000) * 10_000;
+  return Math.max(10_000, base + (centavos - base >= 1_000 ? 10_000 : 0));
+}
+
+/** El precio que sugiere la app: costo por margen, redondeado para cobrar. */
 export function precioSugerido(
   costoCentavos: number,
   margen = MARGEN_SUGERIDO,
 ): number {
-  return Math.round(costoCentavos * margen);
+  return redondearPrecio(Math.round(costoCentavos * margen));
 }
 
 export type Margen = {

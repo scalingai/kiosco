@@ -13,7 +13,7 @@ export type DB = NodePgDatabase<typeof schema>;
  * DATABASE_URL y usa el Postgres de verdad. Mismo dialecto y mismas migraciones
  * en los dos lados, así que lo que anda acá anda allá.
  */
-const DIRECTORIO_LOCAL = path.join(process.cwd(), ".data", "pg");
+const DIRECTORIO_LOCAL = process.env.KIOSCO_LOCAL_DB_DIR || path.join(process.cwd(), ".data", "pg");
 const CARPETA_MIGRACIONES = path.join(process.cwd(), "drizzle");
 
 type Cache = { db?: Promise<DB> };

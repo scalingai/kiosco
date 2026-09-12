@@ -2,12 +2,12 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import BotonAnularFila from "@/components/BotonAnularFila";
+import PreciosDeCompra from "@/components/PreciosDeCompra";
 import BotonCompra from "@/components/BotonCompra";
 import BotonPagarCompra from "@/components/BotonPagarCompra";
 import SelectorMes from "@/components/SelectorMes";
 import { listarProveedores } from "@/lib/caja";
 import {
-  agruparPorProducto,
   deudaDelProveedor,
   historialDeCompras,
   obtenerProveedor,
@@ -59,7 +59,6 @@ export default async function FichaProveedor({
   ]);
 
   const total = lista.reduce((t, c) => t + c.montoCentavos, 0);
-  const productos = agruparPorProducto(lista);
 
   const pestana = (activo: boolean) =>
     "flex-1 rounded-xl border px-3 py-2 text-center text-sm " +
@@ -88,11 +87,11 @@ export default async function FichaProveedor({
         />
       </div>
 
-      <section className="rounded-2xl border border-linea bg-papel-hondo px-5 py-5">
-        <p className="text-xs uppercase tracking-[0.18em] text-tinta-suave">
+      {(!verProductos || lista.length > 1 || deuda > 0) && <section className="rounded-xl border border-linea bg-papel-hondo px-4 py-3">
+        <p className="text-sm text-tinta-suave">
           Le compraste en {nombreDeMes(mes)}
         </p>
-        <p className="cifra mt-1 text-3xl font-medium sm:text-4xl">
+        <p className="mt-1 text-xl font-semibold tabular-nums">
           {formatearCentavos(total)}
         </p>
         <p className="mt-1 text-sm text-tinta-suave">
@@ -110,7 +109,7 @@ export default async function FichaProveedor({
             </span>
           )}
         </p>
-      </section>
+      </section>}
 
       <BotonCompra
         fecha={hoy}
@@ -124,13 +123,13 @@ export default async function FichaProveedor({
           href={`/compras/proveedor/${id}?mes=${mes}`}
           className={pestana(verProductos)}
         >
-          Qué le compro
+          Compra y precios
         </Link>
         <Link
           href={`/compras/proveedor/${id}?mes=${mes}&ver=compras`}
           className={pestana(!verProductos)}
         >
-          Sus compras
+          Historial
         </Link>
       </div>
 
@@ -140,82 +139,7 @@ export default async function FichaProveedor({
           mes.
         </p>
       ) : verProductos ? (
-        productos.length === 0 ? (
-          <p className="text-sm text-tinta-suave">
-            Las compras de este mes se cargaron sólo con el total, sin detalle de
-            qué vino.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {productos.map((p) => (
-              <section
-                key={p.clave}
-                className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5"
-              >
-                <div className="flex items-baseline justify-between gap-3">
-                  <h2 className="min-w-0 truncate font-display text-xl leading-none">
-                    {p.nombre}
-                  </h2>
-                  <span className="cifra shrink-0 text-sm font-medium">
-                    {formatearCentavos(p.totalCentavos)}
-                  </span>
-                </div>
-
-                <p className="mt-1 text-xs text-tinta-suave">
-                  {p.veces === 1 ? "1 compra" : `${p.veces} compras`}
-                  {p.ultimoCosto?.costoCentavos != null && (
-                    <>
-                      {" · última a "}
-                      <span className="cifra text-tinta">
-                        {formatearCentavos(p.ultimoCosto.costoCentavos)}
-                      </span>{" "}
-                      {p.ultimoCosto.porCada}
-                    </>
-                  )}
-                  {p.variacion != null && p.variacion !== 0 && (
-                    <span
-                      className={p.variacion > 0 ? "text-deuda" : "text-pago"}
-                    >
-                      {" · "}
-                      {p.variacion > 0 ? "+" : ""}
-                      {p.variacion}% en el mes
-                    </span>
-                  )}
-                </p>
-
-                {/* Cada vez que entró, con su fecha: la fecha lleva al día
-                    completo, que es donde se ve todo lo que llegó ese día. */}
-                <ul className="mt-2 divide-y divide-linea border-t border-linea">
-                  {p.compras.map((c, i) => (
-                    <li
-                      key={c.compraId + i}
-                      className="flex flex-wrap items-baseline justify-between gap-x-3 py-1.5 text-xs"
-                    >
-                      <Link
-                        href={`/compras/dia/${c.fecha}`}
-                        className="text-tinta-suave underline underline-offset-4"
-                      >
-                        {fechaCorta(c.fecha)}
-                      </Link>
-                      <span className="flex items-baseline gap-3">
-                        {c.costoCentavos != null && (
-                          <span className="cifra text-tinta">
-                            {formatearCentavos(c.costoCentavos)} {c.porCada}
-                          </span>
-                        )}
-                        <span className="cifra text-tinta-suave">
-                          {c.importeCentavos != null
-                            ? formatearCentavos(c.importeCentavos)
-                            : "sin importe"}
-                        </span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
-        )
+        <PreciosDeCompra compras={lista} />
       ) : (
         <div className="space-y-3">
           {lista.map((compra) => (
