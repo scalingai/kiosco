@@ -96,9 +96,50 @@ export type RenglonAGuardar = {
   /** cuánto trae cada bulto, medido en `unidad` */
   unidadesPorBulto: number;
   unidad: Unidad;
-  /** lo que se pagó por todo el renglón */
+  /** lo que dice la factura por todo el renglón, en bruto */
   importeCentavos: number | null;
+  /** lo que el proveedor descontó de este renglón, y por qué */
+  descuentoCentavos: number | null;
+  descuentoNota: string | null;
+  /**
+   * A cuánto se decide venderlo, y con qué multiplicador se llegó a ese
+   * número. Van con la compra porque es EL momento en que se decide: llegó la
+   * mercadería, cambió el costo, hay que ponerle precio. Mandar a la persona a
+   * otra pantalla a hacerlo después es garantizar que no lo haga.
+   *
+   * Los dos en null significan "no lo toqué": la compra no le pisa el precio
+   * al producto.
+   */
+  precioVentaCentavos: number | null;
+  multiplicadorMilesimas: number | null;
 };
+
+export type PagoDeCompra = { medio: MedioPago; importeCentavos: number };
+
+/**
+ * Reparte el total entre los medios que tengan importe.
+ *
+ * Devuelve `null` cuando alcanza con un solo medio: en ese caso no hace falta
+ * escribir filas de pago y la compra se guarda como siempre. Tira si la suma
+ * no da el total, porque una compra pagada a medias por cada lado deja la caja
+ * diciendo que salió plata de donde no salió.
+ */
+export function repartirPago(
+  pagos: PagoDeCompra[],
+  totalCentavos: number,
+): PagoDeCompra[] | null {
+  const conPlata = pagos.filter((p) => p.importeCentavos > 0);
+  if (conPlata.length <= 1) return null;
+
+  const suma = conPlata.reduce((t, p) => t + p.importeCentavos, 0);
+  if (suma !== totalCentavos) {
+    throw new Error(
+      `Los medios suman ${suma / 100} y la compra es ${totalCentavos / 100}. ` +
+        "Tienen que dar lo mismo.",
+    );
+  }
+  return conPlata;
+}
 
 export type CompraAGuardar = {
   proveedorId?: string;
@@ -111,15 +152,42 @@ export type CompraAGuardar = {
   pagadoEn: string | null;
   /** Con qué se pagó. Va junto con `pagadoEn`: sin pago no hay medio. */
   medio: MedioPago | null;
+  /**
+   * Cuando se pagó con más de un medio: cuánto por cada uno.
+   *
+   * Al proveedor se le paga como se puede —la mitad en efectivo y el resto por
+   * transferencia es lo normal—, y con un solo medio había que elegir uno y
+   * mentir. Vacío o ausente significa que se pagó todo con `medio`.
+   */
+  pagos?: PagoDeCompra[];
   comprobante?: string | null;
   nota?: string | null;
+  /** lo que descontaron de TODA la factura, y por qué */
+  descuentoCentavos?: number | null;
+  descuentoNota?: string | null;
   /** con factura: el costo real es el importe por 1,21 */
   enBlanco: boolean;
 };
 
-/** Suma de los renglones que ya tienen importe. Los que no, no suman. */
+/**
+ * Lo que de verdad costó un renglón: lo que dice la factura menos lo que
+ * descontaron.
+ *
+ * Se guardan los dos números por separado y se resta al leer, igual que el
+ * costo por unidad. Guardar sólo el neto haría que el renglón dejara de
+ * coincidir con el papel del proveedor, que es contra lo que se controla.
+ */
+export function netoDelRenglon(renglon: {
+  importeCentavos: number | null;
+  descuentoCentavos?: number | null;
+}): number | null {
+  if (renglon.importeCentavos == null) return null;
+  return Math.max(0, renglon.importeCentavos - (renglon.descuentoCentavos ?? 0));
+}
+
+/** Suma de los renglones que ya tienen importe, ya descontados. */
 export function sumarRenglones(lista: RenglonAGuardar[]): number {
-  return lista.reduce((total, r) => total + (r.importeCentavos ?? 0), 0);
+  return lista.reduce((total, r) => total + (netoDelRenglon(r) ?? 0), 0);
 }
 
 /** Cuánto entró en total por ese renglón, en su unidad de medida. */
@@ -189,20 +257,22 @@ export function costoDeReferencia(renglon: {
   unidadesPorBulto: number;
   unidad: Unidad;
   importeCentavos: number | null;
+  descuentoCentavos?: number | null;
 }): CostoDeReferencia | null {
-  if (renglon.importeCentavos == null) return null;
+  // Sobre el NETO: si te descontaron, esa mercadería te salió menos, y el
+  // margen que muestre la app tiene que ser el de verdad. La resta vive acá y
+  // no en cada pantalla para que ninguna se la olvide.
+  const neto = netoDelRenglon(renglon);
+  if (neto == null) return null;
   const total = contenidoTotal(renglon.cantidad, renglon.unidadesPorBulto);
   if (total <= 0) return null;
 
   if (renglon.unidad === "un") {
-    return {
-      centavos: Math.round(renglon.importeCentavos / total),
-      porCada: "cada una",
-    };
+    return { centavos: Math.round(neto / total), porCada: "cada una" };
   }
 
   return {
-    centavos: Math.round((renglon.importeCentavos * 1000) / total),
+    centavos: Math.round((neto * 1000) / total),
     porCada: renglon.unidad === "gr" ? "el kilo" : "el litro",
   };
 }
@@ -232,19 +302,56 @@ export function costoConIva(centavos: number, enBlanco: boolean): number {
   return enBlanco ? Math.round(centavos * IVA) : centavos;
 }
 
-/** Desde $10 sobre una centena, sube a la siguiente. Nunca sugiere cero para un costo positivo. */
+/**
+ * El multiplicador se guarda en milésimas: 1400 es 1,4.
+ *
+ * Entero a propósito, igual que la plata. Un `numeric` leído como float de JS
+ * convierte 1,4 en 1,4000000000000001 y después el precio sugerido baila un
+ * centavo según el día. Milésimas dan de sobra: nadie afina el margen más allá
+ * de la tercera cifra.
+ */
+export const MILESIMAS = 1000;
+
+/** El 1,4 de arriba, en milésimas, para guardar y comparar. */
+export const MARGEN_SUGERIDO_MILESIMAS = Math.round(
+  MARGEN_SUGERIDO * MILESIMAS,
+);
+
+/**
+ * A cuánto se redondea el precio sugerido: siempre a los $100.
+ *
+ * En el kiosco los precios son redondos. Nadie cobra $4.357 ni tiene monedas
+ * para el vuelto, y un precio que no se puede cantar de memoria hace más lento
+ * al que atiende.
+ */
+const PASO = 10_000; // $100 en centavos
+
+/**
+ * Desde $10 sobre una centena, sube a la siguiente: $509 queda en $500 y
+ * $510 sube a $600. Regla actualizada el 2026-09-12.
+ *
+ * Nunca devuelve cero: algo que vale $30 se sugiere a $100, no a nada.
+ */
 export function redondearPrecio(centavos: number): number {
   if (centavos <= 0) return 0;
-  const base = Math.floor(centavos / 10_000) * 10_000;
-  return Math.max(10_000, base + (centavos - base >= 1_000 ? 10_000 : 0));
+  const base = Math.floor(centavos / PASO) * PASO;
+  return Math.max(PASO, base + (centavos - base >= 1_000 ? PASO : 0));
 }
 
-/** El precio que sugiere la app: costo por margen, redondeado para cobrar. */
+/**
+ * El precio que sugiere la app: el costo real por el multiplicador, redondeado
+ * a algo cobrable.
+ *
+ * `multiplicadorMilesimas` es lo que tenga cargado ESE producto. Cuando viene
+ * en null se usa el 1,4 general: es una sugerencia inicial, no una regla, y la
+ * gracia es poder correrla producto por producto sin tocar el resto.
+ */
 export function precioSugerido(
   costoCentavos: number,
-  margen = MARGEN_SUGERIDO,
+  multiplicadorMilesimas: number | null = null,
 ): number {
-  return redondearPrecio(Math.round(costoCentavos * margen));
+  const milesimas = multiplicadorMilesimas ?? MARGEN_SUGERIDO_MILESIMAS;
+  return redondearPrecio(Math.round((costoCentavos * milesimas) / MILESIMAS));
 }
 
 export type Margen = {
@@ -282,13 +389,34 @@ export function formatearMultiplicador(valor: number): string {
   return "×" + valor.toFixed(2).replace(".", ",");
 }
 
+/**
+ * Cómo está escrito el precio en la factura del proveedor.
+ *
+ * El mayorista casi siempre lista el precio DEL BULTO —"cajón de gaseosa
+ * $18.400"— y no el total de la partida. Tenerlo al revés obligaba a
+ * multiplicar de cabeza antes de anotar, que es justo la cuenta que la app
+ * tendría que estar haciendo.
+ *
+ * Cuando el producto viene suelto (un bulto trae 1) "por bulto" es lo mismo
+ * que "por unidad", y la pantalla lo dice así.
+ */
+export type ModoPrecio = "bulto" | "total";
+
 /** Lo que se edita en pantalla: todo texto hasta que se confirma. */
 export type RenglonBorrador = {
   descripcion: string;
   cantidad: string;
   unidadesPorBulto: string;
-  unidad: Unidad;
+  /** cómo hay que leer `importe` */
+  modo: ModoPrecio;
   importe: string;
+  /** lo que descontaron de este renglón, y por qué */
+  descuento: string;
+  descuentoNota: string;
+  /** por cuánto multiplicar el costo; vacío usa el del producto o el general */
+  multiplicador: string;
+  /** a cuánto venderlo; vacío deja el precio que ya tenía */
+  precioVenta: string;
 };
 
 export function renglonVacio(): RenglonBorrador {
@@ -296,9 +424,30 @@ export function renglonVacio(): RenglonBorrador {
     descripcion: "",
     cantidad: "1",
     unidadesPorBulto: "1",
-    unidad: "un",
+    // Por bulto es como viene la factura; el total es la excepción.
+    modo: "bulto",
     importe: "",
+    descuento: "",
+    descuentoNota: "",
+    multiplicador: "",
+    precioVenta: "",
   };
+}
+
+/**
+ * De lo escrito al total del renglón, que es lo único que se guarda.
+ *
+ * Guardar el total y no el precio unitario es lo que hace que la suma de los
+ * renglones siga dando lo que dice la factura. Con el precio del bulto
+ * guardado, el total sería una multiplicación más a rehacer en cada pantalla.
+ */
+export function totalDelRenglon(
+  importeCentavos: number | null,
+  cantidad: number,
+  modo: ModoPrecio,
+): number | null {
+  if (importeCentavos == null) return null;
+  return modo === "bulto" ? importeCentavos * Math.max(1, cantidad) : importeCentavos;
 }
 
 /** Un renglón cuenta si tiene nombre O importe. Sólo se descarta el vacío. */
@@ -307,6 +456,46 @@ export function renglonesCargados(lista: RenglonBorrador[]): RenglonBorrador[] {
 }
 
 export class RenglonInvalido extends Error {}
+
+/** El multiplicador escrito en el renglón, en milésimas. */
+function leerMultiplicador(renglon: RenglonBorrador): number | null {
+  if (!renglon.multiplicador.trim()) return null;
+  const numero = Number(renglon.multiplicador.trim().replace(",", "."));
+  if (!Number.isFinite(numero) || numero < 1 || numero > 10) {
+    throw new RenglonInvalido(
+      `El multiplicador de ${nombrar(renglon)} tiene que estar entre 1 y 10.`,
+    );
+  }
+  return Math.round(numero * MILESIMAS);
+}
+
+/**
+ * El descuento escrito en el renglón, en centavos.
+ *
+ * Siempre es un monto, nunca un porcentaje: la factura del mayorista dice
+ * pesos, y hacer la regla de tres para volver a pesos al guardar es una vuelta
+ * donde se pierden centavos y después el renglón no cuadra con el papel.
+ */
+function leerDescuento(renglon: RenglonBorrador): number | null {
+  if (!renglon.descuento.trim()) return null;
+  const centavos = parsearMonto(renglon.descuento);
+  if (centavos == null || centavos <= 0) {
+    throw new RenglonInvalido(`Revisá el descuento de ${nombrar(renglon)}.`);
+  }
+  return centavos;
+}
+
+/** El precio de venta escrito en el renglón, en centavos. */
+function leerPrecioVenta(renglon: RenglonBorrador): number | null {
+  if (!renglon.precioVenta.trim()) return null;
+  const centavos = parsearMonto(renglon.precioVenta);
+  if (centavos == null || centavos <= 0) {
+    throw new RenglonInvalido(
+      `Revisá el precio de venta de ${nombrar(renglon)}.`,
+    );
+  }
+  return centavos;
+}
 
 function nombrar(renglon: RenglonBorrador): string {
   return renglon.descripcion.trim() || "el renglón sin nombre";
@@ -338,21 +527,32 @@ export function aRenglonesAGuardar(
       );
     }
 
-    let importeCentavos: number | null = null;
+    let escrito: number | null = null;
     if (renglon.importe.trim()) {
       const centavos = parsearMonto(renglon.importe);
       if (centavos == null || centavos <= 0) {
         throw new RenglonInvalido(`Revisá el importe de ${nombrar(renglon)}.`);
       }
-      importeCentavos = centavos;
+      escrito = centavos;
     }
 
     return {
       descripcion: renglon.descripcion.trim() || null,
       cantidad,
       unidadesPorBulto,
-      unidad: renglon.unidad,
-      importeCentavos,
+      /*
+       * Siempre "un". Al proveedor se le compran UNIDADES —tres cajones de
+       * seis botellas son dieciocho botellas— y los ml o gramos son del
+       * producto, no de la compra: eso vive en `productos.contenido`. Tenerlo
+       * en los dos lados hacía elegir dos veces la misma cosa y permitía que
+       * no coincidieran. La columna queda porque las compras viejas la usaron.
+       */
+      unidad: "un",
+      importeCentavos: totalDelRenglon(escrito, cantidad, renglon.modo),
+      descuentoCentavos: leerDescuento(renglon),
+      descuentoNota: renglon.descuentoNota.trim() || null,
+      precioVentaCentavos: leerPrecioVenta(renglon),
+      multiplicadorMilesimas: leerMultiplicador(renglon),
     };
   });
 }

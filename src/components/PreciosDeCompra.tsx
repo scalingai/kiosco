@@ -41,7 +41,7 @@ export default function PreciosDeCompra({ compras }: { compras: CompraDelHistori
       </div>
 
       <div className="px-4 pb-3 pt-2 text-xs leading-relaxed text-tinta-suave sm:px-6">
-        Sugerido: 40% sobre el costo. Desde $10 sobre una centena, sube a la siguiente. {compra.enBlanco ? "Costo con IVA, sin percepciones." : "Costo de esta compra."} Al guardar, se actualiza también en Stock.
+        Sugerido: multiplicador del producto o 40% inicial. Desde $10 sobre una centena, sube a la siguiente. {compra.enBlanco ? "Costo con IVA, sin percepciones." : "Costo de esta compra."} Al guardar, se actualiza también en Stock.
       </div>
       <div className="hidden grid-cols-[minmax(0,1fr)_130px_120px_160px] gap-4 border-y border-linea bg-papel/60 px-6 py-3 text-xs font-semibold text-tinta-suave md:grid">
         <span>Producto</span><span>Costo {compra.enBlanco ? "con IVA" : "unitario"}</span><span title="Porcentaje que agregás al costo">Multiplicador</span><span>Precio de venta</span>
@@ -60,9 +60,10 @@ export default function PreciosDeCompra({ compras }: { compras: CompraDelHistori
 
 function PrecioRenglon({ renglon: r, enBlanco, precio, alGuardar }: { renglon: RenglonDelHistorial; enBlanco: boolean; precio: number | null; alGuardar: (valor: number) => void }) {
   const costo = r.costoCentavos == null ? null : costoConIva(r.costoCentavos, enBlanco);
-  const sugerido = costo == null ? null : precioSugerido(costo);
+  const sugerido = costo == null ? null : precioSugerido(costo, r.multiplicadorMilesimas);
   const [texto, setTexto] = useState(precio == null ? null : String(precio / 100).replace(".", ","));
   const [porcentaje, setPorcentaje] = useState<string | null>(null);
+  const [ventaManual, setVentaManual] = useState(false);
   const textoVisible = texto ?? (sugerido == null ? "" : String(sugerido / 100).replace(".", ","));
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState(false);
@@ -70,14 +71,14 @@ function PrecioRenglon({ renglon: r, enBlanco, precio, alGuardar }: { renglon: R
   const valor = parsearMonto(textoVisible);
   const margen = costo != null && valor != null && valor > 0 ? calcularMargen(costo, valor) : null;
   const cambio = valor !== (precio ?? sugerido);
-  const porcentajeVisible = porcentaje ?? (precio == null && texto == null ? "40" : margen && costo ? String(Math.round((margen.multiplicador - 1) * 1000) / 10).replace(".", ",") : "");
+  const porcentajeVisible = porcentaje ?? (!ventaManual && (texto == null || r.multiplicadorMilesimas != null) ? String(((r.multiplicadorMilesimas ?? 1400) - 1000) / 10).replace(".", ",") : margen && costo ? String(Math.round((margen.multiplicador - 1) * 1000) / 10).replace(".", ",") : "");
   function cambiarPorcentaje(nuevo: string) {
     setPorcentaje(nuevo);
     setMensaje("");
     setError(false);
     const numero = Number(nuevo.replace(",", "."));
-    const valido = nuevo.trim() !== "" && Number.isFinite(numero) && numero > -100;
-    const calculado = valido && costo != null ? precioSugerido(costo, 1 + numero / 100) : null;
+    const valido = nuevo.trim() !== "" && Number.isFinite(numero) && numero >= 0 && numero <= 900;
+    const calculado = valido && costo != null ? precioSugerido(costo, Math.round(1000 + numero * 10)) : null;
     setTexto(calculado != null && Number.isSafeInteger(calculado) ? String(calculado / 100).replace(".", ",") : "");
   }
   function guardar() {
@@ -87,7 +88,7 @@ function PrecioRenglon({ renglon: r, enBlanco, precio, alGuardar }: { renglon: R
     }
     iniciar(async () => {
       try {
-        const respuesta = await editarProducto(r.productoId!, { precioVentaCentavos: valor });
+        const respuesta = await editarProducto(r.productoId!, { precioVentaCentavos: valor, ...(porcentaje != null ? { multiplicadorMilesimas: Math.round(1000 + Number(porcentaje.replace(",", ".")) * 10) } : {}) });
         if (!respuesta.ok) { setError(true); setMensaje(respuesta.error); return; }
         alGuardar(valor); setError(false); setMensaje("Guardado");
       } catch { setError(true); setMensaje("No se pudo guardar. Volvé a intentar."); }
@@ -116,7 +117,7 @@ function PrecioRenglon({ renglon: r, enBlanco, precio, alGuardar }: { renglon: R
         <label htmlFor={`venta-${r.id}`} className="mb-1 block text-[11px] text-tinta-suave md:sr-only">Precio de venta<span className="sr-only"> de {r.descripcion}</span></label>
         <div className="flex items-center rounded-lg border border-linea bg-white focus-within:border-acento focus-within:ring-1 focus-within:ring-acento">
           <span className="pl-2 text-sm text-tinta-suave">$</span>
-          <input id={`venta-${r.id}`} inputMode="decimal" autoComplete="off" placeholder="Sin precio" value={textoVisible} disabled={!r.productoId || guardando} aria-invalid={error} aria-describedby={`estado-${r.id}`} onChange={e => { setTexto(e.target.value); setPorcentaje(null); setMensaje(""); setError(false); }} className="min-w-0 w-full bg-transparent px-2 py-2 text-base tabular-nums outline-none md:text-sm" />
+          <input id={`venta-${r.id}`} inputMode="decimal" autoComplete="off" placeholder="Sin precio" value={textoVisible} disabled={!r.productoId || guardando} aria-invalid={error} aria-describedby={`estado-${r.id}`} onChange={e => { setTexto(e.target.value); setPorcentaje(null); setVentaManual(true); setMensaje(""); setError(false); }} className="min-w-0 w-full bg-transparent px-2 py-2 text-base tabular-nums outline-none md:text-sm" />
         </div>
         {cambio && <button type="submit" disabled={guardando || !r.productoId} className="mt-2 w-full rounded-lg bg-acento px-2 py-1.5 text-xs font-medium text-white disabled:opacity-50">{guardando ? "Guardando…" : "Guardar"}</button>}
         <p id={`estado-${r.id}`} role="status" className={`mt-1 text-[11px] ${error ? "text-deuda" : !cambio && precio != null ? "text-pago" : "text-tinta-suave"}`}>{!r.productoId ? "Sin vínculo al catálogo" : mensaje || (cambio ? "Sin guardar" : precio != null ? "Guardado" : sugerido != null ? "Sugerido" : "Sin precio")}</p>

@@ -242,6 +242,16 @@ export const compras = pgTable(
      */
     totalDeclarado: boolean("total_declarado").notNull().default(true),
     fecha: date("fecha").notNull(),
+    /**
+     * Lo que el proveedor descontó de toda la factura, y por qué.
+     *
+     * `monto_centavos` ya viene NETO —es lo que salió de la caja— así que esto
+     * no cambia ninguna cuenta: está para poder contestar "¿por qué este mes
+     * la Coca salió más barata?" tres meses después. Sin la nota, un costo que
+     * bajó de golpe parece un error de carga.
+     */
+    descuentoCentavos: bigint("descuento_centavos", { mode: "number" }),
+    descuentoNota: text("descuento_nota"),
     /** null = impaga, se le debe al proveedor */
     pagadoEn: date("pagado_en"),
     /** con qué se le pagó. Va junto con `pagadoEn`: sin pago no hay medio. */
@@ -288,6 +298,44 @@ export const compras = pgTable(
  * `unidadesPorBulto` es además lo que va a necesitar el stock cuando exista:
  * un pack que entra son N unidades para vender.
  */
+/**
+ * Con qué se pagó una compra. Una fila por medio.
+ *
+ * Existe porque al proveedor se le paga como se puede: la mitad en efectivo y
+ * el resto por transferencia es lo normal, no la excepción. Con un solo
+ * `compras.medio` había que elegir uno y mentir, y la caja del día terminaba
+ * diciendo que salió de un lado plata que salió de otro.
+ *
+ * La suma de estas filas TIENE que dar el total de la compra: si no, la caja
+ * deja de cerrar. Eso lo valida `registrarCompra`.
+ *
+ * `compras.medio` sigue existiendo para las compras cargadas antes de esto.
+ * Al leer, si una compra no tiene filas acá se usa aquel medio único.
+ */
+export const comprasPagos = pgTable(
+  "compras_pagos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    compraId: uuid("compra_id")
+      .notNull()
+      .references(() => compras.id, { onDelete: "cascade" }),
+    medio: medioPago("medio").notNull(),
+    /** siempre positivo y en centavos */
+    importeCentavos: bigint("importe_centavos", { mode: "number" }).notNull(),
+    creadoEn: timestamp("creado_en", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("compras_pagos_compra_idx").on(t.compraId),
+    // Un medio por compra: dos filas de "efectivo" son la misma plata contada
+    // dos veces, y sumarlas da un total que no existió.
+    uniqueIndex("compras_pagos_compra_medio_key").on(t.compraId, t.medio),
+  ],
+);
+
+export type CompraPago = typeof comprasPagos.$inferSelect;
+
 export const comprasItems = pgTable(
   "compras_items",
   {
@@ -315,6 +363,16 @@ export const comprasItems = pgTable(
      * llega el remito sin precios y la factura viene después.
      */
     importeCentavos: bigint("importe_centavos", { mode: "number" }),
+    /**
+     * El descuento de ESTE renglón, y por qué. La promo suele ser de un
+     * producto —"dos por uno en Manaos"— y no de la factura entera.
+     *
+     * `importe_centavos` sigue siendo lo que dice el renglón en bruto. El costo
+     * por unidad sale de restarle esto: es lo que de verdad pagaste por esa
+     * mercadería, y por lo tanto sobre lo que se calcula el margen.
+     */
+    descuentoCentavos: bigint("descuento_centavos", { mode: "number" }),
+    descuentoNota: text("descuento_nota"),
     posicion: integer("posicion").notNull().default(0),
   },
   (t) => [index("compras_items_compra_idx").on(t.compraId)],
@@ -476,6 +534,19 @@ export const productos = pgTable(
      * cuánto estás ganando.
      */
     precioVentaCentavos: bigint("precio_venta_centavos", { mode: "number" }),
+    /**
+     * Por cuánto multiplicar el costo para sugerir el precio de ESTE producto,
+     * en milésimas: 1400 es 1,4.
+     *
+     * En null usa el 1,4 general. Queda nullable a propósito y no con
+     * `default 1400`: así se distingue "nunca lo toqué" de "decidí que sea
+     * 1,4", y el día que el general cambie, los que nadie ajustó lo siguen.
+     * Con un default en la columna, ese cambio no llegaría a ninguno.
+     *
+     * La bebida se vende con menos margen que la golosina, y el cigarrillo con
+     * casi nada: un solo número para todo el kiosco no existe.
+     */
+    multiplicadorMilesimas: integer("multiplicador_milesimas"),
     /** marcado a mano cuando se ve el hueco en la góndola */
     falta: boolean("falta").notNull().default(false),
     archivadoEn: timestamp("archivado_en", { withTimezone: true }),

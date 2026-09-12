@@ -32,6 +32,7 @@ export type RenglonDelHistorial = {
   costoCentavos: number | null;
   porCada: string | null;
   precioVentaCentavos: number | null;
+  multiplicadorMilesimas: number | null;
 };
 
 export type CompraDelHistorial = {
@@ -112,7 +113,7 @@ export async function historialDeCompras(
 
   // Los renglones de todas las compras en una sola consulta, no una por compra.
   const sueltos = await db
-    .select({ ...getTableColumns(comprasItems), precioVentaCentavos: productos.precioVentaCentavos })
+    .select({ ...getTableColumns(comprasItems), precioVentaCentavos: productos.precioVentaCentavos, multiplicadorMilesimas: productos.multiplicadorMilesimas })
     .from(comprasItems)
     .leftJoin(productos, eq(comprasItems.productoId, productos.id))
     .where(
@@ -138,6 +139,7 @@ export async function historialDeCompras(
       costoCentavos: costo?.centavos ?? null,
       porCada: costo?.porCada ?? null,
       precioVentaCentavos: r.precioVentaCentavos,
+      multiplicadorMilesimas: r.multiplicadorMilesimas,
     });
     porCompra.set(r.compraId, lista);
   }

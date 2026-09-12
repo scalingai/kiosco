@@ -7,6 +7,7 @@ import { guardarMovimientos } from "@/app/acciones";
 import EditorItems from "@/components/EditorItems";
 import FormMovimiento from "@/components/FormMovimiento";
 import Hoja from "@/components/Hoja";
+import SelectorNombre from "@/components/SelectorNombre";
 import { AVISO_TARDANZA, conLimiteDeTiempo } from "@/lib/espera";
 import { hoyLocal } from "@/lib/fechas";
 import {
@@ -408,14 +409,17 @@ export default function AccionesFlotantes({
                 <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
                   <label className="block">
                     <span className="text-xs text-tinta-suave">Cliente</span>
-                    <input
-                      value={b.nombre}
-                      onChange={(e) =>
-                        editar(i, { nombre: e.target.value, clienteId: null })
-                      }
-                      list="lista-clientes"
-                      className="mt-1 w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm"
-                    />
+                    <div className="mt-1">
+                      <SelectorNombre
+                        valor={b.nombre}
+                        alCambiar={(nombre, id) =>
+                          editar(i, { nombre, clienteId: id })
+                        }
+                        opciones={clientes}
+                        queEs="Cliente"
+                        etiquetaAria="Cliente"
+                      />
+                    </div>
                     {!b.clienteId && (
                       <span className="mt-1 block text-xs text-deuda">
                         Cliente nuevo — se crea al anotar
@@ -535,12 +539,6 @@ export default function AccionesFlotantes({
           }}
         />
       </Hoja>
-
-      <datalist id="lista-clientes">
-        {clientes.map((c) => (
-          <option key={c.id} value={c.nombre} />
-        ))}
-      </datalist>
     </>
   );
 }
