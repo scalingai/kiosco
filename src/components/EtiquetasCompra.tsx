@@ -35,12 +35,12 @@ export default function EtiquetasCompra({ productos }: { productos: ProductoEtiq
 function EditorEtiquetas({ productos, cerrar }: { productos: ProductoEtiqueta[]; cerrar: () => void }) {
   const [filas, setFilas] = useState(() => agruparVariantes(productos).map(p => ({ ...p, corto: p.nombre === "Tintura Issue" ? p.nombre : nombreParaEtiqueta(p.nombre), seleccionada: true })));
   const elegidas = filas.filter(p => p.seleccionada && p.precio && p.corto.trim());
-  const hojas = Array.from({ length: Math.ceil(elegidas.length / 65) }, (_, i) => elegidas.slice(i * 65, (i + 1) * 65));
+  const hojas = Array.from({ length: Math.ceil(elegidas.length / 50) }, (_, i) => elegidas.slice(i * 50, (i + 1) * 50));
   const sugeridas = elegidas.filter(p => p.sugerido).length;
   return <div className="etiquetas-editor" role="dialog" aria-modal="true" aria-label="Etiquetas para imprimir" onKeyDown={e => { if (e.key === "Escape") cerrar(); }}>
     <div className="etiquetas-controles">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div><h2 className="text-xl font-semibold">Etiquetas para recortar</h2><p className="mt-1 text-sm text-tinta-suave">A4 apaisada · 5 × 1,5 cm · 65 por hoja</p></div>
+        <div><h2 className="text-xl font-semibold">Etiquetas para recortar</h2><p className="mt-1 text-sm text-tinta-suave">A4 apaisada · 5 × 2 cm · 50 por hoja</p></div>
         <button autoFocus type="button" onClick={cerrar} className="rounded-lg border border-linea px-4 py-2">Volver a la compra</button>
       </header>
       <p className="my-4 text-sm">Todos vienen marcados. Los tonos de Tintura Issue con el mismo precio comparten una etiqueta. Desmarcá lo que no querés imprimir. Podés ajustar los nombres, hasta 14 caracteres. Si no hay precio guardado, se usa el sugerido.</p>
