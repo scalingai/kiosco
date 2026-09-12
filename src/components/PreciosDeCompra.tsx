@@ -6,6 +6,7 @@ import type { CompraDelHistorial, RenglonDelHistorial } from "@/lib/compras";
 import { fechaCorta } from "@/lib/fechas";
 import { calcularMargen, costoConIva, formatearContenido, ETIQUETA_MEDIO, precioSugerido } from "@/lib/negocio";
 import { formatearCentavos, parsearMonto } from "@/lib/plata";
+import EtiquetasCompra from "./EtiquetasCompra";
 
 export default function PreciosDeCompra({ compras }: { compras: CompraDelHistorial[] }) {
   const [seleccion, setSeleccion] = useState(compras[0]?.id ?? "");
@@ -36,6 +37,7 @@ export default function PreciosDeCompra({ compras }: { compras: CompraDelHistori
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 bg-papel/60 px-4 py-3 sm:px-6">
+        <EtiquetasCompra key={compra.id} productos={compra.renglones.map(r => ({ id: r.id, nombre: r.descripcion || "Producto", precio: precioDe(r) ?? (r.costoCentavos == null ? null : precioSugerido(costoConIva(r.costoCentavos, compra.enBlanco), r.multiplicadorMilesimas)), sugerido: precioDe(r) == null }))} />
         <input aria-label="Buscar en esta compra" placeholder="Buscar producto…" value={busqueda} onChange={e => setBusqueda(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-linea bg-white px-3 py-2 text-sm focus:outline-2 focus:outline-acento" />
         <button type="button" aria-pressed={soloPendientes} onClick={() => setSoloPendientes(!soloPendientes)} className={`rounded-full border px-3 py-2 text-xs font-medium focus:outline-2 focus:outline-acento ${soloPendientes ? "border-acento bg-acento text-white" : "border-linea bg-white text-tinta"}`}>Por confirmar ({pendientes})</button>
       </div>
