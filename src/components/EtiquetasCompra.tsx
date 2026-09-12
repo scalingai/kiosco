@@ -66,7 +66,7 @@ function EditorEtiquetas({ productos, cerrar }: { productos: ProductoEtiqueta[];
       {!hojas.length && <p className="p-8 text-center">Elegí productos para armar la hoja.</p>}
       {hojas.map((hoja, i) => <div className="etiquetas-hoja" key={i}>
         {hoja.map((p, n) => <div className="etiqueta-precio" key={n}>
-          <div className="etiqueta-valor" style={{ fontSize: p.precio! >= 10000000 ? "15pt" : "18pt" }}>{formatearCentavos(p.precio!)}</div>
+          <div className="etiqueta-valor" style={{ fontSize: p.precio! >= 10000000 ? "20pt" : "26pt" }}>{formatearCentavos(p.precio!)}</div>
           <div className="etiqueta-nombre">{p.corto}</div>
         </div>)}
       </div>)}
