@@ -134,6 +134,13 @@
       "when": 1794066630653,
       "tag": "0018_wild_karma",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794068976452,
+      "tag": "0019_slim_nighthawk",
+      "breakpoints": true
     }
   ]
 }

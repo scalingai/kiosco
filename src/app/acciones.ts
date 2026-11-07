@@ -42,6 +42,10 @@ import {
   obtenerVentaPendiente,
   ordenPendienteDe,
 } from "@/lib/sucursales";
+import {
+  cambiarEstadoDePedido,
+  type EstadoPedido,
+} from "@/lib/pedidos";
 
 export type Resultado<T = null> =
   | { ok: true; datos: T }
@@ -393,6 +397,20 @@ export async function crearQrDeSucursal(
 
     const caja = await crearCaja(sucursal, ubicacion);
     await guardarCajaDeSucursal(sucursalId, caja);
+    revalidatePath("/", "layout");
+    return { ok: true, datos: null };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+/** Mover un pedido de la tienda de estado. Lo aprieta el kiosquero. */
+export async function moverPedido(
+  id: string,
+  estado: EstadoPedido,
+): Promise<Resultado> {
+  try {
+    await cambiarEstadoDePedido(id, estado);
     revalidatePath("/", "layout");
     return { ok: true, datos: null };
   } catch (error) {

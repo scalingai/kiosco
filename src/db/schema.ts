@@ -261,6 +261,95 @@ export const sucursales = pgTable(
 
 export type Sucursal = typeof sucursales.$inferSelect;
 
+/** Cómo se lo lleva: lo pasa a buscar o se lo mandan. */
+export const tipoEntrega = pgEnum("tipo_entrega", ["retiro", "envio"]);
+
+/**
+ * En qué anda un pedido de la tienda. Es una fila, no un campo que se pisa:
+ * `nuevo` es el que todavía nadie miró, y ese es el único que importa que se
+ * vea de lejos.
+ */
+export const estadoPedido = pgEnum("estado_pedido", [
+  "nuevo",
+  "preparando",
+  "listo",
+  "entregado",
+  "cancelado",
+]);
+
+/**
+ * Un pedido que entró por la tienda.
+ *
+ * NO es una venta: la venta se anota cuando la plata entra, y acá todavía no
+ * entró nada. Son dos cosas distintas y por eso son dos tablas — un pedido se
+ * puede cancelar, se puede no retirar nunca, y hasta que eso se resuelva no
+ * tiene por qué ensuciar la caja del día.
+ *
+ * Lo carga alguien de la calle, sin PIN. Por eso todo lo que entra acá es
+ * texto que escribió un desconocido: se guarda, se muestra, y no se usa para
+ * nada más.
+ */
+export const pedidos = pgTable(
+  "pedidos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /**
+     * El número que se le canta al cliente ("pedido 47"). Un uuid no se puede
+     * decir por teléfono, y la fecha más la hora tampoco distingue dos pedidos
+     * del mismo minuto.
+     */
+    numero: integer("numero").notNull().generatedAlwaysAsIdentity({ startWith: 1 }),
+    nombre: text("nombre").notNull(),
+    telefono: text("telefono").notNull(),
+    entrega: tipoEntrega("entrega").notNull().default("retiro"),
+    /** sólo cuando es envío */
+    direccion: text("direccion"),
+    nota: text("nota"),
+    /**
+     * El total, congelado al momento del pedido. Igual que en una venta: el
+     * precio de la góndola cambia, y un pedido de ayer tiene que seguir
+     * diciendo lo que se le cotizó ayer.
+     */
+    totalCentavos: bigint("total_centavos", { mode: "number" }).notNull(),
+    estado: estadoPedido("estado").notNull().default("nuevo"),
+    /** la venta que salió de este pedido, cuando se cobró */
+    ventaId: uuid("venta_id").references(() => ventas.id, {
+      onDelete: "set null",
+    }),
+    creadoEn: timestamp("creado_en", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("pedidos_estado_idx").on(t.estado),
+    index("pedidos_creado_idx").on(t.creadoEn),
+  ],
+);
+
+export const pedidosItems = pgTable(
+  "pedidos_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pedidoId: uuid("pedido_id")
+      .notNull()
+      .references(() => pedidos.id, { onDelete: "cascade" }),
+    productoId: uuid("producto_id").references(() => productos.id, {
+      onDelete: "set null",
+    }),
+    /** el nombre tal como estaba al pedirlo; queda aunque el producto se archive */
+    descripcion: text("descripcion").notNull(),
+    cantidad: integer("cantidad").notNull().default(1),
+    precioUnitarioCentavos: bigint("precio_unitario_centavos", {
+      mode: "number",
+    }).notNull(),
+    posicion: integer("posicion").notNull().default(0),
+  },
+  (t) => [index("pedidos_items_pedido_idx").on(t.pedidoId)],
+);
+
+export type Pedido = typeof pedidos.$inferSelect;
+export type PedidoItem = typeof pedidosItems.$inferSelect;
+
 export const proveedores = pgTable(
   "proveedores",
   {

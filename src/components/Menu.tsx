@@ -56,6 +56,24 @@ function IconoDia() {
   );
 }
 
+function IconoPedidos() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5 shrink-0"
+      aria-hidden="true"
+    >
+      <path d="M5 8h14l-1 11.2a1 1 0 0 1-1 .8H7a1 1 0 0 1-1-.8Z" />
+      <path d="M9 8V6a3 3 0 0 1 6 0v2" />
+    </svg>
+  );
+}
+
 function IconoLocal() {
   return (
     <svg
@@ -193,6 +211,7 @@ const PAGINAS = [
   { href: "/compras", etiqueta: "Compras", Icono: IconoCompras },
   { href: "/stock", etiqueta: "Stock", Icono: IconoStock },
   { href: "/historial", etiqueta: "Historial", Icono: IconoHistorial },
+  { href: "/pedidos", etiqueta: "Pedidos", Icono: IconoPedidos },
   { href: "/sucursales", etiqueta: "Sucursales", Icono: IconoLocal },
 ] as const;
 
