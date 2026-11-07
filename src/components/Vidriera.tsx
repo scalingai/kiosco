@@ -105,18 +105,23 @@ export default function Vidriera({
   const [rubro, setRubro] = useState<string | null>(null);
   const [cuantos, setCuantos] = useState(TANDA);
 
-  /** Los rubros que de verdad tienen algo publicado, con cuánto hay en cada uno. */
+  /**
+   * Los rubros que de verdad tienen algo publicado, con cuánto hay en cada uno
+   * y tres fotos de muestra.
+   *
+   * Tres y no una: una sola foto hace que la categoría se lea como UN producto
+   * ("Golosinas: un alfajor"), y lo que tiene que decir es qué clase de cosas
+   * hay adentro. Son fotos de lo que de verdad se vende, no una ilustración:
+   * en un kiosco el envase es lo que el cliente reconoce de lejos.
+   */
   const rubros = useMemo(() => {
-    const cuenta = new Map<string, { total: number; foto: string | null }>();
+    const cuenta = new Map<string, { total: number; fotos: string[] }>();
     for (const p of productos) {
       if (!p.rubro) continue;
-      const previo = cuenta.get(p.rubro);
-      cuenta.set(p.rubro, {
-        total: (previo?.total ?? 0) + 1,
-        // La primera foto del rubro hace de portada: una grilla de categorías
-        // sin imagen es una lista de palabras con mucho aire al lado.
-        foto: previo?.foto ?? p.imagenUrl,
-      });
+      const previo = cuenta.get(p.rubro) ?? { total: 0, fotos: [] };
+      previo.total += 1;
+      if (p.imagenUrl && previo.fotos.length < 3) previo.fotos.push(p.imagenUrl);
+      cuenta.set(p.rubro, previo);
     }
     return [...cuenta.entries()]
       .map(([nombre, datos]) => ({ nombre, ...datos }))
@@ -235,17 +240,30 @@ export default function Vidriera({
                 key={r.nombre}
                 type="button"
                 onClick={() => elegirRubro(r.nombre)}
-                className="group relative flex aspect-[4/3] flex-col justify-end overflow-hidden rounded-2xl bg-papel-hondo p-3 text-left ring-1 ring-black/[0.06]"
+                className="group relative flex aspect-[4/3] flex-col justify-end overflow-hidden rounded-2xl bg-tarjeta p-3 text-left ring-1 ring-black/[0.06] transition-shadow hover:shadow-[0_10px_30px_-12px_rgba(0,0,0,0.25)]"
               >
-                {r.foto && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={r.foto}
-                    alt=""
-                    loading="lazy"
-                    className="absolute right-2 top-2 h-16 w-16 object-contain transition-transform duration-500 motion-safe:group-hover:scale-110 md:h-20 md:w-20"
-                  />
-                )}
+                {/* Las tres encimadas y en abanico: alineadas se leen como una
+                    fila de íconos, y en abanico se lee como un puñado. */}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-0 top-0 flex h-[62%] items-center justify-center"
+                >
+                  {r.fotos.map((foto, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={foto}
+                      src={foto}
+                      alt=""
+                      loading="lazy"
+                      className={
+                        "h-[78%] w-auto object-contain drop-shadow-sm transition-transform duration-500 " +
+                        ["-rotate-12 translate-x-3", "z-10 scale-110", "rotate-12 -translate-x-3"][i] +
+                        " motion-safe:group-hover:scale-[1.08]"
+                      }
+                    />
+                  ))}
+                </span>
+
                 <span className="relative">
                   <span className="block text-sm font-medium">{r.nombre}</span>
                   <span className="cifra block text-xs text-tinta-suave">

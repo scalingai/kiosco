@@ -27,6 +27,43 @@ export type ProductoEnVidriera = {
   imagenUrl: string | null;
 };
 
+/**
+ * Unas pocas fotos para el collage del banner.
+ *
+ * Se eligen de rubros DISTINTOS a propósito: cuatro alfajores uno al lado del
+ * otro dicen "vendemos alfajores", y lo que el banner tiene que decir es
+ * "tenemos de todo". El orden no se aleatoriza — un banner que cambia en cada
+ * recarga se ve roto, no vivo.
+ */
+export function fotosParaElBanner(
+  productos: ProductoEnVidriera[],
+  cuantas = 5,
+): ProductoEnVidriera[] {
+  const vistos = new Set<string>();
+  const elegidas: ProductoEnVidriera[] = [];
+
+  for (const p of productos) {
+    if (!p.imagenUrl) continue;
+    const rubro = p.rubro ?? "sin rubro";
+    if (vistos.has(rubro)) continue;
+    vistos.add(rubro);
+    elegidas.push(p);
+    if (elegidas.length === cuantas) break;
+  }
+
+  // Si hay menos rubros que lugares, se completa con lo que haya: un hueco en
+  // el collage se ve peor que repetir un rubro.
+  if (elegidas.length < cuantas) {
+    for (const p of productos) {
+      if (!p.imagenUrl || elegidas.includes(p)) continue;
+      elegidas.push(p);
+      if (elegidas.length === cuantas) break;
+    }
+  }
+
+  return elegidas;
+}
+
 export async function listarVidriera(): Promise<ProductoEnVidriera[]> {
   const db = await getDb();
   const padre = alias(categorias, "categoria_padre");
