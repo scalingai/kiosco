@@ -157,8 +157,6 @@ export default function Vidriera({
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  const pildora =
-    "shrink-0 rounded-full px-4 py-1.5 text-sm transition-colors";
 
   return (
     <div className="space-y-5">
@@ -194,36 +192,27 @@ export default function Vidriera({
           </button>
         </div>
 
-        {rubros.length > 0 && (
-          <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
-            <button
-              type="button"
-              onClick={() => elegirRubro(null)}
-              className={
-                pildora +
-                (rubro === null
-                  ? " bg-acento text-white"
-                  : " border border-linea bg-tarjeta text-tinta")
-              }
-            >
-              Todo
-            </button>
-            {rubros.map((r) => (
-              <button
-                key={r.nombre}
-                type="button"
-                onClick={() => elegirRubro(r.nombre)}
-                className={
-                  pildora +
-                  (rubro === r.nombre
-                    ? " bg-acento text-white"
-                    : " border border-linea bg-tarjeta text-tinta")
-                }
-              >
-                {r.nombre} <span className="cifra opacity-60">{r.total}</span>
-              </button>
-            ))}
-          </div>
+        {/*
+          La tira de píldoras con todos los rubros se sacó (pedido de Agus):
+          repetía exactamente lo que ya dice la grilla de categorías de abajo,
+          que además las muestra con foto. Dos menús para lo mismo, uno encima
+          del otro, es ruido — y en el celular se comía media pantalla antes de
+          que apareciera un solo producto.
+
+          Lo único que queda es la salida: cuando hay un rubro elegido o una
+          búsqueda hecha, el botón para volver a ver todo.
+        */}
+        {(rubro || busqueda.trim()) && (
+          <button
+            type="button"
+            onClick={() => {
+              setBusqueda("");
+              elegirRubro(null);
+            }}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-linea bg-tarjeta px-4 py-1.5 text-sm"
+          >
+            <span aria-hidden>←</span> Ver todo
+          </button>
         )}
       </div>
 
