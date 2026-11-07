@@ -6,7 +6,7 @@ import RegistrarSW from "@/components/RegistrarSW";
 import { listarCandidatos } from "@/lib/consultas";
 import { listarProveedores } from "@/lib/caja";
 import { listarParaVender, type ProductoVendible } from "@/lib/stock";
-import { pinConfigurado } from "@/lib/sesion";
+import { haySesion, pinConfigurado } from "@/lib/sesion";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -41,24 +41,39 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  // Si la base no contesta, el portón y la pantalla de sin conexión tienen que
-  // seguir dibujándose igual.
   let candidatos: { id: string; nombre: string }[] = [];
   let productos: ProductoVendible[] = [];
   let proveedores: { id: string; nombre: string }[] = [];
-  try {
-    [candidatos, productos, proveedores] = await Promise.all([
-      listarCandidatos(),
-      // El catálogo va en el layout y no en la página de ventas porque la
-      // venta se arranca desde donde sea que estés: el cliente llega al
-      // mostrador sin fijarse qué pantalla tenías abierta.
-      listarParaVender(),
-      listarProveedores(),
-    ]);
-  } catch {
-    candidatos = [];
-    productos = [];
-    proveedores = [];
+
+  /*
+   * NADA de esto se carga sin sesión, y la razón no es obvia: `/entrar` está
+   * fuera del matcher del middleware —tiene que estarlo, es el portón— pero se
+   * dibuja adentro de ESTE layout. Todo lo que se cargue acá viaja al
+   * navegador de cualquiera que abra la pantalla de login.
+   *
+   * Y lo que viaja no es poco: los nombres de los clientes, los proveedores, y
+   * el catálogo con el COSTO de cada producto. El costo es lo más sensible que
+   * tiene la app —es a cuánto compra, o sea cuánto gana— y kiosco.naviacloud.com
+   * está en internet. El middleware no alcanza para esto porque el layout corre
+   * igual; el único lugar donde se puede preguntar es acá.
+   */
+  if (await haySesion()) {
+    try {
+      [candidatos, productos, proveedores] = await Promise.all([
+        listarCandidatos(),
+        // El catálogo va en el layout y no en la página de ventas porque la
+        // venta se arranca desde donde sea que estés: el cliente llega al
+        // mostrador sin fijarse qué pantalla tenías abierta.
+        listarParaVender(),
+        listarProveedores(),
+      ]);
+    } catch {
+      // Si la base no contesta, el portón y la pantalla de sin conexión tienen
+      // que seguir dibujándose igual.
+      candidatos = [];
+      productos = [];
+      proveedores = [];
+    }
   }
 
   return (

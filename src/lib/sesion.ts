@@ -65,6 +65,27 @@ export async function tokenValido(
 }
 
 /**
+ * Si quien está mirando ya pasó el portón.
+ *
+ * El middleware protege las páginas, pero NO el layout: `/entrar` está fuera de
+ * su matcher —tiene que estarlo, es el portón— y aun así se dibuja adentro del
+ * layout raíz. Todo lo que el layout cargue viaja al navegador de cualquiera
+ * que abra la pantalla de login, sin PIN.
+ *
+ * Por eso esto existe y se usa ahí: es el único lugar donde el layout puede
+ * preguntar lo que el middleware ya sabe.
+ */
+export async function haySesion(): Promise<boolean> {
+  const pin = pinConfigurado();
+  // Sin PIN configurado no hay portón que pasar: la app es abierta a propósito
+  // (es la instalación de alguien que todavía no le puso clave).
+  if (!pin) return true;
+  const { cookies } = await import("next/headers");
+  const token = (await cookies()).get(COOKIE_SESION)?.value;
+  return tokenValido(token, pin);
+}
+
+/**
  * A dónde mandar después de entrar. Sólo rutas internas: sin esto, un link con
  * `?volver=https://otra-cosa` convierte el login en un redirector abierto.
  */
