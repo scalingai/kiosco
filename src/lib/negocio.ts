@@ -356,19 +356,15 @@ export const MARGEN_SUGERIDO_MILESIMAS = Math.round(
 const PASO = 10_000; // $100 en centavos
 
 /**
- * Deja el precio en un número que se pueda cobrar: el múltiplo de $100 más
- * cercano. $480 y $510 son los dos $500; $4.357 es $4.400.
- *
- * Va al MÁS CERCANO y no para arriba —regla de Agus, 2026-09-08—. Forzar para
- * arriba defendía el margen al centavo pero empujaba $510 a $600, que es 18%
- * más caro por nada: en la góndola el precio lo termina fijando lo que cobra
- * el de la otra cuadra, no la calculadora.
+ * Desde $10 sobre una centena, sube a la siguiente: $509 queda en $500 y
+ * $510 sube a $600. Regla actualizada el 2026-09-12.
  *
  * Nunca devuelve cero: algo que vale $30 se sugiere a $100, no a nada.
  */
 export function redondearPrecio(centavos: number): number {
   if (centavos <= 0) return 0;
-  return Math.max(PASO, Math.round(centavos / PASO) * PASO);
+  const base = Math.floor(centavos / PASO) * PASO;
+  return Math.max(PASO, base + (centavos - base >= 1_000 ? PASO : 0));
 }
 
 /**

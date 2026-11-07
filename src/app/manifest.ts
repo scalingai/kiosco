@@ -13,7 +13,8 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     scope: "/",
     display: "standalone",
-    orientation: "portrait",
+    // Permite girar la app instalada; el diseño responde a la orientación.
+    orientation: "any",
     background_color: "#faf7f0",
     theme_color: "#faf7f0",
     lang: "es-AR",

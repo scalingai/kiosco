@@ -387,13 +387,17 @@ export default function Menu({
       {/* Pantalla grande: la columna vive siempre, no se despliega. */}
       {/* Pantalla grande: la columna vive siempre sobre la lava del marco, sin
           fondo propio — el verde que se ve es el del layout, y por eso el humo
-          sigue de largo por detrás del menú sin cortarse. */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-56 lg:block">
+          sigue de largo por detrás del menú sin cortarse.
+
+          El corte es "escritorio" y no "lg": eso viene de main y es mejor que
+          lo que yo tenía. Una tablet acostada muestra la planilla y parada
+          muestra la navegación del celular, que es como se usa de verdad. */}
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-56 escritorio:block">
         {panel}
       </aside>
 
       {/* Celular: arriba queda un solo botón, y todo lo demás sale de ahí. */}
-      <header className="fixed inset-x-0 top-0 z-40 flex h-14 items-center gap-2 px-3 text-white lg:hidden">
+      <header className="fixed inset-x-0 top-0 z-40 flex h-14 items-center gap-2 px-3 text-white escritorio:hidden">
         <button
           type="button"
           onClick={() => setAbierto(true)}
@@ -446,7 +450,7 @@ export default function Menu({
       </header>
 
       {abierto && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-50 escritorio:hidden">
           <button
             type="button"
             aria-label="Cerrar el menú"

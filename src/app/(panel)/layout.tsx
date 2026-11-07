@@ -79,14 +79,18 @@ export default async function PanelLayout({
         transparentes sobre la lava, así que el contenido se corre para
         dejarles el lugar en vez de taparlos.
       */}
-      <div className="relative z-10 lg:pl-56">
+      {/* El corrimiento usa el MISMO corte que el menú (`escritorio`, que
+          viene de main). Con `lg` acá y `escritorio` allá, una tablet acostada
+          mostraba la columna encima del contenido: el menú aparecía a los
+          768px y el contenido recién se corría a los 1024. */}
+      <div className="relative z-10 escritorio:pl-56">
         {/*
           La hoja de trabajo. Arranca debajo de la barra en el celular y al
           costado del menú en escritorio, con el filete verde alrededor: ese
           respiro es lo único que hace leer el contenido como una tarjeta
           apoyada sobre la marca y no como una página pintada de verde.
         */}
-        <div className="mt-14 min-h-[calc(100dvh-3.5rem)] rounded-t-3xl bg-papel shadow-xl lg:mb-2 lg:mr-2 lg:mt-2 lg:min-h-[calc(100dvh-1rem)] lg:rounded-3xl">
+        <div className="mt-14 min-h-[calc(100dvh-3.5rem)] rounded-t-3xl bg-papel shadow-xl escritorio:mb-2 escritorio:mr-2 escritorio:mt-2 escritorio:min-h-[calc(100dvh-1rem)] escritorio:rounded-3xl">
           {/*
             Antes esto estaba capado en 5xl (1024px) y las planillas no
             entraban: con el menú al costado sobraba pantalla y la tabla igual

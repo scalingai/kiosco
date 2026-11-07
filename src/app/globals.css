@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Tablet: planilla al acostarla, navegación móvil al ponerla vertical. */
+@custom-variant escritorio {
+  @media (min-width: 1280px), (min-width: 768px) and (orientation: landscape) {
+    @slot;
+  }
+}
+
 @theme {
   /*
    * La paleta del panel de AppGenda (Material 3), para que el kiosco y la

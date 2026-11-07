@@ -1,8 +1,8 @@
 import "server-only";
 
-import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gte, inArray, isNull, lte } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { compras, comprasItems, proveedores } from "@/db/schema";
+import { compras, comprasItems, productos, proveedores } from "@/db/schema";
 import {
   costoDeReferencia,
   ETIQUETA_MEDIO,
@@ -31,6 +31,8 @@ export type RenglonDelHistorial = {
   importeCentavos: number | null;
   costoCentavos: number | null;
   porCada: string | null;
+  precioVentaCentavos: number | null;
+  multiplicadorMilesimas: number | null;
 };
 
 export type CompraDelHistorial = {
@@ -111,8 +113,9 @@ export async function historialDeCompras(
 
   // Los renglones de todas las compras en una sola consulta, no una por compra.
   const sueltos = await db
-    .select()
+    .select({ ...getTableColumns(comprasItems), precioVentaCentavos: productos.precioVentaCentavos, multiplicadorMilesimas: productos.multiplicadorMilesimas })
     .from(comprasItems)
+    .leftJoin(productos, eq(comprasItems.productoId, productos.id))
     .where(
       inArray(
         comprasItems.compraId,
@@ -135,6 +138,8 @@ export async function historialDeCompras(
       importeCentavos: r.importeCentavos,
       costoCentavos: costo?.centavos ?? null,
       porCada: costo?.porCada ?? null,
+      precioVentaCentavos: r.precioVentaCentavos,
+      multiplicadorMilesimas: r.multiplicadorMilesimas,
     });
     porCompra.set(r.compraId, lista);
   }
