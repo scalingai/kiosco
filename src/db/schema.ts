@@ -651,6 +651,21 @@ export const productos = pgTable(
      * casi nada: un solo número para todo el kiosco no existe.
      */
     multiplicadorMilesimas: integer("multiplicador_milesimas"),
+    /**
+     * Cuánto más sale pagándolo con algo que no sea efectivo, en milésimas:
+     * 1100 es un 10% arriba. En null no tiene recargo, que es lo normal.
+     *
+     * Existe porque hay cosas —el cigarrillo es el caso— que se venden con un
+     * margen tan finito que la comisión de la tarjeta se come la ganancia
+     * entera. El kiosco lo resuelve con dos precios, y la app tenía uno solo:
+     * cobrando el de efectivo con tarjeta se pierde plata en cada venta, y
+     * cobrando el de tarjeta en efectivo se cobra de más.
+     *
+     * Va en el producto y no como un número global porque es de unos pocos:
+     * aplicárselo a todo sería cobrarle un recargo a la gaseosa que no lo
+     * tiene.
+     */
+    recargoMilesimas: integer("recargo_milesimas"),
     /** marcado a mano cuando se ve el hueco en la góndola */
     falta: boolean("falta").notNull().default(false),
     archivadoEn: timestamp("archivado_en", { withTimezone: true }),

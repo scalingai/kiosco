@@ -268,6 +268,7 @@ export default function TablaStock({
               precioVentaCentavos={editando.precioVentaCentavos}
               sugeridoCentavos={editando.sugeridoCentavos}
               multiplicadorMilesimas={editando.multiplicadorMilesimas}
+              recargoMilesimas={editando.recargoMilesimas}
               costoRealCentavos={editando.costoRealCentavos}
               categoriaId={editando.categoriaId}
               envase={editando.envase}

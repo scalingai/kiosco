@@ -14,6 +14,7 @@ import RepartoDePago, {
 import {
   agregar,
   cambiarCantidad,
+  conRecargo,
   gananciaDelCarrito,
   sacar,
   totalDelCarrito,
@@ -28,6 +29,40 @@ import type { ProductoVendible } from "@/lib/stock";
 
 /** Cuántas sugerencias se dibujan mientras se escribe. */
 const MAXIMO = 8;
+
+/**
+ * La foto del envase, o un cuadrito con la inicial.
+ *
+ * El hueco se dibuja SIEMPRE, con foto o sin ella: si apareciera sólo cuando
+ * hay imagen, las filas se correrían de a una y la lista dejaría de ser una
+ * columna que se puede barrer con la vista, que es justo para lo que sirve.
+ *
+ * Va con `<img>` y no con el `<Image>` de Next porque son URLs de la CDN del
+ * supermercado de donde salió cada producto: optimizarlas obligaría a declarar
+ * esos dominios y a proxear fotos ajenas por nuestro servidor.
+ */
+function Miniatura({
+  producto,
+}: {
+  producto: { nombre: string; imagenUrl?: string | null };
+}) {
+  if (!producto.imagenUrl) {
+    return (
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-papel-hondo text-sm font-medium text-tinta-suave">
+        {producto.nombre.trim().charAt(0).toUpperCase() || "?"}
+      </span>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={producto.imagenUrl}
+      alt=""
+      loading="lazy"
+      className="h-10 w-10 shrink-0 rounded-lg bg-white object-contain"
+    />
+  );
+}
 
 /**
  * El mostrador: cobrar una venta producto por producto.
@@ -71,6 +106,16 @@ export default function Mostrador({
    * que sigue al producto aunque se muevan las filas.
    */
   const [precios, setPrecios] = useState<Record<string, string>>({});
+  /*
+   * Si esta venta se cobra con algo que no es efectivo. Es UNA decisión para
+   * todo el carrito y no una por renglón, porque así se pregunta en el
+   * mostrador: "¿efectivo o tarjeta?" antes de cantar el total.
+   *
+   * No sale del reparto de medios de abajo: ese se completa DESPUÉS de decir
+   * el precio, y si el recargo dependiera de él, el total cambiaría mientras
+   * el cliente ya está pagando.
+   */
+  const [conTarjeta, setConTarjeta] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const campo = useRef<HTMLInputElement>(null);
@@ -121,11 +166,23 @@ export default function Mostrador({
       agregar(previo, {
         productoId: producto.id,
         descripcion: producto.nombre,
+        imagenUrl: producto.imagenUrl,
+        precioBaseCentavos: producto.precioVentaCentavos ?? 0,
+        recargoMilesimas: producto.recargoMilesimas,
         cantidad: 1,
         // Sin precio cargado entra en cero y la fila pide el número. Frenar la
         // venta porque falta un precio sería dejar de cobrar por un dato que se
         // puede poner en el momento.
-        precioUnitarioCentavos: producto.precioVentaCentavos ?? 0,
+        //
+        // Si ya se eligió "con tarjeta", el producto entra con el recargo
+        // puesto: sumarlo recién al final haría que el precio que se le cantó
+        // al cliente no sea el que termina pagando.
+        precioUnitarioCentavos: conTarjeta
+          ? conRecargo(
+              producto.precioVentaCentavos ?? 0,
+              producto.recargoMilesimas,
+            )
+          : (producto.precioVentaCentavos ?? 0),
         costoUnitarioCentavos: producto.costoRealCentavos,
       }),
     );
@@ -176,6 +233,39 @@ export default function Mostrador({
       `No encontré "${texto}". Si es un precio suelto, escribí sólo el número.`,
     );
   }
+
+  /**
+   * Cambia la forma de pago y vuelve a poner los precios de todo el carrito.
+   *
+   * Se reescribe `precioUnitarioCentavos` en vez de calcularlo al mostrar
+   * porque ESE es el número que se guarda: la venta tiene que quedar diciendo
+   * lo que de verdad se cobró, no el precio de lista más una regla que hay que
+   * volver a aplicar para entenderla.
+   */
+  function cambiarFormaDePago(tarjeta: boolean) {
+    setConTarjeta(tarjeta);
+    setRenglones((previo) =>
+      previo.map((r) => {
+        // El monto suelto y el precio puesto a mano no tienen lista: lo que se
+        // tecleó es lo que se cobra, con tarjeta o sin ella.
+        if (r.precioBaseCentavos == null) return r;
+        return {
+          ...r,
+          precioUnitarioCentavos: tarjeta
+            ? conRecargo(r.precioBaseCentavos, r.recargoMilesimas)
+            : r.precioBaseCentavos,
+        };
+      }),
+    );
+  }
+
+  /** Cuántos renglones del carrito cambian de precio con la tarjeta. */
+  const conRecargoEncima = renglones.filter(
+    (r) =>
+      r.precioBaseCentavos != null &&
+      conRecargo(r.precioBaseCentavos, r.recargoMilesimas) >
+        r.precioBaseCentavos,
+  ).length;
 
   /** La identidad de un renglón: la misma con la que el carrito deduplica. */
   function llaveDe(renglon: RenglonCarrito): string {
@@ -281,6 +371,7 @@ export default function Mostrador({
     setPrecios({});
     setMontos(montosVacios());
     setBusqueda("");
+    setConTarjeta(false);
     setCliente("");
     setClienteId(null);
     setTelefono("");
@@ -309,9 +400,10 @@ export default function Mostrador({
               <button
                 type="button"
                 onClick={() => meter(p)}
-                className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm hover:bg-papel-hondo"
+                className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm hover:bg-papel-hondo"
               >
-                <span className="min-w-0">
+                <Miniatura producto={p} />
+                <span className="min-w-0 flex-1">
                   <span className="block truncate">{p.nombre}</span>
                   {p.marca && (
                     <span className="block truncate text-xs text-tinta-suave">
@@ -391,8 +483,14 @@ export default function Mostrador({
         {renglones.map((renglon, i) => (
           <li
             key={llaveDe(renglon)}
-            className="flex items-center gap-2 px-3 py-2.5"
+            className="flex items-center gap-2.5 px-3 py-2.5"
           >
+            <Miniatura
+              producto={{
+                nombre: renglon.descripcion,
+                imagenUrl: renglon.imagenUrl,
+              }}
+            />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm">
                 {renglon.descripcion}
@@ -484,6 +582,41 @@ export default function Mostrador({
 
         {renglones.length > 0 && (
           <>
+            {/* Sólo cuando hay algo que cambie de precio: un interruptor que
+                no mueve ningún número es una pregunta de más en cada venta. */}
+            {conRecargoEncima > 0 && (
+              <div className="rounded-xl border border-linea bg-tarjeta p-2">
+                <div className="flex gap-1">
+                  {[
+                    { tarjeta: false, texto: "Efectivo" },
+                    { tarjeta: true, texto: "Tarjeta o transferencia" },
+                  ].map((opcion) => (
+                    <button
+                      key={opcion.texto}
+                      type="button"
+                      aria-pressed={conTarjeta === opcion.tarjeta}
+                      onClick={() => cambiarFormaDePago(opcion.tarjeta)}
+                      className={
+                        "flex-1 rounded-lg px-3 py-2 text-sm transition-colors " +
+                        (conTarjeta === opcion.tarjeta
+                          ? "bg-acento text-white"
+                          : "text-tinta hover:bg-papel-hondo")
+                      }
+                    >
+                      {opcion.texto}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 px-1 text-xs text-tinta-suave">
+                  {conRecargoEncima === 1
+                    ? "1 producto de este carrito"
+                    : `${conRecargoEncima} productos de este carrito`}{" "}
+                  {conRecargoEncima === 1 ? "tiene" : "tienen"} recargo con
+                  tarjeta.
+                </p>
+              </div>
+            )}
+
             <div className="rounded-xl bg-papel-hondo px-4 py-3">
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-sm text-tinta-suave">

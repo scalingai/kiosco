@@ -125,12 +125,16 @@ export type ProductoVendible = {
   nombre: string;
   marca: string | null;
   codigoBarras: string | null;
+  /** la foto del envase; es lo que se reconoce de un vistazo */
+  imagenUrl: string | null;
   /** null si nadie le puso precio todavía; se pide al vender */
   precioVentaCentavos: number | null;
   /** null si el producto nunca se compró por la app */
   costoRealCentavos: number | null;
   /** el multiplicador propio; lo necesita el formulario de compra */
   multiplicadorMilesimas: number | null;
+  /** cuánto más sale con tarjeta; null es sin recargo */
+  recargoMilesimas: number | null;
 };
 
 export async function listarParaVender(): Promise<ProductoVendible[]> {
@@ -140,9 +144,11 @@ export async function listarParaVender(): Promise<ProductoVendible[]> {
     nombre: f.nombre,
     marca: f.marca,
     codigoBarras: f.codigoBarras,
+    imagenUrl: f.imagenUrl,
     precioVentaCentavos: f.precioVentaCentavos,
     costoRealCentavos: f.costoRealCentavos,
     multiplicadorMilesimas: f.multiplicadorMilesimas,
+    recargoMilesimas: f.recargoMilesimas,
   }));
 }
 
@@ -178,6 +184,8 @@ export type FilaStock = {
   precioVentaCentavos: number | null;
   /** el multiplicador propio de este producto; null = usa el general */
   multiplicadorMilesimas: number | null;
+  /** cuánto más sale pagándolo con tarjeta; null = sin recargo */
+  recargoMilesimas: number | null;
   /** a cuánto habría que venderlo con SU multiplicador, ya redondeado */
   sugeridoCentavos: number | null;
   /** el margen que sale de verdad; sólo existe si hay precio de venta */
@@ -218,6 +226,7 @@ export async function listarStock(): Promise<FilaStock[]> {
         contenidoUnidad: productos.contenidoUnidad,
         precioVentaCentavos: productos.precioVentaCentavos,
         multiplicadorMilesimas: productos.multiplicadorMilesimas,
+        recargoMilesimas: productos.recargoMilesimas,
       })
       .from(productos)
       .leftJoin(proveedores, eq(proveedores.id, productos.proveedorId))
@@ -281,6 +290,7 @@ export async function listarStock(): Promise<FilaStock[]> {
       costoRealCentavos: costoReal,
       precioVentaCentavos: producto.precioVentaCentavos,
       multiplicadorMilesimas: producto.multiplicadorMilesimas,
+      recargoMilesimas: producto.recargoMilesimas,
       sugeridoCentavos:
         costoReal != null
           ? precioSugerido(costoReal, producto.multiplicadorMilesimas)
@@ -428,6 +438,8 @@ export type FichaProducto = {
   precioVentaCentavos?: number | null;
   /** el multiplicador propio; `null` lo devuelve al general */
   multiplicadorMilesimas?: number | null;
+  /** el recargo con tarjeta; `null` lo deja sin recargo */
+  recargoMilesimas?: number | null;
   /** la subcategoría; `null` lo deja sin rubro */
   categoriaId?: string | null;
   envase?: Envase | null;
@@ -452,6 +464,7 @@ export async function actualizarProducto(id: string, ficha: FichaProducto) {
     contenidoUnidad?: Unidad | null;
     precioVentaCentavos?: number | null;
     multiplicadorMilesimas?: number | null;
+    recargoMilesimas?: number | null;
     categoriaId?: string | null;
     envase?: Envase | null;
     codigoBarras?: string | null;
@@ -500,6 +513,16 @@ export async function actualizarProducto(id: string, ficha: FichaProducto) {
       throw new Error("El multiplicador tiene que estar entre 1 y 10");
     }
     cambios.multiplicadorMilesimas = m;
+  }
+
+  if (ficha.recargoMilesimas !== undefined) {
+    const r = ficha.recargoMilesimas;
+    // Abajo de 1000 sería un descuento, no un recargo, y arriba de 2000 es
+    // cobrar el doble: las dos son un tipeo, no una decisión.
+    if (r != null && (r < 1000 || r > 2000)) {
+      throw new Error("El recargo con tarjeta tiene que estar entre 0% y 100%");
+    }
+    cambios.recargoMilesimas = r;
   }
 
   if (ficha.categoriaId !== undefined) {

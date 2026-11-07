@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { editarProducto } from "@/app/acciones";
+import { conRecargo } from "@/lib/carrito";
 import SelectorNombre from "@/components/SelectorNombre";
 import {
   ETIQUETA_UNIDAD,
@@ -44,6 +45,7 @@ export default function FichaProducto({
   precioVentaCentavos,
   sugeridoCentavos,
   multiplicadorMilesimas,
+  recargoMilesimas,
   costoRealCentavos,
   categoriaId,
   envase,
@@ -61,6 +63,8 @@ export default function FichaProducto({
   sugeridoCentavos: number | null;
   /** el multiplicador propio de este producto; null = usa el general */
   multiplicadorMilesimas: number | null;
+  /** cuánto más sale con tarjeta; null = sin recargo */
+  recargoMilesimas: number | null;
   /** el costo con IVA de una unidad, para recalcular mientras se escribe */
   costoRealCentavos: number | null;
   categoriaId: string | null;
@@ -83,6 +87,11 @@ export default function FichaProducto({
   const [multiplicador, setMultiplicador] = useState(
     multiplicadorMilesimas != null
       ? String(multiplicadorMilesimas / MILESIMAS).replace(".", ",")
+      : "",
+  );
+  const [recargo, setRecargo] = useState(
+    recargoMilesimas != null
+      ? String(Math.round((recargoMilesimas / MILESIMAS - 1) * 100))
       : "",
   );
   const [rubro, setRubro] = useState(categoriaId ?? "");
@@ -128,6 +137,19 @@ export default function FichaProducto({
       milesimas = Math.round(numero * MILESIMAS);
     }
 
+    let recargoEnMilesimas: number | null = null;
+    if (recargo.trim()) {
+      const porciento = Number(recargo.trim().replace(",", "."));
+      if (!Number.isFinite(porciento) || porciento < 0 || porciento > 100) {
+        setError("El recargo con tarjeta va entre 0 y 100. Ej: 10");
+        return;
+      }
+      // Cero no es un recargo: es no tener. Se guarda null para que sea una
+      // sola cosa en la base y no dos que significan lo mismo.
+      recargoEnMilesimas =
+        porciento > 0 ? Math.round(MILESIMAS * (1 + porciento / 100)) : null;
+    }
+
     empezar(async () => {
       const resultado = await editarProducto(id, {
         nombre: nuevoNombre,
@@ -136,6 +158,7 @@ export default function FichaProducto({
         contenidoUnidad: valor ? unidad : null,
         precioVentaCentavos: venta,
         multiplicadorMilesimas: milesimas,
+        recargoMilesimas: recargoEnMilesimas,
         categoriaId: rubro || null,
         envase: envasado || null,
         codigoBarras: codigo.trim() || null,
@@ -273,6 +296,51 @@ export default function FichaProducto({
             {/* Sin este dato la app sólo puede sugerir; con él dice el margen
                 que estás sacando de verdad. */}
             Poniéndolo, la app te dice el margen real en vez de uno sugerido.
+          </span>
+        </label>
+
+        {/*
+          El recargo con tarjeta. Está acá, pegado al precio, porque es el
+          SEGUNDO precio del producto: el cigarrillo tiene un margen tan finito
+          que la comisión se come la ganancia, y el kiosco lo resuelve cobrando
+          distinto según cómo se pague.
+        */}
+        <label className="block">
+          <span className="text-xs text-tinta-suave">Recargo con tarjeta</span>
+          <span className="mt-1 flex items-center gap-1.5">
+            <input
+              value={recargo}
+              inputMode="decimal"
+              placeholder="0"
+              onChange={(e) => setRecargo(e.target.value)}
+              className="cifra w-20 rounded-lg border border-linea bg-white px-3 py-2 text-sm"
+            />
+            <span className="text-sm text-tinta-suave">%</span>
+          </span>
+          <span className="mt-1 block text-xs text-tinta-suave">
+            {recargo.trim() && Number(recargo.replace(",", ".")) > 0 ? (
+              precioVentaCentavos != null ? (
+                <>
+                  Con tarjeta sale{" "}
+                  <span className="cifra">
+                    {formatearCentavos(
+                      conRecargo(
+                        precioVentaCentavos,
+                        Math.round(
+                          MILESIMAS *
+                            (1 + Number(recargo.replace(",", ".")) / 100),
+                        ),
+                      ),
+                    )}
+                  </span>
+                  .
+                </>
+              ) : (
+                "Se aplica cuando no se paga en efectivo."
+              )
+            ) : (
+              "Vacío: se cobra lo mismo con cualquier medio."
+            )}
           </span>
         </label>
 

@@ -11,10 +11,48 @@
  * actualizar una lista de precios reescribiría la historia.
  */
 
+/** El recargo neutro: 1000 milésimas es "por uno", o sea sin recargo. */
+export const SIN_RECARGO = 1000;
+
+/**
+ * El precio con el recargo de no-efectivo aplicado, redondeado a peso entero.
+ *
+ * Se redondea porque un recargo del 10% sobre $4.350 da $4.785, y nadie cobra
+ * centavos: dejarlo sin redondear mete fracciones en el vuelto de una venta de
+ * mostrador.
+ */
+export function conRecargo(
+  precioCentavos: number,
+  recargoMilesimas: number | null | undefined,
+): number {
+  if (!recargoMilesimas || recargoMilesimas <= SIN_RECARGO) {
+    return precioCentavos;
+  }
+  const conRecargoExacto = (precioCentavos * recargoMilesimas) / SIN_RECARGO;
+  return Math.round(conRecargoExacto / 100) * 100;
+}
+
 export type RenglonCarrito = {
   /** null cuando se vendió algo que no está en el catálogo */
   productoId: string | null;
   descripcion: string;
+  /**
+   * La foto, sólo para dibujar. NO se guarda con la venta: es del producto y
+   * ya vive en su ficha, así que copiarla acá sería tener la misma URL en dos
+   * lugares para que el día que cambie queden distintas.
+   */
+  imagenUrl?: string | null;
+  /**
+   * El precio de lista en efectivo, y cuánto más sale con tarjeta. Los dos son
+   * sólo para la pantalla: lo que se guarda es `precioUnitarioCentavos`, que
+   * ya tiene el recargo adentro si correspondía.
+   *
+   * El base se conserva para poder volver atrás exacto al cambiar de forma de
+   * pago: recalcularlo dividiendo el precio con recargo perdería los pesos que
+   * se redondearon al aplicarlo.
+   */
+  precioBaseCentavos?: number;
+  recargoMilesimas?: number | null;
   cantidad: number;
   precioUnitarioCentavos: number;
   /** lo que costaba esa unidad; null si el producto nunca se compró por la app */
