@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ingresar } from "@/app/entrar/acciones";
+import { ingresar } from "@/app/(panel)/entrar/acciones";
 
 export default function FormPin({ destino }: { destino: string }) {
   const router = useRouter();

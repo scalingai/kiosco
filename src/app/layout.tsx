@@ -1,12 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
-import AccionesFlotantes from "@/components/AccionesFlotantes";
-import FondoMarca, { VERDE_MARCA } from "@/components/Lava";
-import RegistrarSW from "@/components/RegistrarSW";
-import { listarCandidatos } from "@/lib/consultas";
-import { listarProveedores } from "@/lib/caja";
-import { listarParaVender, type ProductoVendible } from "@/lib/stock";
-import { haySesion, pinConfigurado } from "@/lib/sesion";
+import { VERDE_MARCA } from "@/components/Lava";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -40,92 +34,28 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default async function RootLayout({ children }: LayoutProps<"/">) {
-  let candidatos: { id: string; nombre: string }[] = [];
-  let productos: ProductoVendible[] = [];
-  let proveedores: { id: string; nombre: string }[] = [];
-
-  /*
-   * NADA de esto se carga sin sesión, y la razón no es obvia: `/entrar` está
-   * fuera del matcher del middleware —tiene que estarlo, es el portón— pero se
-   * dibuja adentro de ESTE layout. Todo lo que se cargue acá viaja al
-   * navegador de cualquiera que abra la pantalla de login.
-   *
-   * Y lo que viaja no es poco: los nombres de los clientes, los proveedores, y
-   * el catálogo con el COSTO de cada producto. El costo es lo más sensible que
-   * tiene la app —es a cuánto compra, o sea cuánto gana— y kiosco.naviacloud.com
-   * está en internet. El middleware no alcanza para esto porque el layout corre
-   * igual; el único lugar donde se puede preguntar es acá.
-   */
-  if (await haySesion()) {
-    try {
-      [candidatos, productos, proveedores] = await Promise.all([
-        listarCandidatos(),
-        // El catálogo va en el layout y no en la página de ventas porque la
-        // venta se arranca desde donde sea que estés: el cliente llega al
-        // mostrador sin fijarse qué pantalla tenías abierta.
-        listarParaVender(),
-        listarProveedores(),
-      ]);
-    } catch {
-      // Si la base no contesta, el portón y la pantalla de sin conexión tienen
-      // que seguir dibujándose igual.
-      candidatos = [];
-      productos = [];
-      proveedores = [];
-    }
-  }
-
+/**
+ * El layout raíz: sólo las fuentes y el documento.
+ *
+ * Quedó vacío a propósito. Hay DOS cosas distintas colgando de acá y antes
+ * compartían todo:
+ *
+ *  - `(panel)`, la app del kiosquero: menú, lava de fondo, y la carga del
+ *    catálogo con costos, proveedores y clientes.
+ *  - `tienda`, la vidriera pública: la mira un cliente desde la calle.
+ *
+ * Con un solo layout, la tienda salía con el menú de la app encima y —peor—
+ * cargaba los datos del panel para cualquiera que abriera el link. El armazón
+ * del panel vive ahora en `(panel)/layout.tsx`, que es el único lugar donde se
+ * carga algo, y detrás del PIN.
+ */
+export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="es-AR"
       className={`${geistSans.variable} ${geistMono.variable} ${serif.variable} h-full antialiased`}
     >
-      <body className="min-h-full">
-        {/*
-          El marco de marca: el verde con la lava, anclado a la PANTALLA y no al
-          documento. Fijo a propósito — al scrollear, el humo se queda quieto y
-          lo que se mueve es la hoja de trabajo, que es lo que da la sensación
-          de tarjeta apoyada encima en vez de fondo pegado al contenido.
-        */}
-        <div className="fixed inset-0 z-0">
-          <FondoMarca />
-        </div>
-
-        {/*
-          El menú es fijo: una columna a la izquierda en pantalla grande y una
-          barra con un solo botón arriba en el celular. Los dos van
-          transparentes sobre la lava, así que el contenido se corre para
-          dejarles el lugar en vez de taparlos.
-        */}
-        <div className="relative z-10 lg:pl-56">
-          {/*
-            La hoja de trabajo. Arranca debajo de la barra en el celular y al
-            costado del menú en escritorio, con el filete verde alrededor: ese
-            respiro es lo único que hace leer el contenido como una tarjeta
-            apoyada sobre la marca y no como una página pintada de verde.
-          */}
-          <div className="min-h-[calc(100dvh-3.5rem)] rounded-t-3xl bg-papel shadow-xl mt-14 lg:mb-2 lg:mr-2 lg:mt-2 lg:min-h-[calc(100dvh-1rem)] lg:rounded-3xl">
-            {/*
-              Antes esto estaba capado en 5xl (1024px) y las planillas no
-              entraban: con el menú al costado sobraba pantalla y la tabla igual
-              scrolleaba. 7xl usa lo que hay sin volver ilegibles las pantallas
-              de lectura.
-            */}
-            <main className="mx-auto w-full max-w-7xl px-4 pb-24 pt-6 sm:px-6 lg:px-8">
-              {children}
-            </main>
-          </div>
-        </div>
-
-        <AccionesFlotantes
-          clientes={candidatos}
-          conSalir={Boolean(pinConfigurado())}
-          productos={productos}
-          proveedores={proveedores}
-        />
-        <RegistrarSW />
-      </body>
+      <body className="min-h-full">{children}</body>
     </html>
   );
 }

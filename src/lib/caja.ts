@@ -24,11 +24,13 @@ import {
   movimientos,
   productos,
   proveedores,
+  sucursales,
   ventas,
   ventasItems,
   ventasPagos,
 } from "@/db/schema";
 import { totalDelCarrito } from "@/lib/carrito";
+import { consultarOrden, estaPagada } from "@/lib/mercadopago";
 import { buscarOCrearClienteConTelefono } from "@/lib/consultas";
 import {
   costoDeReferencia,
@@ -156,6 +158,11 @@ export async function registrarVenta(entrada: VentaAGuardar) {
         montoCentavos,
         totalDeclarado,
         clienteId,
+        sucursalId: entrada.sucursalId ?? null,
+        // Esperando el QR: la venta queda anotada pero NO toca la caja hasta
+        // que Mercado Pago avise que pagaron. Misma regla que una compra
+        // impaga — la plata todavía no se movió.
+        pendienteEn: entrada.pendiente ? new Date() : null,
         nota: entrada.nota?.trim() || null,
         fecha: validarFecha(entrada.fecha),
         medio: entrada.medio,
@@ -193,6 +200,63 @@ export async function registrarVenta(entrada: VentaAGuardar) {
 
     return fila;
   });
+}
+
+/** Guarda en la venta la orden de Mercado Pago que está esperando cobrar. */
+export async function anotarOrdenDeQr(ventaId: string, ordenId: string) {
+  if (!UUID.test(ventaId)) return;
+  const db = await getDb();
+  await db
+    .update(ventas)
+    .set({ mpOrderId: ordenId })
+    .where(eq(ventas.id, ventaId));
+}
+
+/**
+ * Da por cobrada la venta que estaba esperando ese QR.
+ *
+ * NO alcanza con que nos avisen: antes de tocar nada se le pregunta a Mercado
+ * Pago, con el token de esa sucursal, cómo quedó la orden. El aviso sólo dice
+ * "andá a mirar"; lo que se cree es lo que contesta la API. Marcar una venta
+ * como cobrada es decir que entró plata, y eso no se hace por un mensaje que
+ * llegó de afuera.
+ *
+ * Es idempotente a propósito: Mercado Pago reintenta los avisos, y confirmar
+ * dos veces la misma venta tiene que ser igual que confirmarla una.
+ */
+export async function confirmarCobroQr(ordenId: string): Promise<boolean> {
+  const db = await getDb();
+
+  const [venta] = await db
+    .select({
+      id: ventas.id,
+      pendienteEn: ventas.pendienteEn,
+      sucursalId: ventas.sucursalId,
+    })
+    .from(ventas)
+    .where(and(eq(ventas.mpOrderId, ordenId), isNull(ventas.anuladoEn)))
+    .limit(1);
+
+  if (!venta) return false;
+  // Ya estaba cobrada: el reintento no tiene nada que hacer.
+  if (!venta.pendienteEn) return true;
+  if (!venta.sucursalId) return false;
+
+  const [sucursal] = await db
+    .select()
+    .from(sucursales)
+    .where(eq(sucursales.id, venta.sucursalId))
+    .limit(1);
+  if (!sucursal) return false;
+
+  const estado = await consultarOrden(sucursal, ordenId);
+  if (!estado || !estaPagada(estado.estado, estado.detalle)) return false;
+
+  await db
+    .update(ventas)
+    .set({ pendienteEn: null })
+    .where(eq(ventas.id, venta.id));
+  return true;
 }
 
 export async function registrarGasto(entrada: GastoAGuardar) {
@@ -544,7 +608,15 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
           medio: ventas.medio,
         })
         .from(ventas)
-        .where(and(eq(ventas.fecha, fecha), isNull(ventas.anuladoEn)))
+        // Las que esperan el QR no son plata todavía: cuentan recién
+        // cuando Mercado Pago confirma. Misma regla que una compra impaga.
+        .where(
+          and(
+            eq(ventas.fecha, fecha),
+            isNull(ventas.anuladoEn),
+            isNull(ventas.pendienteEn),
+          ),
+        )
         .orderBy(asc(ventas.creadoEn)),
 
       db
@@ -906,7 +978,13 @@ export async function resumenDelMes(fecha: string): Promise<ResumenMes> {
     db
       .select({ total })
       .from(ventas)
-      .where(and(enElMes(ventas.fecha), isNull(ventas.anuladoEn))),
+      .where(
+        and(
+          enElMes(ventas.fecha),
+          isNull(ventas.anuladoEn),
+          isNull(ventas.pendienteEn),
+        ),
+      ),
     db
       .select({ total })
       .from(gastos)
@@ -973,7 +1051,7 @@ export async function ventasPorDia(dias = 60): Promise<DiaDeVentas[]> {
       medio: ventas.medio,
     })
     .from(ventas)
-    .where(isNull(ventas.anuladoEn))
+    .where(and(isNull(ventas.anuladoEn), isNull(ventas.pendienteEn)))
     .orderBy(desc(ventas.fecha), asc(ventas.creadoEn));
 
   const porFecha = new Map<string, DiaDeVentas>();

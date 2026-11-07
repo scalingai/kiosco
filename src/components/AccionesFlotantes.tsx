@@ -110,12 +110,15 @@ export default function AccionesFlotantes({
   conSalir,
   productos,
   proveedores,
+  sucursalConQr,
 }: {
   clientes: Candidato[];
   conSalir: boolean;
   /** el catálogo entero: lo usa el mostrador para escanear sin ir al servidor */
   productos: ProductoVendible[];
   proveedores: { id: string; nombre: string }[];
+  /** la sucursal con el QR listo, si hay alguna */
+  sucursalConQr: { id: string; nombre: string } | null;
 }) {
   const router = useRouter();
   const ruta = usePathname();
@@ -404,6 +407,7 @@ export default function AccionesFlotantes({
           fecha={hoyLocal()}
           productos={productos}
           clientes={clientes}
+          sucursalConQr={sucursalConQr}
           alGuardar={() => {
             setVentaAbierta(false);
             setAviso("Venta cobrada.");

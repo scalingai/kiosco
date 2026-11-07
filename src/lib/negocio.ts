@@ -79,6 +79,14 @@ export type VentaAGuardar = {
   telefonoCliente?: string | null;
   /** cuando el cliente pagó con más de una caja */
   pagos?: RepartoPorMedio[];
+  /** en qué local se vendió; hace falta para cobrar con el QR de ese mostrador */
+  sucursalId?: string | null;
+  /**
+   * La venta queda esperando que paguen el QR. Se anota igual —si Mercado Pago
+   * falla, la venta no se perdió y se puede pasar a efectivo a mano— pero no
+   * cuenta en la caja del día hasta que el pago esté confirmado.
+   */
+  pendiente?: boolean;
 };
 
 export type GastoAGuardar = {

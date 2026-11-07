@@ -11,6 +11,8 @@ import {
   registrarCompra,
   registrarGasto,
   registrarVenta,
+  anotarOrdenDeQr,
+  confirmarCobroQr as confirmarCobroQr_,
 } from "@/lib/caja";
 import {
   anularMovimiento,
@@ -32,6 +34,14 @@ import type {
   MedioPago,
   VentaAGuardar,
 } from "@/lib/negocio";
+import { cancelarOrden, crearCaja, crearOrden } from "@/lib/mercadopago";
+import {
+  agregarSucursal,
+  guardarCajaDeSucursal,
+  obtenerSucursal,
+  obtenerVentaPendiente,
+  ordenPendienteDe,
+} from "@/lib/sucursales";
 
 export type Resultado<T = null> =
   | { ok: true; datos: T }
@@ -248,6 +258,143 @@ export async function archivarVarios(
     if (!archivados) return { ok: false, error: "No se archivó ninguno" };
     revalidatePath("/", "layout");
     return { ok: true, datos: { archivados } };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+/* ── Cobrar con el QR del mostrador ──────────────────────────────────────── */
+
+/**
+ * Anota la venta y le pone el monto al QR impreso.
+ *
+ * La venta se guarda PRIMERO y queda pendiente. Es a propósito: si Mercado
+ * Pago no contesta, lo que no se puede perder es la venta — queda anotada y se
+ * pasa a efectivo a mano. Al revés —crear la orden y después guardar— una
+ * caída en el medio deja al cliente pagando algo que el kiosco no registró.
+ *
+ * Mientras esté pendiente NO cuenta en la caja del día.
+ */
+export async function cobrarConQr(
+  entrada: VentaAGuardar & { sucursalId: string },
+): Promise<Resultado<{ ventaId: string; vence: string | null }>> {
+  try {
+    const sucursal = await obtenerSucursal(entrada.sucursalId);
+    if (!sucursal) return { ok: false, error: "No encontré esa sucursal" };
+    if (!sucursal.mpExternalPosId) {
+      return {
+        ok: false,
+        error: "Esa sucursal todavía no tiene el QR de Mercado Pago creado.",
+      };
+    }
+
+    const venta = await registrarVenta({ ...entrada, pendiente: true });
+
+    /*
+     * Antes de poner el monto nuevo hay que sacar el anterior: la
+     * documentación de Mercado Pago no dice qué muestra el QR si hay dos
+     * órdenes abiertas a la vez, y no es algo para averiguar con el cliente
+     * adelante.
+     */
+    const anterior = await ordenPendienteDe(sucursal.id, venta.id);
+    if (anterior) await cancelarOrden(sucursal, anterior);
+
+    let orden;
+    try {
+      orden = await crearOrden(sucursal, {
+        totalCentavos: venta.montoCentavos,
+        // El id de la venta es único y no dice nada de nadie: sirve de
+        // referencia sin mandarle datos del cliente a Mercado Pago.
+        referencia: venta.id,
+      });
+    } catch (error) {
+      // La venta queda pendiente igual. Es lo correcto: existe, se ve, y se
+      // cobra por otro medio sin volver a cargar el carrito.
+      return {
+        ok: false,
+        error:
+          mensaje(error) +
+          " La venta quedó anotada como pendiente: cobrala por otro medio o reintentá.",
+      };
+    }
+
+    await anotarOrdenDeQr(venta.id, orden.ordenId);
+    revalidatePath("/", "layout");
+    return { ok: true, datos: { ventaId: venta.id, vence: orden.vence } };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+/**
+ * Da por cobrada la venta de esa orden. La llama el webhook de Mercado Pago.
+ *
+ * Vive acá y no en el route handler para que la escritura siga teniendo una
+ * sola puerta, que es lo que pide el repo: el webhook valida quién llama y
+ * después entra por donde entran todos.
+ */
+export async function confirmarCobroQr(ordenId: string): Promise<boolean> {
+  const confirmada = await confirmarCobroQr_(ordenId);
+  if (confirmada) revalidatePath("/", "layout");
+  return confirmada;
+}
+
+/** Si el cliente nunca pagó: se saca el monto del QR y se anula la venta. */
+export async function soltarCobroQr(ventaId: string): Promise<Resultado> {
+  try {
+    const venta = await obtenerVentaPendiente(ventaId);
+    if (!venta) return { ok: false, error: "Esa venta ya no está pendiente" };
+
+    if (venta.sucursalId && venta.mpOrderId) {
+      const sucursal = await obtenerSucursal(venta.sucursalId);
+      if (sucursal) await cancelarOrden(sucursal, venta.mpOrderId);
+    }
+
+    await anularVenta(ventaId);
+    revalidatePath("/", "layout");
+    return { ok: true, datos: null };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+/* ── Sucursales ──────────────────────────────────────────────────────────── */
+
+export async function crearSucursal(nombre: string): Promise<Resultado> {
+  try {
+    await agregarSucursal(nombre);
+    revalidatePath("/", "layout");
+    return { ok: true, datos: null };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+/**
+ * Crea del lado de Mercado Pago la sucursal y la caja, y guarda el QR.
+ *
+ * Se hace una sola vez por local: el QR que vuelve de acá es el papel que se
+ * imprime y se pega en la pared.
+ */
+export async function crearQrDeSucursal(
+  sucursalId: string,
+  ubicacion: {
+    calle: string;
+    numero: string;
+    ciudad: string;
+    provincia: string;
+    latitud: number;
+    longitud: number;
+  },
+): Promise<Resultado> {
+  try {
+    const sucursal = await obtenerSucursal(sucursalId);
+    if (!sucursal) return { ok: false, error: "No encontré esa sucursal" };
+
+    const caja = await crearCaja(sucursal, ubicacion);
+    await guardarCajaDeSucursal(sucursalId, caja);
+    revalidatePath("/", "layout");
+    return { ok: true, datos: null };
   } catch (error) {
     return { ok: false, error: mensaje(error) };
   }

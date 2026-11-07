@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { salir } from "@/app/entrar/acciones";
+import { salir } from "@/app/(panel)/entrar/acciones";
 
 export default function BotonSalir() {
   const router = useRouter();

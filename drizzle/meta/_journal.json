@@ -127,6 +127,13 @@
       "when": 1794065784186,
       "tag": "0017_brave_ted_forrester",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794066630653,
+      "tag": "0018_wild_karma",
+      "breakpoints": true
     }
   ]
 }

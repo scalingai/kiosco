@@ -197,6 +197,70 @@ export const categoriaGasto = pgEnum("categoria_gasto", [
   "otros",
 ]);
 
+/**
+ * Las sucursales del kiosco.
+ *
+ * Existe por una sola razón concreta: cada local cobra con SU cuenta de Mercado
+ * Pago, y el QR impreso que está pegado en cada mostrador pertenece a esa
+ * cuenta. Una venta cobrada en un local no puede acreditarse en la otra.
+ *
+ * Por ahora alcanza con eso y NO scopea el resto: el stock, las compras y el
+ * fiado siguen siendo del kiosco entero. Partirlos por sucursal es un cambio
+ * mucho más grande —y que nadie pidió todavía— que se puede hacer después
+ * agregando `sucursal_id` donde haga falta.
+ */
+export const sucursales = pgTable(
+  "sucursales",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nombre: text("nombre").notNull(),
+    nombreNormalizado: text("nombre_normalizado").notNull(),
+
+    /*
+     * La conexión con Mercado Pago, por OAuth.
+     *
+     * Es OAuth y no un token pegado a mano porque son DOS cuentas distintas:
+     * una variable de entorno sólo puede guardar una, y la que vence o se
+     * revoca hay que volver a pegarla a mano en el servidor. Con OAuth el
+     * dueño aprieta "conectar" en cada sucursal y el token se renueva solo.
+     *
+     * El `access_token` es una credencial viva: quien la tiene puede cobrar y
+     * ver los movimientos de esa cuenta. No sale nunca al navegador — se usa
+     * sólo del lado del servidor.
+     */
+    mpAccessToken: text("mp_access_token"),
+    mpRefreshToken: text("mp_refresh_token"),
+    mpTokenVenceEn: timestamp("mp_token_vence_en", { withTimezone: true }),
+    /** el id del vendedor en Mercado Pago; va en la URL al crear la sucursal allá */
+    mpUserId: text("mp_user_id"),
+
+    /*
+     * La caja de Mercado Pago: la sucursal y el punto de venta creados por API
+     * del otro lado, y el QR que sale de ahí.
+     *
+     * `mpExternalPosId` es el que elegimos nosotros y el que viaja en cada
+     * orden. Se guarda porque es la llave con la que Mercado Pago decide a qué
+     * QR impreso le llega el monto: perderlo es perder el vínculo con el papel
+     * que está pegado en la pared.
+     */
+    mpStoreId: text("mp_store_id"),
+    mpPosId: text("mp_pos_id"),
+    mpExternalPosId: text("mp_external_pos_id"),
+    /** la imagen del QR para imprimir, tal como la devuelve Mercado Pago */
+    mpQrImagen: text("mp_qr_imagen"),
+
+    archivadoEn: timestamp("archivado_en", { withTimezone: true }),
+    creadoEn: timestamp("creado_en", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("sucursales_nombre_normalizado_key").on(t.nombreNormalizado),
+  ],
+);
+
+export type Sucursal = typeof sucursales.$inferSelect;
+
 export const proveedores = pgTable(
   "proveedores",
   {
@@ -426,6 +490,25 @@ export const ventas = pgTable(
     clienteId: uuid("cliente_id").references(() => clientes.id, {
       onDelete: "set null",
     }),
+    /** en qué local se vendió; null en las ventas anteriores a las sucursales */
+    sucursalId: uuid("sucursal_id").references(() => sucursales.id, {
+      onDelete: "set null",
+    }),
+    /**
+     * Cuándo quedó esperando que el cliente pague el QR. `null` es lo normal:
+     * la venta ya está cobrada.
+     *
+     * Null significa "cobrada" —y no al revés— para que las miles de ventas que
+     * ya existen sigan siendo correctas sin tocarlas: una columna nueva nace en
+     * null, y en null quieren decir justo lo que son.
+     *
+     * Mientras tenga fecha, esta venta NO toca la caja del día. Misma regla que
+     * una compra impaga: la plata todavía no se movió, y contarla sería decir
+     * que hay en el cajón algo que no está.
+     */
+    pendienteEn: timestamp("pendiente_en", { withTimezone: true }),
+    /** la orden de Mercado Pago que está esperando; null si no se cobró por QR */
+    mpOrderId: text("mp_order_id"),
     nota: text("nota"),
     fecha: date("fecha").notNull(),
     medio: medioPago("medio").notNull().default("efectivo"),
@@ -437,6 +520,10 @@ export const ventas = pgTable(
   (t) => [
     index("ventas_fecha_idx").on(t.fecha),
     index("ventas_cliente_idx").on(t.clienteId),
+    // La caja del día filtra por esto en cada lectura: sin índice, cada
+    // pantalla recorre la tabla entera de ventas.
+    index("ventas_pendiente_idx").on(t.pendienteEn),
+    uniqueIndex("ventas_mp_order_key").on(t.mpOrderId),
   ],
 );
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { guardarVenta } from "@/app/acciones";
+import { cobrarConQr, guardarVenta, soltarCobroQr } from "@/app/acciones";
 import SelectorNombre from "@/components/SelectorNombre";
 import RepartoDePago, {
   mediosUsados,
@@ -29,6 +29,26 @@ import type { ProductoVendible } from "@/lib/stock";
 
 /** Cuántas sugerencias se dibujan mientras se escribe. */
 const MAXIMO = 8;
+
+function IconoQr() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5 shrink-0"
+      aria-hidden="true"
+    >
+      <rect x="3.5" y="3.5" width="6" height="6" rx="1" />
+      <rect x="14.5" y="3.5" width="6" height="6" rx="1" />
+      <rect x="3.5" y="14.5" width="6" height="6" rx="1" />
+      <path d="M14.5 14.5h3v3h-3zM20.5 14.5v3M17.5 20.5h3" />
+    </svg>
+  );
+}
 
 /**
  * La foto del envase, o un cuadrito con la inicial.
@@ -81,12 +101,19 @@ export default function Mostrador({
   fecha,
   productos,
   clientes,
+  sucursalConQr,
   alGuardar,
 }: {
   fecha: string;
   productos: ProductoVendible[];
   /** para poder poner la venta a nombre de alguien que ya existe */
   clientes: { id: string; nombre: string }[];
+  /**
+   * La sucursal con el QR listo, si hay alguna. Sin esto no se ofrece cobrar
+   * así: un botón que lleva a "no está conectado" se aprieta con el cliente
+   * esperando y es peor que no tenerlo.
+   */
+  sucursalConQr: { id: string; nombre: string } | null;
   alGuardar?: () => void;
 }) {
   const router = useRouter();
@@ -116,6 +143,11 @@ export default function Mostrador({
    * el cliente ya está pagando.
    */
   const [conTarjeta, setConTarjeta] = useState(false);
+  /** la venta que quedó esperando que el cliente escanee */
+  const [esperando, setEsperando] = useState<{
+    ventaId: string;
+    total: number;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const campo = useRef<HTMLInputElement>(null);
@@ -377,6 +409,72 @@ export default function Mostrador({
     setTelefono("");
     router.refresh();
     alGuardar?.();
+  }
+
+  /**
+   * Cobra poniéndole el monto al QR impreso del mostrador.
+   *
+   * La venta se anota pendiente ANTES de hablar con Mercado Pago: si la API no
+   * contesta, lo que no se puede perder es la venta. Queda ahí, se ve, y se
+   * cobra por otro medio sin volver a cargar el carrito.
+   */
+  async function cobrarQr() {
+    setError(null);
+
+    if (!sucursalConQr) return;
+    if (!renglones.length) {
+      setError("El carrito está vacío.");
+      return;
+    }
+    if (sinPrecio) {
+      setError(
+        sinPrecio === 1
+          ? "Hay un producto sin precio."
+          : `Hay ${sinPrecio} productos sin precio.`,
+      );
+      return;
+    }
+
+    setGuardando(true);
+    const espera = await conLimiteDeTiempo(
+      cobrarConQr({
+        fecha,
+        // Lo que entra por QR entra por Mercado Pago: el medio no se pregunta.
+        medio: "mercadopago",
+        items: renglones,
+        sucursalId: sucursalConQr.id,
+        clienteId,
+        nombreCliente: clienteId ? null : cliente.trim() || null,
+        telefonoCliente: clienteId ? null : telefono.trim() || null,
+      }),
+    );
+    setGuardando(false);
+
+    if (espera.venció) {
+      setError(AVISO_TARDANZA);
+      return;
+    }
+    if (!espera.valor.ok) {
+      setError(espera.valor.error);
+      return;
+    }
+
+    // El carrito se vacía: la venta ya está anotada y lo que falta pasa del
+    // otro lado del mostrador. Dejarlo cargado invitaría a cobrarlo dos veces.
+    setEsperando({ ventaId: espera.valor.datos.ventaId, total });
+    setRenglones([]);
+    setPrecios({});
+    setMontos(montosVacios());
+    setBusqueda("");
+    router.refresh();
+  }
+
+  /** El cliente se arrepintió: se saca el monto del QR y se anula la venta. */
+  async function soltar(ventaId: string) {
+    setEsperando(null);
+    const resultado = await soltarCobroQr(ventaId);
+    if (!resultado.ok) setError(resultado.error);
+    router.refresh();
   }
 
   const buscador = (
@@ -665,6 +763,43 @@ export default function Mostrador({
               ? `Cobrar ${formatearCentavos(total)}`
               : "Cobrar"}
         </button>
+
+        {/*
+          El QR sólo aparece si ESTA sucursal lo tiene creado. Un botón que
+          lleva a "no está conectado" es peor que no tenerlo: se aprieta con el
+          cliente esperando.
+        */}
+        {sucursalConQr && (
+          <button
+            type="button"
+            onClick={cobrarQr}
+            disabled={guardando || renglones.length === 0}
+            className="flex w-full items-center justify-center gap-2 rounded-full border border-acento px-5 py-3 text-base font-medium text-acento disabled:opacity-45"
+          >
+            <IconoQr />
+            Que lo escanee
+          </button>
+        )}
+
+        {esperando && (
+          <div className="rounded-xl border border-acento bg-acento-tenue px-4 py-3">
+            <p className="text-sm font-medium text-pago">
+              Esperando que pague{" "}
+              <span className="cifra">{formatearCentavos(esperando.total)}</span>
+            </p>
+            <p className="mt-1 text-xs text-tinta-suave">
+              El monto ya está en el QR del mostrador. Cuando pague, la venta se
+              marca cobrada sola.
+            </p>
+            <button
+              type="button"
+              onClick={() => soltar(esperando.ventaId)}
+              className="mt-2 text-xs text-deuda underline underline-offset-4"
+            >
+              No pagó — cancelar
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
