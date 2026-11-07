@@ -34,9 +34,16 @@ export async function GET(pedido: Request) {
   // Sin code es que el dueño canceló en la pantalla de Mercado Pago. No es un
   // error: se vuelve sin decir nada feo.
   if (!code) return responder("cancelado");
-  if (!estado || !guardado || estado !== guardado) return responder("invalido");
 
-  const sucursalId = leerEstado(estado);
+  /*
+   * La sucursal sale de la COOKIE, no de la URL. Lo único que se comprueba de
+   * lo que llegó es que el `state` sea el mismo número al azar que dejamos al
+   * salir — y esa cookie es `httpOnly` y la pusimos nosotros.
+   *
+   * Sacar el id de la URL sería dejar que quien arma el link elija a qué
+   * sucursal colgarle una cuenta de Mercado Pago.
+   */
+  const sucursalId = leerEstado(estado, guardado);
   if (!sucursalId) return responder("invalido");
 
   const appId = process.env.MP_APP_ID;

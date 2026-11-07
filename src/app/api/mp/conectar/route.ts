@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { armarEstado, COOKIE_ESTADO, urlDeVuelta } from "@/lib/mp-oauth";
+import {
+  armarEstado,
+  COOKIE_ESTADO,
+  urlDeVuelta,
+  VIDA_SEGUNDOS,
+} from "@/lib/mp-oauth";
 
 /** Mismo regex que el resto del repo: un id con basura sale como 404, no 500. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -36,14 +41,9 @@ export async function GET(pedido: Request) {
     return NextResponse.redirect(volver);
   }
 
-  let estado: string;
-  try {
-    estado = armarEstado(sucursalId);
-  } catch (error) {
-    console.error("[mp] no se pudo firmar el state:", error);
-    volver.searchParams.set("mp", "sin_configurar");
-    return NextResponse.redirect(volver);
-  }
+  // El `state` es un número al azar; a qué sucursal pertenece viaja en la
+  // cookie, no en la URL. Ver `mp-oauth.ts` para por qué no va firmado.
+  const { estado, cookie } = armarEstado(sucursalId);
 
   const autorizar = new URL("https://auth.mercadopago.com/authorization");
   autorizar.searchParams.set("client_id", appId);
@@ -52,12 +52,12 @@ export async function GET(pedido: Request) {
   autorizar.searchParams.set("state", estado);
 
   const respuesta = NextResponse.redirect(autorizar.toString());
-  respuesta.cookies.set(COOKIE_ESTADO, estado, {
+  respuesta.cookies.set(COOKIE_ESTADO, cookie, {
     httpOnly: true,
     secure: true,
     sameSite: "lax",
     path: "/",
-    maxAge: 10 * 60,
+    maxAge: VIDA_SEGUNDOS,
   });
   return respuesta;
 }
