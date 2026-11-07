@@ -69,6 +69,14 @@ export type VentaAGuardar = {
   medio: MedioPago;
   /** el carrito, si se cobró producto por producto */
   items?: RenglonCarrito[];
+  /**
+   * A nombre de quién. `clienteId` cuando se eligió uno que ya existe;
+   * `nombreCliente` cuando es alguien nuevo, y ahí `telefonoCliente` se le
+   * guarda en la ficha.
+   */
+  clienteId?: string | null;
+  nombreCliente?: string | null;
+  telefonoCliente?: string | null;
   /** cuando el cliente pagó con más de una caja */
   pagos?: RepartoPorMedio[];
 };

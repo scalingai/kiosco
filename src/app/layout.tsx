@@ -4,6 +4,8 @@ import AccionesFlotantes from "@/components/AccionesFlotantes";
 import FondoMarca, { VERDE_MARCA } from "@/components/Lava";
 import RegistrarSW from "@/components/RegistrarSW";
 import { listarCandidatos } from "@/lib/consultas";
+import { listarProveedores } from "@/lib/caja";
+import { listarParaVender, type ProductoVendible } from "@/lib/stock";
 import { pinConfigurado } from "@/lib/sesion";
 import "./globals.css";
 
@@ -42,10 +44,21 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   // Si la base no contesta, el portón y la pantalla de sin conexión tienen que
   // seguir dibujándose igual.
   let candidatos: { id: string; nombre: string }[] = [];
+  let productos: ProductoVendible[] = [];
+  let proveedores: { id: string; nombre: string }[] = [];
   try {
-    candidatos = await listarCandidatos();
+    [candidatos, productos, proveedores] = await Promise.all([
+      listarCandidatos(),
+      // El catálogo va en el layout y no en la página de ventas porque la
+      // venta se arranca desde donde sea que estés: el cliente llega al
+      // mostrador sin fijarse qué pantalla tenías abierta.
+      listarParaVender(),
+      listarProveedores(),
+    ]);
   } catch {
     candidatos = [];
+    productos = [];
+    proveedores = [];
   }
 
   return (
@@ -90,7 +103,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           </div>
         </div>
 
-        <AccionesFlotantes clientes={candidatos} conSalir={Boolean(pinConfigurado())} />
+        <AccionesFlotantes
+          clientes={candidatos}
+          conSalir={Boolean(pinConfigurado())}
+          productos={productos}
+          proveedores={proveedores}
+        />
         <RegistrarSW />
       </body>
     </html>

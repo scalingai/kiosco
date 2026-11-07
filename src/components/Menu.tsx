@@ -15,7 +15,8 @@ type Props = {
   segundos: number;
   onGrabar: () => void;
   onFrenar: () => void;
-  onCargarAMano: () => void;
+  onNuevaVenta: () => void;
+  onNuevaCompra: () => void;
 };
 
 function IconoCasa() {
@@ -201,7 +202,8 @@ export default function Menu({
   segundos,
   onGrabar,
   onFrenar,
-  onCargarAMano,
+  onNuevaVenta,
+  onNuevaCompra,
 }: Props) {
   const ruta = usePathname();
   const [abierto, setAbierto] = useState(false);
@@ -270,43 +272,66 @@ export default function Menu({
         ))}
       </nav>
 
+      {/*
+        Las dos cosas que se hacen todo el día: cobrar y recibir mercadería.
+        Viven acá arriba de todo y no adentro de su pantalla porque se arrancan
+        desde donde uno esté — llega un cliente al mostrador y no importa qué
+        estabas mirando.
+      */}
       <div className="mt-4 space-y-2 border-t border-white/15 pt-4">
         <button
           type="button"
-          onClick={grabando ? onFrenar : onGrabar}
-          disabled={procesando}
-          className={
-            "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium disabled:opacity-60 " +
-            (grabando
-              ? "bg-deuda text-white"
-              : "bg-white text-marca shadow-sm hover:bg-emerald-50")
-          }
+          onClick={() => {
+            setAbierto(false);
+            onNuevaVenta();
+          }}
+          className="flex w-full items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-sm font-medium text-marca shadow-sm transition-colors hover:bg-emerald-50"
         >
-          {grabando ? (
-            <>
-              <span className="grabando block h-4 w-4 shrink-0 rounded-sm bg-white" />
-              <span className="cifra">Frenar · {segundos}s</span>
-            </>
-          ) : (
-            <>
-              <IconoMicrofono grande />
-              {procesando ? "Escuchando…" : "Grabar audio"}
-            </>
-          )}
+          <IconoVentas />
+          Nueva venta
         </button>
 
         <button
           type="button"
           onClick={() => {
             setAbierto(false);
-            onCargarAMano();
+            onNuevaCompra();
           }}
           className="flex w-full items-center gap-3 rounded-xl border border-white/25 px-3 py-2.5 text-sm text-emerald-50 transition-colors hover:bg-white/10 hover:text-white"
         >
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center text-xl leading-none">
-            +
-          </span>
-          Cargar a mano
+          <IconoCompras />
+          Nueva compra
+        </button>
+
+        {/*
+          El audio quedó como ícono: dejó de ser una de las dos acciones
+          principales, pero sacarle la puerta del todo lo volvería código
+          muerto — y es la forma más rápida de anotar un fiado con las manos
+          ocupadas, que es para lo que se hizo.
+        */}
+        <button
+          type="button"
+          onClick={grabando ? onFrenar : onGrabar}
+          disabled={procesando}
+          aria-label={grabando ? "Frenar la grabación" : "Grabar un audio"}
+          className={
+            "flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs transition-colors disabled:opacity-60 " +
+            (grabando
+              ? "bg-deuda text-white"
+              : "text-emerald-50/70 hover:bg-white/10 hover:text-white")
+          }
+        >
+          {grabando ? (
+            <>
+              <span className="grabando block h-3.5 w-3.5 shrink-0 rounded-sm bg-white" />
+              <span className="cifra">Frenar · {segundos}s</span>
+            </>
+          ) : (
+            <>
+              <IconoMicrofono />
+              {procesando ? "Escuchando…" : "Anotar por audio"}
+            </>
+          )}
         </button>
       </div>
 

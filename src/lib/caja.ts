@@ -29,6 +29,7 @@ import {
   ventasPagos,
 } from "@/db/schema";
 import { totalDelCarrito } from "@/lib/carrito";
+import { buscarOCrearClienteConTelefono } from "@/lib/consultas";
 import {
   costoDeReferencia,
   repartirPago,
@@ -133,11 +134,28 @@ export async function registrarVenta(entrada: VentaAGuardar) {
       throw new Error("La venta tiene que tener un monto mayor a cero");
     }
 
+    /*
+     * A nombre de quién. Si se eligió uno que ya existe viene el id; si es
+     * alguien nuevo, se crea con su teléfono. Es opcional: la enorme mayoría
+     * de las ventas del mostrador no tienen nombre y así tiene que seguir.
+     */
+    let clienteId = entrada.clienteId ?? null;
+    if (clienteId && !UUID.test(clienteId)) throw new Error("Cliente inválido");
+    if (!clienteId && entrada.nombreCliente?.trim()) {
+      const cliente = await buscarOCrearClienteConTelefono(
+        tx,
+        entrada.nombreCliente,
+        entrada.telefonoCliente,
+      );
+      clienteId = cliente?.id ?? null;
+    }
+
     const [fila] = await tx
       .insert(ventas)
       .values({
         montoCentavos,
         totalDeclarado,
+        clienteId,
         nota: entrada.nota?.trim() || null,
         fecha: validarFecha(entrada.fecha),
         medio: entrada.medio,
@@ -695,10 +713,53 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
         { medio: c.medio ?? ("efectivo" as MedioPago), monto: c.montoCentavos },
       ],
   );
+  /*
+   * Cómo se repartió cada venta entre las cajas. Una venta cobrada con un solo
+   * medio no tiene filas acá, y tampoco las tienen las cargadas antes de que
+   * esto existiera: para esas vale el `medio` único de la venta.
+   *
+   * Mismo tratamiento que las compras, y por la misma razón: sin esto, una
+   * venta mitad efectivo y mitad transferencia entra entera por una sola caja
+   * y el arqueo del día no cierra contra lo que hay en el cajón.
+   */
+  const repartosVenta = filasVentas.length
+    ? await db
+        .select({
+          ventaId: ventasPagos.ventaId,
+          medio: ventasPagos.medio,
+          importeCentavos: ventasPagos.importeCentavos,
+        })
+        .from(ventasPagos)
+        .where(
+          inArray(
+            ventasPagos.ventaId,
+            filasVentas.map((v) => v.id),
+          ),
+        )
+    : [];
+
+  const repartoDeVenta = new Map<
+    string,
+    { medio: MedioPago; monto: number }[]
+  >();
+  for (const fila of repartosVenta) {
+    const lista = repartoDeVenta.get(fila.ventaId) ?? [];
+    lista.push({ medio: fila.medio, monto: fila.importeCentavos });
+    repartoDeVenta.set(fila.ventaId, lista);
+  }
+
+  const entradasDeVentas = filasVentas.flatMap(
+    (v) =>
+      repartoDeVenta.get(v.id) ?? [{ medio: v.medio, monto: v.montoCentavos }],
+  );
+
   const entroPorMedio = sumarPorMedio(
-    [...filasVentas, ...cobros],
+    [
+      ...entradasDeVentas,
+      ...cobros.map((c) => ({ medio: c.medio, monto: c.montoCentavos })),
+    ],
     (f) => f.medio,
-    (f) => f.montoCentavos,
+    (f) => f.monto,
   );
   const salioPorMedio = sumarPorMedio(
     [

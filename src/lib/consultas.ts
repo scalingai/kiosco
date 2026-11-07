@@ -175,6 +175,27 @@ async function buscarOCrearClienteCon(db: Ejecutor, nombre: string) {
   return ganadorDeLaCarrera;
 }
 
+/**
+ * El mismo buscar-o-crear, pero guardando el teléfono si vino y la ficha no lo
+ * tenía. No pisa uno cargado: el de la ficha lo puso alguien a propósito, y el
+ * que se teclea apurado en el mostrador no tiene por qué ganarle.
+ */
+export async function buscarOCrearClienteConTelefono(
+  db: Ejecutor,
+  nombre: string,
+  telefono?: string | null,
+) {
+  const cliente = await buscarOCrearClienteCon(db, nombre);
+  const limpio = telefono?.trim();
+  if (cliente && limpio && !cliente.telefono) {
+    await db
+      .update(clientes)
+      .set({ telefono: limpio })
+      .where(eq(clientes.id, cliente.id));
+  }
+  return cliente;
+}
+
 export async function buscarOCrearCliente(nombre: string) {
   const db = await getDb();
   return buscarOCrearClienteCon(db, nombre);

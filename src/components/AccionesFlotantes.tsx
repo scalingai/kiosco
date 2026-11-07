@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import FormCompra from "@/components/FormCompra";
 import Menu from "@/components/Menu";
+import Mostrador from "@/components/Mostrador";
 import { guardarMovimientos } from "@/app/acciones";
 import EditorItems from "@/components/EditorItems";
 import FormMovimiento from "@/components/FormMovimiento";
@@ -10,6 +12,7 @@ import Hoja from "@/components/Hoja";
 import SelectorNombre from "@/components/SelectorNombre";
 import { AVISO_TARDANZA, conLimiteDeTiempo } from "@/lib/espera";
 import { hoyLocal } from "@/lib/fechas";
+import type { ProductoVendible } from "@/lib/stock";
 import {
   aItemsAGuardar,
   itemVacio,
@@ -105,9 +108,14 @@ function totalEfectivo(b: Borrador): { centavos: number; declarado: boolean } {
 export default function AccionesFlotantes({
   clientes,
   conSalir,
+  productos,
+  proveedores,
 }: {
   clientes: Candidato[];
   conSalir: boolean;
+  /** el catálogo entero: lo usa el mostrador para escanear sin ir al servidor */
+  productos: ProductoVendible[];
+  proveedores: { id: string; nombre: string }[];
 }) {
   const router = useRouter();
   const ruta = usePathname();
@@ -127,6 +135,8 @@ export default function AccionesFlotantes({
   const [borradores, setBorradores] = useState<Borrador[]>([]);
   const [segundos, setSegundos] = useState(0);
   const [manualAbierto, setManualAbierto] = useState(false);
+  const [ventaAbierta, setVentaAbierta] = useState(false);
+  const [compraAbierta, setCompraAbierta] = useState(false);
 
   const grabadorRef = useRef<MediaRecorder | null>(null);
   const trozosRef = useRef<Blob[]>([]);
@@ -380,8 +390,42 @@ export default function AccionesFlotantes({
         segundos={segundos}
         onGrabar={arrancar}
         onFrenar={parar}
-        onCargarAMano={() => setManualAbierto(true)}
+        onNuevaVenta={() => setVentaAbierta(true)}
+        onNuevaCompra={() => setCompraAbierta(true)}
       />
+
+      <Hoja
+        abierta={ventaAbierta}
+        ancha
+        titulo="Nueva venta"
+        onCerrar={() => setVentaAbierta(false)}
+      >
+        <Mostrador
+          fecha={hoyLocal()}
+          productos={productos}
+          clientes={clientes}
+          alGuardar={() => {
+            setVentaAbierta(false);
+            setAviso("Venta cobrada.");
+          }}
+        />
+      </Hoja>
+
+      <Hoja
+        abierta={compraAbierta}
+        titulo="Nueva compra"
+        onCerrar={() => setCompraAbierta(false)}
+      >
+        <FormCompra
+          fecha={hoyLocal()}
+          proveedores={proveedores}
+          productos={productos}
+          alGuardar={() => {
+            setCompraAbierta(false);
+            setAviso("Compra anotada.");
+          }}
+        />
+      </Hoja>
 
       <Hoja
         abierta={estado === "revisando" || estado === "guardando"}

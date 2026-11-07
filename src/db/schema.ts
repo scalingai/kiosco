@@ -414,6 +414,18 @@ export const ventas = pgTable(
      * cambiarlo a mano sería pisar la cuenta que los explica.
      */
     totalDeclarado: boolean("total_declarado").notNull().default(true),
+    /**
+     * A nombre de quién fue la venta. Opcional y casi siempre null: en el
+     * mostrador nadie pide el nombre para vender un chicle.
+     *
+     * Sirve cuando sí importa —el que encarga, el que se lleva el pedido
+     * grande, el que después reclama— y es lo que deja ver qué compra cada
+     * cliente sin obligar a cargarlo todas las veces. NO lo convierte en
+     * fiado: eso sigue siendo un movimiento aparte, con su deuda.
+     */
+    clienteId: uuid("cliente_id").references(() => clientes.id, {
+      onDelete: "set null",
+    }),
     nota: text("nota"),
     fecha: date("fecha").notNull(),
     medio: medioPago("medio").notNull().default("efectivo"),
@@ -422,7 +434,10 @@ export const ventas = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("ventas_fecha_idx").on(t.fecha)],
+  (t) => [
+    index("ventas_fecha_idx").on(t.fecha),
+    index("ventas_cliente_idx").on(t.clienteId),
+  ],
 );
 
 /**

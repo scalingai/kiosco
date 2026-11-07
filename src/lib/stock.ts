@@ -129,6 +129,8 @@ export type ProductoVendible = {
   precioVentaCentavos: number | null;
   /** null si el producto nunca se compró por la app */
   costoRealCentavos: number | null;
+  /** el multiplicador propio; lo necesita el formulario de compra */
+  multiplicadorMilesimas: number | null;
 };
 
 export async function listarParaVender(): Promise<ProductoVendible[]> {
@@ -140,6 +142,7 @@ export async function listarParaVender(): Promise<ProductoVendible[]> {
     codigoBarras: f.codigoBarras,
     precioVentaCentavos: f.precioVentaCentavos,
     costoRealCentavos: f.costoRealCentavos,
+    multiplicadorMilesimas: f.multiplicadorMilesimas,
   }));
 }
 
