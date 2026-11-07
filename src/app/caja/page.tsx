@@ -39,7 +39,7 @@ function Seccion({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5">
+    <section className="rounded-2xl border border-linea bg-tarjeta px-4 py-3.5">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="font-display text-xl leading-none">{titulo}</h2>
         {total && <span className="cifra text-sm font-medium">{total}</span>}
@@ -100,7 +100,7 @@ export default async function Caja({ searchParams }: PageProps<"/caja">) {
         </p>
 
         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-          <div className="rounded-xl bg-white/70 px-3 py-2.5">
+          <div className="rounded-xl bg-tarjeta px-3 py-2.5">
             <dt className="text-xs text-tinta-suave">Entró</dt>
             <dd className="cifra mt-0.5 font-medium text-pago">
               {formatearCentavos(balance.entroCentavos)}
@@ -112,7 +112,7 @@ export default async function Caja({ searchParams }: PageProps<"/caja">) {
             </dd>
           </div>
 
-          <div className="rounded-xl bg-white/70 px-3 py-2.5">
+          <div className="rounded-xl bg-tarjeta px-3 py-2.5">
             <dt className="text-xs text-tinta-suave">Salió</dt>
             <dd className="cifra mt-0.5 font-medium text-deuda">
               {formatearCentavos(balance.salioCentavos)}
@@ -133,7 +133,7 @@ export default async function Caja({ searchParams }: PageProps<"/caja">) {
             return (
               <li
                 key={medio}
-                className="rounded-xl bg-white/70 px-2.5 py-2 text-center"
+                className="rounded-xl bg-tarjeta px-2.5 py-2 text-center"
               >
                 <span className="block text-xs text-tinta-suave">
                   {ETIQUETA_MEDIO[medio]}

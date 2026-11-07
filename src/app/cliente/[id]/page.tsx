@@ -58,7 +58,7 @@ export default async function Ficha({ params }: PageProps<"/cliente/[id]">) {
             Todavía no hay movimientos.
           </p>
         ) : (
-          <ul className="mt-3 divide-y divide-linea overflow-hidden rounded-2xl border border-linea bg-white/60">
+          <ul className="mt-3 divide-y divide-linea overflow-hidden rounded-2xl border border-linea bg-tarjeta">
             {movimientos.map((m) => (
               <li
                 key={m.id}

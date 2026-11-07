@@ -47,7 +47,7 @@ function Chip({
         "shrink-0 rounded-full border px-3 py-1.5 text-xs " +
         (activo
           ? "border-acento bg-acento text-white"
-          : "border-linea bg-white/70 text-tinta")
+          : "border-linea bg-tarjeta text-tinta")
       }
     >
       {children}
@@ -74,7 +74,7 @@ function Puerta({
   return (
     <Link
       href={href}
-      className="flex items-center justify-between gap-3 rounded-2xl border border-linea bg-white/60 px-4 py-3.5 transition-colors hover:bg-white"
+      className="flex items-center justify-between gap-3 rounded-2xl border border-linea bg-tarjeta px-4 py-3.5 transition-colors hover:bg-white"
     >
       <span className="min-w-0">
         <span className="block truncate font-display text-xl leading-none">
@@ -228,7 +228,7 @@ export default async function Compras({ searchParams }: PageProps<"/compras">) {
           {agruparPorMedio(lista).map((g) => (
             <section
               key={g.clave}
-              className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5"
+              className="rounded-2xl border border-linea bg-tarjeta px-4 py-3.5"
             >
               <div className="flex items-baseline justify-between gap-3">
                 <h2 className="font-display text-xl leading-none">{g.titulo}</h2>
@@ -259,7 +259,7 @@ export default async function Compras({ searchParams }: PageProps<"/compras">) {
             {porProducto.map((p) => (
               <section
                 key={p.clave}
-                className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5"
+                className="rounded-2xl border border-linea bg-tarjeta px-4 py-3.5"
               >
                 <div className="flex items-baseline justify-between gap-3">
                   <h2 className="min-w-0 truncate font-display text-xl leading-none">

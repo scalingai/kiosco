@@ -96,7 +96,7 @@ export default async function Stock() {
         </p>
       </div>
 
-      <section className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5">
+      <section className="rounded-2xl border border-linea bg-tarjeta px-4 py-3.5">
         <FormProducto />
       </section>
 
@@ -127,7 +127,7 @@ export default async function Stock() {
         arbol.map(({ categoria, subcategorias }) => (
           <section
             key={categoria}
-            className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5"
+            className="rounded-2xl border border-linea bg-tarjeta px-4 py-3.5"
           >
             <h2 className="font-display text-2xl leading-none">{categoria}</h2>
 

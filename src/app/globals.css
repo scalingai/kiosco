@@ -1,21 +1,59 @@
 @import "tailwindcss";
 
 @theme {
-  /* Paleta de cuaderno de kiosco: papel tibio, tinta azul oscura, rojo de deuda. */
-  --color-papel: #faf7f0;
-  --color-papel-hondo: #f2ede2;
-  --color-linea: #e2dacb;
-  --color-tinta: #1c1a17;
-  --color-tinta-suave: #6f675b;
-  --color-deuda: #b3341f;
-  --color-deuda-tenue: #fbe9e4;
-  --color-pago: #1f6b45;
-  --color-pago-tenue: #e4f2ea;
-  --color-acento: #14304f;
+  /*
+   * La paleta del panel de AppGenda (Material 3), para que el kiosco y la
+   * agenda se sientan el mismo sistema. Los nombres siguen en castellano y
+   * siguen significando lo mismo, así que cambiar los VALORES acá repinta la
+   * app entera sin tocar un solo componente.
+   *
+   * El marco es verde con lava y el contenido es una tarjeta blanca encima:
+   * por eso `papel` es blanco —la superficie donde se lee— y el verde vive
+   * aparte, en `marca`.
+   */
+
+  /*
+   * Superficies, como las apila el panel de AppGenda: la hoja de trabajo es
+   * gris muy claro y las tarjetas son blancas encima. Al revés —tarjetas
+   * grises sobre blanco— se pierde el relieve y todo se lee como un bloque.
+   */
+  --color-papel: #f8f9fa;
+  --color-tarjeta: #ffffff;
+  --color-papel-hondo: #eef1f5;
+  --color-linea: #e3e6e8;
+  --color-linea-fuerte: #c4c7c5;
+
+  /* Texto */
+  --color-tinta: #1f1f1f;
+  --color-tinta-suave: #444746;
+
+  /*
+   * El verde de la marca. `marca` es el del marco (el mismo `#14663c` que usa
+   * el panel debajo de la lava) y `acento` es el de los botones.
+   *
+   * Son distintos a propósito: el primario de AppGenda (`#10B981`) con texto
+   * blanco encima da 2,5:1 y no se lee. Para algo que hay que apretar a las
+   * seis de la tarde con el sol de frente, el verde baja a `#047857`, que da
+   * 5,2:1 y sigue siendo el mismo verde de la familia.
+   */
+  --color-marca: #14663c;
+  --color-acento: #047857;
+  --color-acento-tenue: #d1fae5;
+
+  /* Plata que entra y plata que se debe */
+  --color-pago: #047857;
+  --color-pago-tenue: #d1fae5;
+  --color-deuda: #dc2626;
+  --color-deuda-tenue: #fee2e2;
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
-  --font-display: var(--font-instrument-serif), Georgia, serif;
+  /*
+   * Los titulares pasan de la serif editorial a la sans del sistema: el panel
+   * de AppGenda es una herramienta de trabajo, no una revista, y la serif era
+   * lo que más desentonaba al poner las dos pantallas al lado.
+   */
+  --font-display: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
@@ -24,9 +62,19 @@
   }
 
   body {
-    background-color: var(--color-papel);
+    /* El verde de base: lo que se ve bajo la lava mientras carga, y en los
+       equipos sin WebGL, donde la lava no dibuja nada a propósito. */
+    background-color: var(--color-marca);
     color: var(--color-tinta);
     font-family: var(--font-sans);
+  }
+
+  /* Sin la serif, el peso es lo único que separa un titular del cuerpo. */
+  h1,
+  h2,
+  h3 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
   }
 
   /* Las barras de scroll de Windows son grises y gordas y cortan el papel.

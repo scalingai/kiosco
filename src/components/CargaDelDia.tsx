@@ -39,7 +39,7 @@ export default function CargaDelDia({
   const cerrar = () => setAbierta(null);
 
   const boton =
-    "flex-1 rounded-xl border border-linea bg-white/70 px-3 py-3 text-sm font-medium active:scale-[0.98]";
+    "flex-1 rounded-xl border border-linea bg-tarjeta px-3 py-3 text-sm font-medium active:scale-[0.98]";
 
   return (
     <>

@@ -404,7 +404,7 @@ export default function AccionesFlotantes({
             return (
               <li
                 key={i}
-                className="rounded-xl border border-linea bg-white/60 p-3 sm:p-4"
+                className="rounded-xl border border-linea bg-tarjeta p-3 sm:p-4"
               >
                 <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
                   <label className="block">

@@ -269,7 +269,7 @@ export default function FormCompra({
         precio sugerido de cada producto se leen mientras se carga la factura, y
         elegirlo después obliga a releer todo lo que ya se había mirado.
       */}
-      <fieldset className="rounded-xl border border-linea bg-white/60 px-3 py-2.5">
+      <fieldset className="rounded-xl border border-linea bg-tarjeta px-3 py-2.5">
         <legend className="px-1 text-xs text-tinta-suave">Cómo se compró</legend>
         <div className="flex gap-2">
           <button
@@ -374,7 +374,7 @@ export default function FormCompra({
       </div>
 
 
-      <fieldset className="rounded-xl border border-linea bg-white/60 px-3 py-2.5">
+      <fieldset className="rounded-xl border border-linea bg-tarjeta px-3 py-2.5">
         <legend className="px-1 text-xs text-tinta-suave">Cómo se paga</legend>
         <div className="flex flex-wrap gap-4 text-sm">
           <label className="flex items-center gap-2">

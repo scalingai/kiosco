@@ -3,6 +3,7 @@
  * `movimiento.ts` para el fiado: nada de acá toca la base, así que lo puede
  * importar un componente de cliente.
  */
+import type { RenglonCarrito } from "@/lib/carrito";
 import { parsearMonto } from "@/lib/plata";
 
 export const MEDIOS = ["efectivo", "mercadopago", "banco"] as const;
@@ -58,10 +59,18 @@ export function esRetiro(categoria: CategoriaGasto): boolean {
 }
 
 export type VentaAGuardar = {
-  montoCentavos: number;
+  /**
+   * El total. Cuando viene el carrito y nadie tecleó un total, se calcula
+   * sumándolo: por eso es opcional.
+   */
+  montoCentavos?: number | null;
   nota?: string | null;
   fecha: string;
   medio: MedioPago;
+  /** el carrito, si se cobró producto por producto */
+  items?: RenglonCarrito[];
+  /** cuando el cliente pagó con más de una caja */
+  pagos?: RepartoPorMedio[];
 };
 
 export type GastoAGuardar = {
@@ -114,7 +123,11 @@ export type RenglonAGuardar = {
   multiplicadorMilesimas: number | null;
 };
 
-export type PagoDeCompra = { medio: MedioPago; importeCentavos: number };
+/**
+ * Cuánta plata se movió por cada caja. Sirve para los dos lados del mostrador:
+ * lo que se le paga al proveedor y lo que paga el cliente.
+ */
+export type RepartoPorMedio = { medio: MedioPago; importeCentavos: number };
 
 /**
  * Reparte el total entre los medios que tengan importe.
@@ -125,9 +138,9 @@ export type PagoDeCompra = { medio: MedioPago; importeCentavos: number };
  * diciendo que salió plata de donde no salió.
  */
 export function repartirPago(
-  pagos: PagoDeCompra[],
+  pagos: RepartoPorMedio[],
   totalCentavos: number,
-): PagoDeCompra[] | null {
+): RepartoPorMedio[] | null {
   const conPlata = pagos.filter((p) => p.importeCentavos > 0);
   if (conPlata.length <= 1) return null;
 
@@ -159,7 +172,7 @@ export type CompraAGuardar = {
    * transferencia es lo normal—, y con un solo medio había que elegir uno y
    * mentir. Vacío o ausente significa que se pagó todo con `medio`.
    */
-  pagos?: PagoDeCompra[];
+  pagos?: RepartoPorMedio[];
   comprobante?: string | null;
   nota?: string | null;
   /** lo que descontaron de TODA la factura, y por qué */

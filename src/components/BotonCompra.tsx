@@ -39,7 +39,7 @@ export default function BotonCompra({
       <button
         type="button"
         onClick={() => setAbierta(true)}
-        className="w-full rounded-xl border border-linea bg-white/70 px-3 py-3 text-sm font-medium active:scale-[0.99]"
+        className="w-full rounded-xl border border-linea bg-tarjeta px-3 py-3 text-sm font-medium active:scale-[0.99]"
       >
         + Anotar una compra
         {proveedorInicial ? ` de ${proveedorInicial}` : ""}

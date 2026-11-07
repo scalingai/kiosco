@@ -47,7 +47,7 @@ export default async function Ventas() {
         </p>
       </section>
 
-      <section className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5">
+      <section className="rounded-2xl border border-linea bg-tarjeta px-4 py-3.5">
         <h2 className="font-display text-xl leading-none">Anotar venta</h2>
         <div className="mt-3">
           <FormVenta fecha={hoy} />
@@ -63,7 +63,7 @@ export default async function Ventas() {
           {dias.map((dia) => (
             <li
               key={dia.fecha}
-              className="rounded-2xl border border-linea bg-white/60 px-4 py-3"
+              className="rounded-2xl border border-linea bg-tarjeta px-4 py-3"
             >
               <div className="flex items-baseline justify-between gap-3">
                 <Link

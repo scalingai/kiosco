@@ -91,7 +91,7 @@ export default async function DiaDeCompras({
           {lista.map((compra) => (
             <section
               key={compra.id}
-              className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5"
+              className="rounded-2xl border border-linea bg-tarjeta px-4 py-3.5"
             >
               <div className="flex items-baseline justify-between gap-3">
                 <Link

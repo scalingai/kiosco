@@ -24,7 +24,7 @@ export default function SelectorDia({ fecha }: { fecha: string }) {
   }
 
   const flecha =
-    "rounded-full border border-linea bg-white/70 px-3 py-1.5 text-sm leading-none";
+    "rounded-full border border-linea bg-tarjeta px-3 py-1.5 text-sm leading-none";
 
   return (
     <div className="flex items-center gap-2">

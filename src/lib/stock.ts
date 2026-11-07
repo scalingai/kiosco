@@ -106,6 +106,43 @@ export async function listarNombresDeProductos() {
     .orderBy(asc(productos.nombre));
 }
 
+/**
+ * El catálogo como lo necesita el mostrador: nombre, código, a cuánto se vende
+ * y cuánto costó.
+ *
+ * Va entero al navegador a propósito. Son unos pocos cientos de productos —
+ * menos de lo que pesa una foto— y a cambio escanear un código resuelve en el
+ * acto, sin pedirle nada al servidor. En un mostrador eso es la diferencia
+ * entre cobrar y esperar, y además sigue andando cuando el wifi del kiosco se
+ * cae, que pasa.
+ *
+ * Sale de `listarStock()` y no de una consulta propia para que el costo se
+ * calcule en UN solo lugar: la cuenta de bulto a unidad con IVA es la misma, y
+ * tenerla dos veces es tenerla distinta dentro de tres meses.
+ */
+export type ProductoVendible = {
+  id: string;
+  nombre: string;
+  marca: string | null;
+  codigoBarras: string | null;
+  /** null si nadie le puso precio todavía; se pide al vender */
+  precioVentaCentavos: number | null;
+  /** null si el producto nunca se compró por la app */
+  costoRealCentavos: number | null;
+};
+
+export async function listarParaVender(): Promise<ProductoVendible[]> {
+  const filas = await listarStock();
+  return filas.map((f) => ({
+    id: f.id,
+    nombre: f.nombre,
+    marca: f.marca,
+    codigoBarras: f.codigoBarras,
+    precioVentaCentavos: f.precioVentaCentavos,
+    costoRealCentavos: f.costoRealCentavos,
+  }));
+}
+
 export type Envase = "botella" | "retornable" | "lata" | "tetra" | "otro";
 
 export type FilaStock = {

@@ -407,6 +407,13 @@ export const ventas = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     montoCentavos: bigint("monto_centavos", { mode: "number" }).notNull(),
+    /**
+     * `true` cuando alguien tecleó el total ("vendí $40.000 en la mañana").
+     * `false` cuando salió de sumar el carrito. Misma distinción que en fiado y
+     * en compras: con `false`, el total es una consecuencia de los renglones y
+     * cambiarlo a mano sería pisar la cuenta que los explica.
+     */
+    totalDeclarado: boolean("total_declarado").notNull().default(true),
     nota: text("nota"),
     fecha: date("fecha").notNull(),
     medio: medioPago("medio").notNull().default("efectivo"),
@@ -417,6 +424,88 @@ export const ventas = pgTable(
   },
   (t) => [index("ventas_fecha_idx").on(t.fecha)],
 );
+
+/**
+ * El carrito: qué se llevó el cliente en ESA venta.
+ *
+ * Es opcional. El kiosco sigue pudiendo anotar "vendí $40.000 hoy" sin detalle
+ * —así se cargó siempre y es lo que se hace al cerrar el día—, pero cuando se
+ * cobra producto por producto esto guarda el detalle, y con eso aparecen dos
+ * cosas que el total suelto no puede dar: qué se vende de verdad, y cuánto se
+ * ganó (el costo de cada unidad ya vive en las compras).
+ *
+ * `producto_id` puede ser null: se vende cosas que no están en el catálogo y
+ * frenar la venta por eso sería dejar de cobrar.
+ */
+export const ventasItems = pgTable(
+  "ventas_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ventaId: uuid("venta_id")
+      .notNull()
+      .references(() => ventas.id, { onDelete: "cascade" }),
+    productoId: uuid("producto_id").references(() => productos.id, {
+      onDelete: "set null",
+    }),
+    /** lo que se escribió; queda aunque después se archive el producto */
+    descripcion: text("descripcion"),
+    cantidad: integer("cantidad").notNull().default(1),
+    /**
+     * A cuánto se vendió UNA unidad, en ese momento.
+     *
+     * Se copia del producto al cobrar y NO se lee después: el precio de la
+     * góndola cambia, y una venta de marzo tiene que seguir diciendo lo que se
+     * cobró en marzo. Leerlo del catálogo reescribiría la historia cada vez
+     * que alguien actualiza un precio.
+     */
+    precioUnitarioCentavos: bigint("precio_unitario_centavos", {
+      mode: "number",
+    }).notNull(),
+    /**
+     * Lo que costaba esa unidad cuando se vendió, con IVA. Es lo que convierte
+     * la venta en ganancia sin tener que reconstruirla desde las compras.
+     * Puede faltar: si el producto nunca se compró por la app, no hay costo.
+     */
+    costoUnitarioCentavos: bigint("costo_unitario_centavos", {
+      mode: "number",
+    }),
+    posicion: integer("posicion").notNull().default(0),
+  },
+  (t) => [
+    index("ventas_items_venta_idx").on(t.ventaId),
+    index("ventas_items_producto_idx").on(t.productoId),
+  ],
+);
+
+/**
+ * Con qué pagó el cliente. Una fila por medio, igual que en las compras.
+ *
+ * El que paga la mitad con efectivo y la mitad con transferencia existe de los
+ * dos lados del mostrador. Sin esto, la caja del día dice que entró por una
+ * caja plata que entró por otra. `ventas.medio` queda para las ventas viejas y
+ * para el caso de un solo medio.
+ */
+export const ventasPagos = pgTable(
+  "ventas_pagos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ventaId: uuid("venta_id")
+      .notNull()
+      .references(() => ventas.id, { onDelete: "cascade" }),
+    medio: medioPago("medio").notNull(),
+    importeCentavos: bigint("importe_centavos", { mode: "number" }).notNull(),
+    creadoEn: timestamp("creado_en", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("ventas_pagos_venta_idx").on(t.ventaId),
+    uniqueIndex("ventas_pagos_venta_medio_key").on(t.ventaId, t.medio),
+  ],
+);
+
+export type VentaItem = typeof ventasItems.$inferSelect;
+export type VentaPago = typeof ventasPagos.$inferSelect;
 
 export type Proveedor = typeof proveedores.$inferSelect;
 export type Compra = typeof compras.$inferSelect;

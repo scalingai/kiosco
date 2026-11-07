@@ -63,7 +63,7 @@ export default async function Historial() {
             e.clase === "nota" ? (
               <li
                 key={e.id}
-                className="rounded-2xl border border-linea bg-white/60 p-4"
+                className="rounded-2xl border border-linea bg-tarjeta p-4"
               >
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-xs uppercase tracking-[0.16em] text-tinta-suave">
@@ -111,7 +111,7 @@ export default async function Historial() {
             ) : (
               <li
                 key={e.id}
-                className="rounded-2xl border border-linea bg-white/40 px-4 py-3"
+                className="rounded-2xl border border-linea bg-tarjeta px-4 py-3"
               >
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-xs uppercase tracking-[0.16em] text-tinta-suave">

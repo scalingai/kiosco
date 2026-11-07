@@ -31,7 +31,7 @@ export default function SelectorMes({
   }
 
   const flecha =
-    "rounded-full border border-linea bg-white/70 px-3 py-1.5 text-sm leading-none disabled:opacity-35";
+    "rounded-full border border-linea bg-tarjeta px-3 py-1.5 text-sm leading-none disabled:opacity-35";
 
   return (
     <div className="flex items-center gap-2">

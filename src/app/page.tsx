@@ -27,7 +27,7 @@ function Tarjeta({
   return (
     <Link
       href={href}
-      className="block rounded-2xl border border-linea bg-white/60 px-4 py-3.5 transition-colors hover:bg-white"
+      className="block rounded-2xl border border-linea bg-tarjeta px-4 py-3.5 transition-colors hover:bg-white"
     >
       <p className="text-xs uppercase tracking-[0.16em] text-tinta-suave">
         {titulo}
@@ -151,7 +151,7 @@ export default async function Inicio() {
         />
       </div>
 
-      <section className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5">
+      <section className="rounded-2xl border border-linea bg-tarjeta px-4 py-3.5">
         <h2 className="font-display text-xl leading-none">Resultado del mes</h2>
         <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
           <div>

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import AccionesFlotantes from "@/components/AccionesFlotantes";
+import FondoMarca, { VERDE_MARCA } from "@/components/Lava";
 import RegistrarSW from "@/components/RegistrarSW";
 import { listarCandidatos } from "@/lib/consultas";
 import { pinConfigurado } from "@/lib/sesion";
@@ -30,7 +31,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#faf7f0",
+  themeColor: VERDE_MARCA,
   width: "device-width",
   initialScale: 1,
   // En standalone la app ocupa la pantalla entera del celular.
@@ -54,20 +55,39 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full">
         {/*
-          El menú es fijo: una columna a la izquierda en pantalla grande y una
-          barra con un solo botón arriba en el celular. El contenido se corre
-          para dejarle el lugar en cada caso.
+          El marco de marca: el verde con la lava, anclado a la PANTALLA y no al
+          documento. Fijo a propósito — al scrollear, el humo se queda quieto y
+          lo que se mueve es la hoja de trabajo, que es lo que da la sensación
+          de tarjeta apoyada encima en vez de fondo pegado al contenido.
         */}
-        <div className="lg:pl-64">
+        <div className="fixed inset-0 z-0">
+          <FondoMarca />
+        </div>
+
+        {/*
+          El menú es fijo: una columna a la izquierda en pantalla grande y una
+          barra con un solo botón arriba en el celular. Los dos van
+          transparentes sobre la lava, así que el contenido se corre para
+          dejarles el lugar en vez de taparlos.
+        */}
+        <div className="relative z-10 lg:pl-56">
           {/*
-            Antes esto estaba capado en 5xl (1024px) y las planillas no
-            entraban: con el menú al costado sobraba pantalla y la tabla igual
-            scrolleaba. 7xl usa lo que hay sin volver ilegibles las pantallas
-            de lectura.
+            La hoja de trabajo. Arranca debajo de la barra en el celular y al
+            costado del menú en escritorio, con el filete verde alrededor: ese
+            respiro es lo único que hace leer el contenido como una tarjeta
+            apoyada sobre la marca y no como una página pintada de verde.
           */}
-          <main className="mx-auto w-full max-w-7xl px-4 pb-16 pt-20 sm:px-6 lg:pt-8">
-            {children}
-          </main>
+          <div className="min-h-[calc(100dvh-3.5rem)] rounded-t-3xl bg-papel shadow-xl mt-14 lg:mb-2 lg:mr-2 lg:mt-2 lg:min-h-[calc(100dvh-1rem)] lg:rounded-3xl">
+            {/*
+              Antes esto estaba capado en 5xl (1024px) y las planillas no
+              entraban: con el menú al costado sobraba pantalla y la tabla igual
+              scrolleaba. 7xl usa lo que hay sin volver ilegibles las pantallas
+              de lectura.
+            */}
+            <main className="mx-auto w-full max-w-7xl px-4 pb-24 pt-6 sm:px-6 lg:px-8">
+              {children}
+            </main>
+          </div>
         </div>
 
         <AccionesFlotantes clientes={candidatos} conSalir={Boolean(pinConfigurado())} />

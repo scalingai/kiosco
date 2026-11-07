@@ -491,7 +491,7 @@ export default function EditorRenglones({
           return (
             <li
               key={i}
-              className="rounded-xl border border-linea bg-white/70 px-2.5 py-2"
+              className="rounded-xl border border-linea bg-tarjeta px-2.5 py-2"
             >
               <div className="flex items-start gap-2">
                 <span className="min-w-0 flex-1">

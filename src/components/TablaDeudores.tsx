@@ -80,7 +80,7 @@ export default function TablaDeudores({ filas }: { filas: FilaDeudor[] }) {
             : "Ningún cliente coincide con la búsqueda."}
         </p>
       ) : (
-        <ul className="mt-4 divide-y divide-linea overflow-hidden rounded-2xl border border-linea bg-white/60">
+        <ul className="mt-4 divide-y divide-linea overflow-hidden rounded-2xl border border-linea bg-tarjeta">
           {visibles.map((f) => {
             const dias = f.ultimoMovimiento ? diasDesde(f.ultimoMovimiento) : null;
             return (

@@ -152,7 +152,7 @@ export default function FormMovimiento({
     <form
       onSubmit={enviar}
       className={
-        sinTitulo ? "" : "rounded-2xl border border-linea bg-white/60 p-4 sm:p-5"
+        sinTitulo ? "" : "rounded-2xl border border-linea bg-tarjeta p-4 sm:p-5"
       }
     >
       {!sinTitulo && (

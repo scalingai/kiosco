@@ -25,7 +25,10 @@ import {
   productos,
   proveedores,
   ventas,
+  ventasItems,
+  ventasPagos,
 } from "@/db/schema";
+import { totalDelCarrito } from "@/lib/carrito";
 import {
   costoDeReferencia,
   repartirPago,
@@ -36,7 +39,7 @@ import {
   type CompraAGuardar,
   type GastoAGuardar,
   type MedioPago,
-  type PagoDeCompra,
+  type RepartoPorMedio,
   type PorMedio,
   type Unidad,
   type VentaAGuardar,
@@ -106,21 +109,72 @@ export async function listarProveedores() {
 
 /* ── Escrituras ───────────────────────────────────────────────────────────── */
 
+/**
+ * La venta y su carrito entran juntos o no entra ninguno: media venta cargada
+ * es un total que después nadie puede explicar. Misma regla que en compras.
+ */
 export async function registrarVenta(entrada: VentaAGuardar) {
-  if (entrada.montoCentavos <= 0) {
-    throw new Error("La venta tiene que tener un monto mayor a cero");
-  }
   const db = await getDb();
-  const [fila] = await db
-    .insert(ventas)
-    .values({
-      montoCentavos: entrada.montoCentavos,
-      nota: entrada.nota?.trim() || null,
-      fecha: validarFecha(entrada.fecha),
-      medio: entrada.medio,
-    })
-    .returning();
-  return fila;
+
+  return db.transaction(async (tx) => {
+    const carrito = (entrada.items ?? []).filter((i) => i.cantidad > 0);
+
+    /*
+     * El total lo declara quien lo teclea; si no, lo dice el carrito. La
+     * distinción se guarda porque cambia qué significa el número: un total
+     * declarado es un dato, uno calculado es una consecuencia de los renglones.
+     */
+    const totalDeclarado = entrada.montoCentavos != null;
+    const montoCentavos = totalDeclarado
+      ? entrada.montoCentavos!
+      : totalDelCarrito(carrito);
+
+    if (montoCentavos <= 0) {
+      throw new Error("La venta tiene que tener un monto mayor a cero");
+    }
+
+    const [fila] = await tx
+      .insert(ventas)
+      .values({
+        montoCentavos,
+        totalDeclarado,
+        nota: entrada.nota?.trim() || null,
+        fecha: validarFecha(entrada.fecha),
+        medio: entrada.medio,
+      })
+      .returning();
+
+    if (carrito.length) {
+      await tx.insert(ventasItems).values(
+        carrito.map((renglon, posicion) => ({
+          ventaId: fila.id,
+          productoId: renglon.productoId,
+          descripcion: renglon.descripcion.trim() || null,
+          cantidad: Math.max(1, Math.round(renglon.cantidad)),
+          precioUnitarioCentavos: renglon.precioUnitarioCentavos,
+          costoUnitarioCentavos: renglon.costoUnitarioCentavos,
+          posicion,
+        })),
+      );
+    }
+
+    // Igual que en las compras: la suma del reparto tiene que dar el total, o
+    // la caja del día dice que entró por un lado plata que entró por otro.
+    if (entrada.pagos?.length) {
+      const reparto = repartirPago(entrada.pagos, montoCentavos);
+      if (reparto) {
+        await tx.insert(ventasPagos).values(
+          reparto.map((pago) => ({
+            ventaId: fila.id,
+            medio: pago.medio,
+            importeCentavos: pago.importeCentavos,
+          })),
+        );
+      }
+    }
+
+    return fila;
+  });
 }
 
 export async function registrarGasto(entrada: GastoAGuardar) {
@@ -294,7 +348,7 @@ export async function marcarCompraPagada(
   id: string,
   fecha: string,
   medio: MedioPago,
-  pagos?: PagoDeCompra[],
+  pagos?: RepartoPorMedio[],
 ) {
   if (!UUID.test(id)) return null;
   const db = await getDb();

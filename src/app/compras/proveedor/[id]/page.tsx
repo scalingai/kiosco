@@ -65,7 +65,7 @@ export default async function FichaProveedor({
     "flex-1 rounded-xl border px-3 py-2 text-center text-sm " +
     (activo
       ? "border-acento bg-acento text-white"
-      : "border-linea bg-white/70 text-tinta");
+      : "border-linea bg-tarjeta text-tinta");
 
   return (
     <div className="space-y-4">
@@ -150,7 +150,7 @@ export default async function FichaProveedor({
             {productos.map((p) => (
               <section
                 key={p.clave}
-                className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5"
+                className="rounded-2xl border border-linea bg-tarjeta px-4 py-3.5"
               >
                 <div className="flex items-baseline justify-between gap-3">
                   <h2 className="min-w-0 truncate font-display text-xl leading-none">
@@ -221,7 +221,7 @@ export default async function FichaProveedor({
           {lista.map((compra) => (
             <section
               key={compra.id}
-              className="rounded-2xl border border-linea bg-white/60 px-4 py-3.5"
+              className="rounded-2xl border border-linea bg-tarjeta px-4 py-3.5"
             >
               <div className="flex items-baseline justify-between gap-3">
                 <Link

@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import BotonSalir from "@/components/BotonSalir";
+import FondoMarca from "@/components/Lava";
 
 type Props = {
   /** Sin PIN configurado no hay sesión que cerrar, así que no se ofrece salir. */
@@ -223,10 +224,16 @@ export default function Menu({
   if (ruta === "/entrar") return null;
 
   const enlace = (activo: boolean) =>
-    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm " +
+    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors " +
+    /*
+     * El menú va sobre el verde, así que el activo no se puede marcar con un
+     * fondo de color: encima de la lava, un tinte verde no se distingue del
+     * fondo. Lo marca un vidrio blanco, que funciona igual sobre la parte
+     * clara y sobre la oscura del humo.
+     */
     (activo
-      ? "bg-acento/10 font-medium text-acento"
-      : "text-tinta hover:bg-papel-hondo");
+      ? "bg-white/20 font-medium text-white shadow-sm"
+      : "text-emerald-50/75 hover:bg-white/10 hover:text-white");
 
   const panel = (
     <div className="flex h-full flex-col gap-1 px-3 py-4">
@@ -243,7 +250,7 @@ export default function Menu({
           priority
           className="h-9 w-9 object-contain"
         />
-        <span className="font-display text-2xl leading-none tracking-tight">
+        <span className="font-display text-2xl font-semibold leading-none tracking-tight text-white">
           El Osito
         </span>
       </Link>
@@ -263,14 +270,16 @@ export default function Menu({
         ))}
       </nav>
 
-      <div className="mt-4 space-y-2 border-t border-linea pt-4">
+      <div className="mt-4 space-y-2 border-t border-white/15 pt-4">
         <button
           type="button"
           onClick={grabando ? onFrenar : onGrabar}
           disabled={procesando}
           className={
-            "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white disabled:opacity-60 " +
-            (grabando ? "bg-deuda" : "bg-acento")
+            "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium disabled:opacity-60 " +
+            (grabando
+              ? "bg-deuda text-white"
+              : "bg-white text-marca shadow-sm hover:bg-emerald-50")
           }
         >
           {grabando ? (
@@ -292,7 +301,7 @@ export default function Menu({
             setAbierto(false);
             onCargarAMano();
           }}
-          className="flex w-full items-center gap-3 rounded-xl border border-linea px-3 py-2.5 text-sm"
+          className="flex w-full items-center gap-3 rounded-xl border border-white/25 px-3 py-2.5 text-sm text-emerald-50 transition-colors hover:bg-white/10 hover:text-white"
         >
           <span className="flex h-5 w-5 shrink-0 items-center justify-center text-xl leading-none">
             +
@@ -312,18 +321,21 @@ export default function Menu({
   return (
     <>
       {/* Pantalla grande: la columna vive siempre, no se despliega. */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-linea bg-papel-hondo/60 lg:block">
+      {/* Pantalla grande: la columna vive siempre sobre la lava del marco, sin
+          fondo propio — el verde que se ve es el del layout, y por eso el humo
+          sigue de largo por detrás del menú sin cortarse. */}
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-56 lg:block">
         {panel}
       </aside>
 
       {/* Celular: arriba queda un solo botón, y todo lo demás sale de ahí. */}
-      <header className="fixed inset-x-0 top-0 z-40 flex h-14 items-center gap-2 border-b border-linea bg-papel/95 px-3 backdrop-blur lg:hidden">
+      <header className="fixed inset-x-0 top-0 z-40 flex h-14 items-center gap-2 px-3 text-white lg:hidden">
         <button
           type="button"
           onClick={() => setAbierto(true)}
           aria-label="Abrir el menú"
           aria-expanded={abierto}
-          className="rounded-xl border border-linea bg-white/70 px-3 py-2"
+          className="rounded-xl border border-white/25 px-3 py-2 transition-colors hover:bg-white/10"
         >
           <svg
             viewBox="0 0 24 24"
@@ -338,7 +350,7 @@ export default function Menu({
           </svg>
         </button>
 
-        <span className="min-w-0 flex-1 truncate font-display text-xl leading-none">
+        <span className="min-w-0 flex-1 truncate font-display text-xl font-semibold leading-none">
           {tituloDe(ruta)}
         </span>
 
@@ -353,8 +365,8 @@ export default function Menu({
             onClick={grabando ? onFrenar : undefined}
             disabled={procesando}
             className={
-              "flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white disabled:opacity-70 " +
-              (grabando ? "bg-deuda" : "bg-acento")
+              "flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium disabled:opacity-70 " +
+              (grabando ? "bg-deuda text-white" : "bg-white text-marca")
             }
           >
             {grabando ? (
@@ -377,8 +389,11 @@ export default function Menu({
             onClick={() => setAbierto(false)}
             className="absolute inset-0 bg-tinta/35"
           />
-          <div className="absolute inset-y-0 left-0 w-72 max-w-[85vw] border-r border-linea bg-papel shadow-2xl">
-            {panel}
+          {/* El cajón es la MISMA superficie que la columna de escritorio: si
+              fuera una hoja blanca, abrir el menú cambiaría de app. */}
+          <div className="absolute inset-y-0 left-0 w-72 max-w-[85vw] overflow-hidden shadow-2xl">
+            <FondoMarca velo="parejo" />
+            <div className="relative h-full">{panel}</div>
           </div>
         </div>
       )}
