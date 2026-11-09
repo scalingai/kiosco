@@ -2,7 +2,15 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { cobrarConQr, guardarVenta, soltarCobroQr } from "@/app/acciones";
+import {
+  altaPorCodigo,
+  cobrarConQr,
+  editarProducto,
+  guardarVenta,
+  identificarCodigo,
+  soltarCobroQr,
+} from "@/app/acciones";
+import type { CandidatoEan, Parecido } from "@/lib/buscar-ean";
 import SelectorNombre from "@/components/SelectorNombre";
 import RepartoDePago, {
   mediosUsados,
@@ -25,10 +33,20 @@ import { AVISO_TARDANZA, conLimiteDeTiempo } from "@/lib/espera";
 import { normalizarNombre } from "@/lib/nombres";
 import { repartirPago, type MedioPago } from "@/lib/negocio";
 import { formatearCentavos, parsearMonto } from "@/lib/plata";
+import { pareceCodigoDeBarras } from "@/lib/codigos";
 import type { ProductoVendible } from "@/lib/stock";
 
 /** Cuántas sugerencias se dibujan mientras se escribe. */
 const MAXIMO = 8;
+
+/**
+ * Lo máximo que puede valer UN renglón cobrado como monto suelto: $1.000.000.
+ *
+ * No es el tope de la venta ni del carrito, es el de un renglón solo. Está
+ * holgado a propósito —un cartón de cigarrillos no llega ni cerca— porque su
+ * trabajo no es ajustar el precio sino cortar lo absurdo.
+ */
+const TOPE_SUELTO = 100_000_000;
 
 function IconoQr() {
   return (
@@ -150,6 +168,14 @@ export default function Mostrador({
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  /** un código que se escaneó y no es de ningún producto todavía */
+  const [codigoHuerfano, setCodigoHuerfano] = useState<string | null>(null);
+  /** qué dice el catálogo del supermercado que es ese código */
+  const [candidato, setCandidato] = useState<CandidatoEan | null>(null);
+  /** lo que YA está en el catálogo y podría ser lo mismo, sin el código */
+  const [parecidos, setParecidos] = useState<Parecido[]>([]);
+  const [buscandoCodigo, setBuscandoCodigo] = useState(false);
+  const [guardandoCodigo, setGuardandoCodigo] = useState(false);
   const campo = useRef<HTMLInputElement>(null);
 
   const total = totalDelCarrito(renglones);
@@ -227,6 +253,19 @@ export default function Mostrador({
   function meterSuelto(texto: string) {
     const centavos = parsearMonto(texto);
     if (centavos == null || centavos <= 0) return false;
+
+    /*
+     * Un renglón de kiosco no llega al millón de pesos. Un número así no es un
+     * precio: es un código mal leído, o un cero de más. El tope es la segunda
+     * red —la primera es `pareceCodigoDeBarras` de arriba— y está acá porque
+     * cobrar de más no se deshace solo: hay que anular la venta.
+     */
+    if (centavos > TOPE_SUELTO) {
+      setError(
+        `${formatearCentavos(centavos)} es demasiado para un renglón. Si es un código de barras, el producto todavía no lo tiene cargado.`,
+      );
+      return true;
+    }
     setRenglones((previo) =>
       agregar(previo, {
         productoId: null,
@@ -254,16 +293,109 @@ export default function Mostrador({
     const porEscaneo = porCodigo.get(texto.replace(/\D/g, ""));
     if (porEscaneo) return void meter(porEscaneo);
 
-    // 2) Si hay una sola coincidencia por nombre, esa.
+    /*
+     * 2) Un escaneo que no encontró producto TERMINA ACÁ.
+     *
+     * Antes seguía de largo hasta el monto suelto, y ese era el peor bug que
+     * tuvo el mostrador: de los productos con precio cargado, la mayoría no
+     * tiene código todavía. Escanear uno de ésos no fallaba — cobraba el
+     * código COMO SI FUERA EL PRECIO, y metía un renglón "Varios" de miles de
+     * millones de pesos sin que nada avisara.
+     *
+     * Tampoco se pasa a la búsqueda por nombre: trece dígitos no son el nombre
+     * de nada, y si por casualidad matchearan algo, agregaría un producto que
+     * nadie pidió.
+     */
+    if (pareceCodigoDeBarras(texto)) {
+      olvidarCodigo();
+      setCodigoHuerfano(texto);
+      setError(null);
+      setBusqueda("");
+      void preguntarQueEs(texto);
+      return;
+    }
+
+    // 3) Si hay coincidencia por nombre, la primera.
     if (sugerencias.length) return void meter(sugerencias[0]);
 
-    // 3) Si no encontró nada y lo escrito es un número, se cobra como monto
-    //    suelto. Es lo que se hace con lo que no está cargado todavía.
+    // 4) Lo que no está cargado se cobra como monto suelto.
     if (meterSuelto(texto)) return;
 
     setError(
       `No encontré "${texto}". Si es un precio suelto, escribí sólo el número.`,
     );
+  }
+
+  /**
+   * Le pregunta a los catálogos de los supermercados qué producto es ese
+   * código. Es sólo una consulta: no da de alta nada hasta que alguien
+   * confirme.
+   */
+  async function preguntarQueEs(codigo: string) {
+    setBuscandoCodigo(true);
+    const r = await identificarCodigo(codigo);
+    setBuscandoCodigo(false);
+    if (!r.ok) return;
+    // Si mientras tanto se escaneó otra cosa, esta respuesta ya no sirve.
+    if (r.datos.candidato && r.datos.candidato.codigo !== codigo) return;
+    setCandidato(r.datos.candidato);
+    setParecidos(r.datos.parecidos);
+  }
+
+  /** "Es este": lo da de alta con el código pegado y lo mete al carrito. */
+  async function altaDelCandidato() {
+    if (!candidato) return;
+
+    setGuardandoCodigo(true);
+    const r = await altaPorCodigo(candidato);
+    setGuardandoCodigo(false);
+    if (!r.ok) return setError(r.error);
+
+    // Entra a la venta sin precio: el renglón lo pide. Frenar el cobro para ir
+    // a cargar un precio es perder la venta por un dato que se pone acá mismo.
+    meter({
+      id: r.datos.id,
+      nombre: candidato.nombre,
+      marca: candidato.marca,
+      codigoBarras: candidato.codigo,
+      imagenUrl: candidato.imagenUrl,
+      precioVentaCentavos: null,
+      costoRealCentavos: null,
+      multiplicadorMilesimas: null,
+      recargoMilesimas: null,
+    });
+
+    olvidarCodigo();
+    router.refresh();
+  }
+
+  /** Le pega el código escaneado a un producto que YA está en el catálogo. */
+  async function adoptarCodigo(producto: ProductoVendible) {
+    const codigo = codigoHuerfano;
+    if (!codigo) return;
+
+    setGuardandoCodigo(true);
+    const r = await editarProducto(producto.id, { codigoBarras: codigo });
+    setGuardandoCodigo(false);
+    if (!r.ok) return setError(r.error);
+
+    olvidarCodigo();
+    meter(producto);
+    router.refresh();
+  }
+
+  /** Lo mismo, desde la lista de parecidos, que sólo trae el id. */
+  async function adoptarPorId(id: string) {
+    const producto = productos.find((p) => p.id === id);
+    if (producto) return adoptarCodigo(producto);
+    // No debería pasar: los parecidos salen del mismo catálogo que `productos`.
+    setError("Ese producto ya no está en la lista. Recargá la pantalla.");
+  }
+
+  function olvidarCodigo() {
+    setCodigoHuerfano(null);
+    setCandidato(null);
+    setParecidos([]);
   }
 
   /**
@@ -490,6 +622,149 @@ export default function Mostrador({
         onKeyDown={alTeclear}
         className="w-full rounded-xl border border-linea bg-white px-4 py-3 text-base"
       />
+
+      {/*
+        Un código que no es de nadie. En vez de un error y nada más, acá se le
+        asigna a un producto: el escaneo que falló es justo el momento en que
+        se sabe qué código tiene esa cosa, con el envase en la mano.
+      */}
+      {codigoHuerfano && (
+        <div className="mt-2 rounded-xl border border-linea bg-tarjeta p-3 shadow-sm">
+          <p className="font-mono text-[11px] tracking-tight text-tinta-suave">
+            {codigoHuerfano}
+          </p>
+
+          {buscandoCodigo && (
+            <p className="mt-1 text-sm text-tinta-suave">
+              Buscando qué producto es…
+            </p>
+          )}
+
+          {/* Lo encontró: una foto, un nombre y un botón. */}
+          {!buscandoCodigo && candidato && (
+            <>
+              <div className="mt-1 flex items-center gap-3">
+                {candidato.imagenUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={candidato.imagenUrl}
+                    alt=""
+                    className="h-14 w-14 shrink-0 rounded-lg bg-white object-contain p-1 ring-1 ring-linea"
+                  />
+                )}
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold leading-snug">
+                    {candidato.nombre}
+                  </span>
+                  <span className="block text-xs text-tinta-suave">
+                    lo reconoció {candidato.fuente}
+                  </span>
+                </span>
+              </div>
+
+              {/*
+                ESTO VA ANTES DEL ALTA, a propósito. Si el producto ya está en
+                el catálogo sin su código, dar de alta otro parte el historial
+                de costos en dos filas que después nadie desarma. Acá la opción
+                de arriba es siempre pegarle el código al que ya existe.
+              */}
+              {parecidos.length > 0 && (
+                <div className="mt-2.5 rounded-lg bg-papel-hondo p-2">
+                  <p className="text-xs font-semibold">
+                    Esto ya lo tenés cargado
+                  </p>
+                  <ul className="mt-1 space-y-1">
+                    {parecidos.map((p) => (
+                      <li key={p.id}>
+                        <button
+                          type="button"
+                          disabled={guardandoCodigo}
+                          onClick={() => void adoptarPorId(p.id)}
+                          className="flex w-full items-center gap-2 rounded-md bg-tarjeta px-2 py-1.5 text-left ring-1 ring-linea disabled:opacity-60"
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">
+                              {p.nombre}
+                            </span>
+                            <span className="block text-[11px] text-tinta-suave">
+                              {p.porque}
+                              {p.codigoBarras &&
+                                " · ojo: ya tiene otro código y se lo cambiás"}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-xs font-semibold text-marca">
+                            Es este
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => void altaDelCandidato()}
+                disabled={guardandoCodigo}
+                className={`mt-2.5 w-full rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-60 ${
+                  parecidos.length
+                    ? "border border-linea bg-tarjeta text-tinta-suave"
+                    : "bg-marca text-white"
+                }`}
+              >
+                {guardandoCodigo
+                  ? "Cargando…"
+                  : parecidos.length
+                    ? "No, es uno nuevo: cargalo"
+                    : "Es este, cargalo"}
+              </button>
+              <p className="mt-1.5 text-center text-[11px] text-tinta-suave">
+                Entra sin precio: lo escribís en el carrito.
+              </p>
+            </>
+          )}
+
+          {/* No lo encontró, o no es el que dice: se elige del catálogo. */}
+          {!buscandoCodigo && (
+            <div className="mt-2.5">
+              <p className="text-xs text-tinta-suave">
+                {candidato
+                  ? "¿No es ese? Elegilo de tu catálogo:"
+                  : "No lo encontré en ningún catálogo. ¿Cuál es?"}
+              </p>
+              <div className="mt-1.5">
+                <SelectorNombre
+                  queEs="producto"
+                  valor=""
+                  opciones={productos.map((p) => ({
+                    id: p.id,
+                    nombre: p.nombre,
+                    detalle: p.marca ?? undefined,
+                  }))}
+                  permitirCrear={false}
+                  placeholder="Buscalo por nombre"
+                  etiquetaAria="Producto al que pertenece el código"
+                  alCambiar={(_nombre, id) => {
+                    const p = productos.find((x) => x.id === id);
+                    if (p) void adoptarCodigo(p);
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              olvidarCodigo();
+              campo.current?.focus();
+            }}
+            className="mt-2 text-xs font-medium text-tinta-suave underline"
+          >
+            Dejarlo para después
+          </button>
+        </div>
+      )}
 
       {sugerencias.length > 0 ? (
         <ul className="mt-1 overflow-hidden rounded-xl border border-linea bg-tarjeta">

@@ -28,6 +28,12 @@ import {
   marcarFalta,
   type FichaProducto,
 } from "@/lib/stock";
+import {
+  buscarParecidos,
+  identificarEan,
+  type CandidatoEan,
+  type Parecido,
+} from "@/lib/buscar-ean";
 import type {
   CompraAGuardar,
   GastoAGuardar,
@@ -216,6 +222,53 @@ export async function agregarProducto(
 ): Promise<Resultado<{ id: string }>> {
   try {
     const producto = await crearProducto(nombre);
+    revalidatePath("/", "layout");
+    return { ok: true, datos: { id: producto.id } };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+/**
+ * Qué producto es este código de barras, según los catálogos de los
+ * supermercados. NO escribe nada: devuelve un candidato para confirmar.
+ *
+ * Vive como acción de servidor y no como fetch del navegador por dos razones:
+ * las APIs de las tiendas no mandan CORS, y así el mostrador no le habla
+ * directo a un dominio ajeno.
+ */
+export async function identificarCodigo(
+  codigo: string,
+): Promise<Resultado<{ candidato: CandidatoEan | null; parecidos: Parecido[] }>> {
+  try {
+    const candidato = await identificarEan(codigo);
+    // Lo que el catálogo YA tiene y podría ser esto mismo sin el código
+    // cargado. Sin este paso, el alta duplicaría el producto.
+    const parecidos = candidato ? await buscarParecidos(candidato) : [];
+    return { ok: true, datos: { candidato, parecidos } };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+/**
+ * Da de alta un producto a partir de lo que dijo el catálogo, con su código ya
+ * pegado. Es el paso que sigue al toque de "es este".
+ *
+ * El precio de venta NO se pone: queda en `null` y el renglón del carrito lo
+ * pide. Un precio inventado acá sería peor que la demora — ver en CLAUDE.md
+ * «un ítem sin precio no vale cero».
+ */
+export async function altaPorCodigo(
+  candidato: CandidatoEan,
+): Promise<Resultado<{ id: string }>> {
+  try {
+    const producto = await crearProducto(candidato.nombre);
+    await actualizarProducto(producto.id, {
+      marca: candidato.marca,
+      codigoBarras: candidato.codigo,
+      imagenUrl: candidato.imagenUrl,
+    });
     revalidatePath("/", "layout");
     return { ok: true, datos: { id: producto.id } };
   } catch (error) {

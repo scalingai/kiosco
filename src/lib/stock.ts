@@ -20,30 +20,11 @@ import {
   type Unidad,
 } from "@/lib/negocio";
 import { normalizarNombre } from "@/lib/nombres";
+import { codigoValido } from "@/lib/codigos";
 
-/**
- * Valida un código de barras por su dígito verificador.
- *
- * Los EAN-13 y EAN-8 llevan el último dígito calculado a partir de los otros,
- * justamente para detectar un dígito mal leído o mal tipeado. Chequearlo es lo
- * que evita el peor caso: un código que "parece" bien, se guarda, y el día que
- * se escanee trae otro producto.
- *
- * Los EAN argentinos arrancan en 779, pero eso NO se exige: en la góndola hay
- * importados y productos con código de otro país.
- */
-export function codigoValido(codigo: string): boolean {
-  if (!/^\d+$/.test(codigo)) return false;
-  if (codigo.length !== 8 && codigo.length !== 13) return false;
-
-  const digitos = [...codigo].map(Number);
-  const verificador = digitos.pop()!;
-  // De derecha a izquierda, uno de cada dos pesa 3 y el otro 1.
-  const suma = digitos
-    .reverse()
-    .reduce((total, d, i) => total + d * (i % 2 === 0 ? 3 : 1), 0);
-  return (10 - (suma % 10)) % 10 === verificador;
-}
+// Se re-exporta para no romper lo que ya la importaba de acá. La definición
+// vive en `codigos.ts` porque el mostrador (cliente) también la necesita.
+export { codigoValido, pareceCodigoDeBarras } from "@/lib/codigos";
 
 /** La misma tabla otra vez, para poder leer la categoría padre en la consulta. */
 const padre = alias(categorias, "categoria_padre");
@@ -445,6 +426,8 @@ export type FichaProducto = {
   envase?: Envase | null;
   /** el EAN del envase; `null` lo borra */
   codigoBarras?: string | null;
+  /** la foto; `null` la borra. Sólo http(s) */
+  imagenUrl?: string | null;
 };
 
 /**
@@ -468,6 +451,7 @@ export async function actualizarProducto(id: string, ficha: FichaProducto) {
     categoriaId?: string | null;
     envase?: Envase | null;
     codigoBarras?: string | null;
+    imagenUrl?: string | null;
   } = {};
 
   if (ficha.nombre != null) {
@@ -542,6 +526,16 @@ export async function actualizarProducto(id: string, ficha: FichaProducto) {
       );
     }
     cambios.codigoBarras = limpio || null;
+  }
+
+  if (ficha.imagenUrl !== undefined) {
+    const limpio = ficha.imagenUrl?.trim() ?? "";
+    // Sólo http(s). Un `javascript:` o un `data:` acá terminaría en el `src`
+    // de un <img> de la tienda pública.
+    if (limpio && !/^https?:\/\//i.test(limpio)) {
+      throw new Error("La imagen tiene que ser un link http o https");
+    }
+    cambios.imagenUrl = limpio || null;
   }
 
   if (!Object.keys(cambios).length) return null;

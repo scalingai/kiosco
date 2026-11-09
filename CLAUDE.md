@@ -135,11 +135,33 @@ Lo que nunca se borra, aunque sobre: un producto con compras encima o con
 precio de venta cargado. Eso significa que alguien lo usa de verdad.
 
 **El código de barras no se adivina.** `productos.codigo_barras` se valida con
-el dígito verificador del EAN (`codigoValido()` en `src/lib/stock.ts`) antes de
+el dígito verificador del EAN (`codigoValido()` en `src/lib/codigos.ts`) antes de
 guardarse. Un código equivocado no falla ruidosamente: escanea y trae otro
 producto, que es peor que no tenerlo. Por lo mismo, cuando `db:importar`
 encuentra más de un producto que podría corresponder a un EAN, **no elige
-ninguno**: lo reporta y sigue.
+ninguno**: lo reporta y sigue. Y `buscar-ean.ts` descarta la tienda entera si
+devuelve más de un producto para el mismo código.
+
+**Una ristra larga de dígitos es un escaneo, nunca un precio.** El campo del
+mostrador tiene dos lecturas —buscar producto o cobrar monto suelto— y
+`pareceCodigoDeBarras()` decide cuál. Si entró un código y no es de ningún
+producto, el camino **termina ahí**: no se pasa a la búsqueda por nombre ni al
+monto suelto. Ver abajo por qué.
+
+**Antes de dar de alta un producto desde un código, buscar el duplicado.**
+`buscarParecidos()` mira si eso ya está en el catálogo con otro nombre y sin
+código (mismo nombre normalizado, o misma marca y mismo `contenido`). Dar de
+alta uno nuevo cuando ya existía parte el historial de costos en dos filas y
+**no se nota**: las dos funcionan, y el costo de referencia sale de la que se
+compró. Por eso en pantalla la opción de arriba es siempre pegarle el código al
+que ya está, y crear uno nuevo es la acción secundaria.
+
+Marca y tamaño aciertan el grupo pero **no la variante**: "Monster 473" son los
+cinco Monster de 473. Eso se ORDENA con la tabla `VARIANTES` (original↔común,
+sin azúcar↔zero) y lo elige una persona con un toque. No se resuelve solo, y no
+hace falta un modelo: es comparar strings con respuesta exacta, `normalizarNombre()`
+es la misma función que usa el índice único de la base, y una fusión equivocada
+pega dos historiales que después nadie desarma.
 
 **Rubro y envase son dos ejes distintos, no uno.** El rubro es qué cosa es
 (`categorias`, en dos niveles con `padre_id`: Bebidas › Gaseosas) y el envase es
@@ -240,6 +262,18 @@ inserten. Un solo lugar por donde entra todo.
   llevar es el estado aprobado, no repetir el proceso que lo produjo. El script
   no borra nada y sólo completa campos en `null`, así que un precio cargado
   desde el celular le gana al catálogo de referencia.
+- **El escaneo cobraba el código como precio.** Hasta el 2026-11-09, un código
+  que no estaba cargado caía al monto suelto y metía un renglón "Varios" de
+  miles de millones de pesos, sin error. Pasaba seguido porque de los productos
+  con precio de venta la mayoría todavía no tiene código. Dos redes ahora:
+  `pareceCodigoDeBarras()` corta el camino antes, y `TOPE_SUELTO` en
+  `Mostrador.tsx` rechaza un renglón de más de $1.000.000.
+- **Una función de `stock.ts` en un componente de cliente rompe el build.**
+  `stock.ts` importa `src/db/client.ts`, así que traer de ahí una FUNCIÓN (no un
+  tipo) arrastra el driver de Postgres al bundle del navegador y el build muere
+  con `module not found`. Un `import type` se borra en compilación y no pasa
+  nada; un import normal, sí. Por eso los helpers de código de barras viven en
+  `src/lib/codigos.ts`, que no depende de nada.
 - **Los ids se validan contra un regex de UUID** antes de ir a la base: sin eso,
   una URL con basura sale como 500 en vez de 404.
 
