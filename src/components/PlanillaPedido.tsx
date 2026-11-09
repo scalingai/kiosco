@@ -413,6 +413,16 @@ function Numero({
       className={`px-1.5 py-1.5 text-right ${soloEnGrande ? "hidden escritorio:table-cell" : ""}`}
     >
       <input
+        /*
+         * `key` atado al valor del servidor: sin esto el campo se queda con lo
+         * de antes. `defaultValue` sólo se lee cuando el input se monta, así
+         * que si el servidor devuelve otro número —y acá pasa seguido, porque
+         * escribir el costo por unidad reescribe el precio del bulto y al
+         * revés— el input sigue mostrando el viejo. Cambiar la key lo vuelve a
+         * montar. No molesta mientras se tipea: la prop no cambia hasta que
+         * contesta el servidor.
+         */
+        key={valor}
         type="number"
         min="1"
         step="1"
@@ -461,6 +471,7 @@ function Plata({
       className={`px-1.5 py-1.5 text-right ${soloEnGrande ? "hidden escritorio:table-cell" : ""}`}
     >
       <input
+        key={String(centavos)}
         type="text"
         inputMode="decimal"
         disabled={ocupado}
