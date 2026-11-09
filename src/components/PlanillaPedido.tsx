@@ -10,7 +10,7 @@ import {
   traerLoDeSiempre,
 } from "@/app/acciones";
 import SelectorNombre from "@/components/SelectorNombre";
-import { importeBultoDesdeCosto } from "@/lib/negocio";
+import { importeBultoDesdeCosto, importeBultoDesdeTotal } from "@/lib/negocio";
 import { formatearCentavos, parsearMonto } from "@/lib/plata";
 import type { PedidoDeReposicion, RenglonDePedido } from "@/lib/reposicion";
 
@@ -142,7 +142,7 @@ export default function PlanillaPedido({
               <tr className="border-b border-linea text-[10px] uppercase tracking-wider text-tinta-suave">
                 {/* Los anchos suman 100 en cada corte. Si no, la última
                     columna queda pegada al borde. */}
-                <th className="w-[24%] px-3 py-2 text-left font-semibold escritorio:w-[19%]">
+                <th className="w-[29%] px-3 py-2 text-left font-semibold escritorio:w-[23%]">
                   Producto
                 </th>
                 <th className="w-[10%] px-1.5 py-2 text-right font-semibold">
@@ -163,11 +163,8 @@ export default function PlanillaPedido({
                 <th className="w-[13%] px-1.5 py-2 text-right font-semibold escritorio:w-[10%]">
                   Sugerido
                 </th>
-                <th className="w-[14%] px-1.5 py-2 text-right font-semibold escritorio:w-[11%]">
+                <th className="w-[18%] px-1.5 py-2 text-right font-semibold escritorio:w-[13%]">
                   Precio
-                </th>
-                <th className="w-[9%] px-1.5 py-2 text-right font-semibold escritorio:w-[6%]">
-                  Margen
                 </th>
                 <th className="w-[4%] px-1.5 py-2 escritorio:w-[3%]" />
               </tr>
@@ -208,8 +205,8 @@ export default function PlanillaPedido({
                 <td className="px-1.5 py-2.5 text-right font-mono text-base tabular-nums">
                   {formatearCentavos(pedido.totalCentavos)}
                 </td>
-                <td colSpan={3} className="escritorio:hidden" />
-                <td colSpan={4} className="hidden escritorio:table-cell" />
+                <td colSpan={2} className="escritorio:hidden" />
+                <td colSpan={3} className="hidden escritorio:table-cell" />
               </tr>
             </tfoot>
           </table>
@@ -271,11 +268,12 @@ function Fila({
   onPrecio: (centavos: number | null) => void;
   onSacar: () => void;
 }) {
-  const subio =
-    r.importeBultoAnteriorCentavos != null &&
-    r.importeBultoCentavos != null &&
-    r.importeBultoCentavos > r.importeBultoAnteriorCentavos;
-
+  /*
+   * La columna de margen se sacó —ocupaba ancho y el número se mira una vez—
+   * pero el AVISO no: un producto que se vende al 12% es plata que se va sin
+   * que nadie lo note. Queda como borde rojo en el precio, que es la celda
+   * donde se puede hacer algo al respecto.
+   */
   const flojo = r.margenRealPorciento != null && r.margenRealPorciento < 15;
 
   return (
@@ -310,16 +308,23 @@ function Fila({
         onListo={(c) => onRenglon({ importeBultoCentavos: c })}
       />
 
-      <td className="px-1.5 py-1.5 text-right font-mono tabular-nums">
-        {r.totalCentavos == null ? (
-          <span className="text-falta">—</span>
-        ) : (
-          <>
-            {formatearCentavos(r.totalCentavos)}
-            {subio && <span className="ml-0.5 text-alerta">▲</span>}
-          </>
-        )}
-      </td>
+      {/*
+        El total del renglón también se escribe: el mayorista a veces canta
+        "los tres cajones te salen cuarenta y cinco mil" y no el precio del
+        bulto. Es la tercera forma de entrar el MISMO dato — lo que se guarda
+        sigue siendo el importe del bulto.
+      */}
+      <Plata
+        centavos={r.totalCentavos}
+        ocupado={ocupado}
+        etiqueta={`Total del renglón de ${r.nombre}`}
+        onListo={(total) =>
+          onRenglon({
+            importeBultoCentavos:
+              total == null ? null : importeBultoDesdeTotal(total, r.cantidad),
+          })
+        }
+      />
 
       {/*
         El costo por unidad se puede escribir, y acomoda el precio del bulto
@@ -366,18 +371,20 @@ function Fila({
       <Plata
         centavos={r.precioVentaCentavos}
         ocupado={ocupado}
-        etiqueta={`Precio de venta de ${r.nombre}`}
+        etiqueta={
+          flojo
+            ? `Precio de venta de ${r.nombre} — margen ${r.margenRealPorciento}%, bajo`
+            : `Precio de venta de ${r.nombre}`
+        }
         resaltado
+        alerta={flojo}
+        titulo={
+          r.margenRealPorciento == null
+            ? undefined
+            : `Margen real: ${r.margenRealPorciento}%`
+        }
         onListo={onPrecio}
       />
-
-      <td
-        className={`px-1.5 py-1.5 text-right font-mono tabular-nums ${
-          flojo ? "font-semibold text-deuda" : "text-tinta-suave"
-        }`}
-      >
-        {r.margenRealPorciento == null ? "—" : `${r.margenRealPorciento}%`}
-      </td>
 
       <td className="px-1.5 py-1.5 text-right">
         <button
@@ -457,6 +464,8 @@ function Plata({
   etiqueta,
   resaltado,
   soloEnGrande,
+  alerta,
+  titulo,
   onListo,
 }: {
   centavos: number | null;
@@ -464,6 +473,10 @@ function Plata({
   etiqueta: string;
   resaltado?: boolean;
   soloEnGrande?: boolean;
+  /** pinta el borde de rojo: acá significa margen por debajo del 15% */
+  alerta?: boolean;
+  /** lo que se lee al dejar el mouse encima */
+  titulo?: string;
   onListo: (centavos: number | null) => void;
 }) {
   return (
@@ -486,10 +499,13 @@ function Plata({
           const nuevo = texto ? parsearMonto(texto) : null;
           if (nuevo !== centavos) onListo(nuevo);
         }}
+        title={titulo}
         className={`w-full rounded-md border px-1.5 py-1 text-right font-mono tabular-nums ${
-          resaltado
-            ? "border-acento/40 bg-acento-tenue/40 font-semibold"
-            : "border-linea bg-papel"
+          alerta
+            ? "border-deuda bg-deuda-tenue/50 font-semibold text-deuda"
+            : resaltado
+              ? "border-acento/40 bg-acento-tenue/40 font-semibold"
+              : "border-linea bg-papel"
         }`}
       />
     </td>

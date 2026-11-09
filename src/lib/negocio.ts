@@ -348,6 +348,26 @@ export function costoConIva(centavos: number, enBlanco: boolean): number {
  * el bulto entre lo que trae, y la cantidad se simplifica. Por eso pedir 3
  * cajones o 30 no cambia este número.
  */
+/**
+ * La otra cuenta al revés: sé lo que sale el renglón entero, ¿cuánto es el
+ * bulto?
+ *
+ * El mayorista a veces canta el total del renglón —"los tres cajones te salen
+ * cuarenta y cinco mil"— y no el precio del bulto. Igual que con el costo por
+ * unidad, lo que se guarda sigue siendo el importe del BULTO: son tres formas
+ * de entrar el mismo dato, no tres lugares donde vive.
+ *
+ * No lleva IVA: el total es lo que dice la factura, en bruto, igual que el
+ * importe del bulto. El IVA aparece recién al calcular el costo real.
+ */
+export function importeBultoDesdeTotal(
+  totalCentavos: number,
+  cantidad: number,
+): number {
+  if (cantidad <= 0 || totalCentavos <= 0) return 0;
+  return Math.round(totalCentavos / cantidad);
+}
+
 export function importeBultoDesdeCosto(
   costoUnitarioCentavos: number,
   unidadesPorBulto: number,

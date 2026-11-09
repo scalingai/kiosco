@@ -112,16 +112,21 @@ lo toqué" de "decidí que sea 1,4", y el día que cambie el general, los que na
 ajustó lo siguen. Con un `default 1400` en la columna ese cambio no llegaría a
 ninguno.
 
-**El precio sugerido se redondea a los $100 más cercanos.** Nadie cobra $4.357
-ni tiene monedas para ese vuelto. `redondearPrecio()` va al múltiplo de $100
-más cercano, para los dos lados: $480 y $510 son los dos $500, y $5.235 es
-$5.200.
+**El precio sugerido se redondea a los $100, y desde $10 arriba sube.** Nadie
+cobra $4.357 ni tiene monedas para ese vuelto. `redondearPrecio()` baja al
+múltiplo de $100 cuando sobran menos de $10, y sube al siguiente cuando sobran
+$10 o más: $509 queda en $500 y $510 pasa a $600. Nunca devuelve cero — algo
+que vale $30 se sugiere a $100.
 
-Al **más cercano** y no para arriba (regla de Agus, 2026-09-08). Forzar para
-arriba defiende el margen al centavo pero empuja $510 a $600 —18% más caro por
-nada—, y en la góndola el precio lo termina fijando lo que cobra el de la otra
-cuadra, no la calculadora. Un paso único de $100 en vez de escalones por
-tamaño, por la misma razón: es la regla que se puede decir en una frase.
+Esta regla **reemplaza** a la del "más cercano" que estuvo escrita acá hasta el
+2026-11-09. Confirmada por Agus ese día, mirando lo que hacía el código desde
+el 2026-09-12: el redondeo defiende el margen, y la rebaja la decide una
+persona mirando la góndola, no la calculadora. Un paso único de $100 en vez de
+escalones por tamaño: es la regla que se puede decir en una frase.
+
+⚠️ El sugerido es eso, **una sugerencia**. Si el de la otra cuadra lo tiene más
+barato, el precio se pone a mano y la app calcula el margen que de verdad
+quedó.
 
 **En los rubros de bebidas, `db:catalogo` es la única verdad.** Los que están en
 `RUBROS_PROPIOS` (gaseosas, aguas, saborizadas, jugos, energizantes, alcohol,
