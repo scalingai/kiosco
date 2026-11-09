@@ -203,6 +203,19 @@ lo que va a pasar. No vuelvas a `<datalist>`: lo dibuja el sistema operativo
 encontraba "Coca-Cola") y no distingue elegir de crear, que es como se termina
 con el mismo proveedor cargado tres veces.
 
+**El pedido al proveedor NO es una compra.** Vive en `reposiciones` /
+`reposiciones_items` (`/reponer`), aparte de `compras`, y la razón es el costo:
+`costoDeReferencia()` sale de la última compra, así que meter ahí un pedido con
+precios estimados haría que todo el catálogo calcule márgenes contra plata que
+nadie pagó todavía — sin avisar. El `importe_bulto_centavos` del renglón es
+nullable y sin default: mientras el proveedor no cantó el precio, eso es
+*todavía no sabemos*, y el total dice que está incompleto en vez de mentir.
+
+«Traer lo de siempre» arranca el pedido con lo que ya se le compró a ese
+proveedor. Copia las cantidades pero **no el importe**: el precio de la vez
+pasada no es el de hoy. Se muestra al lado («antes $7.000 el bulto») y un ▲
+marca cuando subió.
+
 **Toda escritura pasa por `src/app/acciones.ts`.** No agregar route handlers que
 inserten. Un solo lugar por donde entra todo.
 
@@ -274,6 +287,20 @@ inserten. Un solo lugar por donde entra todo.
   con `module not found`. Un `import type` se borra en compilación y no pasa
   nada; un import normal, sí. Por eso los helpers de código de barras viven en
   `src/lib/codigos.ts`, que no depende de nada.
+- **Una `DATABASE_URL` VACÍA en el entorno le gana al `.env.local`.** Esta
+  máquina trae `DATABASE_URL` y `DIRECT_URL` definidas pero vacías, y Next NO
+  pisa lo que ya está en `process.env`: los `.env*` sólo rellenan lo ausente.
+  Resultado: la cadena vacía gana, `src/db/client.ts` la ve falsy y cae a
+  PGlite. **No hay ningún error** — las dos bases tienen el mismo schema, así
+  que la app anda perfecto con los datos equivocados. El 2026-11-09 nos hizo
+  leer números de la base local creyendo que eran de producción. Por eso
+  `npm run dev` pasa por [scripts/dev.mjs](scripts/dev.mjs), que borra esas
+  variables si están vacías, y por eso la app imprime `[base] conectado a …`
+  al arrancar. **Si no leíste esa línea, no sabés contra qué estás trabajando.**
+- **El túnel se corta solo y no avisa.** Pasó con `Connection reset by peer`
+  después de un rato quieto. `npm run tunel` ahora manda latido cada 30 s y se
+  vuelve a levantar solo, avisando en pantalla mientras está caído. Igual, la
+  verdad la dice el log `[base]` de la app, no el túnel.
 - **Los ids se validan contra un regex de UUID** antes de ir a la base: sin eso,
   una URL con basura sale como 500 en vez de 404.
 

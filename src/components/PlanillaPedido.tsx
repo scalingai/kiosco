@@ -1,9 +1,10 @@
 "use client";
 
-import { useId, useOptimistic, useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   cambiarEnBlancoDelPedido,
+  editarProducto,
   guardarRenglonDePedido,
   sacarRenglonDePedido,
   traerLoDeSiempre,
@@ -13,13 +14,18 @@ import { formatearCentavos, parsearMonto } from "@/lib/plata";
 import type { PedidoDeReposicion, RenglonDePedido } from "@/lib/reposicion";
 
 /**
- * La planilla del pedido: una fila por renglón, las cuentas a la derecha.
+ * La planilla del pedido, en formato tabla.
  *
- * Todo lo que se calcula —costo por unidad, sugerido, margen— lo hace el
- * SERVIDOR al leer (`leerPedido`). Acá no se recalcula nada: la pantalla
- * escribe el dato crudo y vuelve a pedir la fila. Un segundo juego de
- * fórmulas en el cliente es exactamente cómo terminan dos números distintos
- * para la misma cosa según dónde se mire.
+ * Es una planilla y se usa como tal: el proveedor canta precios uno atrás de
+ * otro y hay que ir anotando sin levantar la vista. En tarjetas apiladas cada
+ * renglón ocupaba media pantalla y había que scrollear para comparar dos
+ * precios — que es justo lo que uno quiere hacer.
+ *
+ * Todo lo calculado —costo por unidad, sugerido, margen— lo hace el SERVIDOR
+ * al leer (`leerPedido`). Acá no se recalcula nada: la pantalla escribe el
+ * dato crudo y vuelve a pedir la fila. Un segundo juego de fórmulas en el
+ * cliente es cómo terminan dos números distintos para la misma cosa según
+ * dónde se mire.
  */
 export default function PlanillaPedido({
   pedido,
@@ -33,22 +39,45 @@ export default function PlanillaPedido({
   const [error, setError] = useState<string | null>(null);
   const [nombreNuevo, setNombreNuevo] = useState("");
 
-  // Mientras el servidor contesta, la fila ya se ve apagada en vez de quieta.
-  const [sacados, marcarSacado] = useOptimistic<string[], string>(
-    [],
-    (previo, id) => [...previo, id],
-  );
-
   const enPedido = new Set(pedido.renglones.map((r) => r.productoId));
   const disponibles = productos.filter((p) => !enPedido.has(p.id));
 
-  function guardar(
-    productoId: string,
-    datos: Parameters<typeof guardarRenglonDePedido>[2],
+  function guardarRenglon(
+    r: RenglonDePedido,
+    cambio: Partial<{
+      cantidad: number;
+      unidadesPorBulto: number;
+      importeBultoCentavos: number | null;
+    }>,
   ) {
     empezar(async () => {
-      const r = await guardarRenglonDePedido(pedido.id, productoId, datos);
-      if (!r.ok) return setError(r.error);
+      const res = await guardarRenglonDePedido(pedido.id, r.productoId, {
+        cantidad: r.cantidad,
+        unidadesPorBulto: r.unidadesPorBulto,
+        importeBultoCentavos: r.importeBultoCentavos,
+        ...cambio,
+      });
+      if (!res.ok) return setError(res.error);
+      setError(null);
+      router.refresh();
+    });
+  }
+
+  /**
+   * El precio de venta se guarda en el PRODUCTO, no en el pedido.
+   *
+   * Está acá porque éste es el único momento en que se tiene el costo nuevo a
+   * la vista: decidir el precio en otra pantalla obliga a acordarse del número
+   * o a ir y volver. De los productos que el kiosco ya compró, la mayoría no
+   * tiene precio cargado — y sin precio no se pueden vender ni salen en la
+   * tienda.
+   */
+  function guardarPrecio(productoId: string, centavos: number | null) {
+    empezar(async () => {
+      const res = await editarProducto(productoId, {
+        precioVentaCentavos: centavos,
+      });
+      if (!res.ok) return setError(res.error);
       setError(null);
       router.refresh();
     });
@@ -56,7 +85,7 @@ export default function PlanillaPedido({
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 rounded-lg border border-linea bg-tarjeta px-3 py-2 text-sm font-medium">
           <input
             type="checkbox"
@@ -101,27 +130,64 @@ export default function PlanillaPedido({
           le compraste a este proveedor, o agregá productos abajo.
         </p>
       ) : (
-        <ul className="space-y-2">
-          {pedido.renglones.map((r) => (
-            <Fila
-              key={r.id}
-              renglon={r}
-              apagada={sacados.includes(r.id)}
-              ocupado={guardando}
-              onGuardar={(datos) => guardar(r.productoId, datos)}
-              onSacar={() =>
-                empezar(async () => {
-                  marcarSacado(r.id);
-                  await sacarRenglonDePedido(r.id);
-                  router.refresh();
-                })
-              }
-            />
-          ))}
-        </ul>
+        /* La tabla es más ancha que un celular: scrollea sola adentro de su
+           caja, sin que la página entera se mueva para los costados. */
+        <div className="overflow-x-auto rounded-xl border border-linea bg-tarjeta">
+          <table className="w-full min-w-[56rem] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-linea text-[10px] uppercase tracking-wider text-tinta-suave">
+                <th className="px-3 py-2 text-left font-semibold">Producto</th>
+                <th className="px-2 py-2 text-right font-semibold">Bultos</th>
+                <th className="px-2 py-2 text-right font-semibold">Un/bulto</th>
+                <th className="px-2 py-2 text-right font-semibold">$ bulto</th>
+                <th className="px-2 py-2 text-right font-semibold">Renglón</th>
+                <th className="px-2 py-2 text-right font-semibold">Costo/un</th>
+                <th className="px-2 py-2 text-right font-semibold">Sugerido</th>
+                <th className="px-2 py-2 text-right font-semibold">Precio</th>
+                <th className="px-2 py-2 text-right font-semibold">Margen</th>
+                <th className="w-8 px-2 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {pedido.renglones.map((r) => (
+                <Fila
+                  key={r.id}
+                  r={r}
+                  ocupado={guardando}
+                  onRenglon={(c) => guardarRenglon(r, c)}
+                  onPrecio={(c) => guardarPrecio(r.productoId, c)}
+                  onSacar={() =>
+                    empezar(async () => {
+                      await sacarRenglonDePedido(r.id);
+                      router.refresh();
+                    })
+                  }
+                />
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-linea-fuerte font-semibold">
+                <td className="px-3 py-2.5 text-xs uppercase tracking-wider text-tinta-suave">
+                  Lo que sale el pedido
+                </td>
+                <td colSpan={3} />
+                <td className="px-2 py-2.5 text-right font-mono text-base tabular-nums">
+                  {formatearCentavos(pedido.totalCentavos)}
+                </td>
+                <td colSpan={5} />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       )}
 
-      {/* Agregar algo que no estaba en la última compra. */}
+      {pedido.sinPrecio > 0 && (
+        <p className="mt-2 text-xs text-alerta">
+          {pedido.sinPrecio} {pedido.sinPrecio === 1 ? "renglón" : "renglones"}{" "}
+          sin precio todavía: ese total está incompleto.
+        </p>
+      )}
+
       <div className="mt-4 rounded-xl border border-linea bg-tarjeta p-3">
         <SelectorNombre
           queEs="producto"
@@ -133,212 +199,223 @@ export default function PlanillaPedido({
           alCambiar={(texto, id) => {
             setNombreNuevo(texto);
             if (!id) return;
-            guardar(id, { cantidad: 1, unidadesPorBulto: 1 });
+            empezar(async () => {
+              const res = await guardarRenglonDePedido(pedido.id, id, {
+                cantidad: 1,
+                unidadesPorBulto: 1,
+              });
+              if (!res.ok) return setError(res.error);
+              router.refresh();
+            });
             setNombreNuevo("");
           }}
         />
       </div>
 
       {error && <p className="mt-3 text-sm text-deuda">{error}</p>}
-
-      {/* El total, pegado abajo: es el número con el que se decide. */}
-      <div className="sticky bottom-0 z-10 mt-4 -mx-4 border-t border-linea bg-tarjeta/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-          <span className="text-xs font-semibold uppercase tracking-wider text-tinta-suave">
-            Lo que sale el pedido
-          </span>
-          <span className="font-mono text-2xl font-semibold tabular-nums">
-            {formatearCentavos(pedido.totalCentavos)}
-          </span>
-        </div>
-        {pedido.sinPrecio > 0 && (
-          <p className="mt-1 text-xs text-alerta">
-            {pedido.sinPrecio}{" "}
-            {pedido.sinPrecio === 1 ? "renglón" : "renglones"} sin precio
-            todavía: ese total está incompleto.
-          </p>
-        )}
-      </div>
     </>
   );
 }
 
 function Fila({
-  renglon: r,
-  apagada,
+  r,
   ocupado,
-  onGuardar,
+  onRenglon,
+  onPrecio,
   onSacar,
 }: {
-  renglon: RenglonDePedido;
-  apagada: boolean;
+  r: RenglonDePedido;
   ocupado: boolean;
-  onGuardar: (datos: {
+  onRenglon: (c: {
     cantidad?: number;
     unidadesPorBulto?: number;
     importeBultoCentavos?: number | null;
   }) => void;
+  onPrecio: (centavos: number | null) => void;
   onSacar: () => void;
 }) {
-  const importe = useRef<HTMLInputElement>(null);
-
   const subio =
     r.importeBultoAnteriorCentavos != null &&
     r.importeBultoCentavos != null &&
     r.importeBultoCentavos > r.importeBultoAnteriorCentavos;
 
+  const flojo = r.margenRealPorciento != null && r.margenRealPorciento < 15;
+
   return (
-    <li
-      className={`rounded-xl border border-linea bg-tarjeta p-3 ${apagada ? "opacity-40" : ""}`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <span className="min-w-0">
-          <span className="block font-medium leading-snug">{r.nombre}</span>
-          {r.importeBultoAnteriorCentavos != null && (
-            <span className="block text-[11px] text-tinta-suave">
-              la vez pasada el bulto salía{" "}
-              {formatearCentavos(r.importeBultoAnteriorCentavos)}
-            </span>
-          )}
-        </span>
+    <tr className="border-b border-linea last:border-0 hover:bg-papel-hondo/50">
+      <td className="min-w-[14rem] px-3 py-1.5">
+        <span className="block leading-tight">{r.nombre}</span>
+        {r.importeBultoAnteriorCentavos != null && (
+          <span className="block text-[10px] text-tinta-suave">
+            antes {formatearCentavos(r.importeBultoAnteriorCentavos)} el bulto
+          </span>
+        )}
+      </td>
+
+      <Numero
+        valor={r.cantidad}
+        ocupado={ocupado}
+        etiqueta={`Bultos de ${r.nombre}`}
+        onListo={(v) => onRenglon({ cantidad: v })}
+      />
+      <Numero
+        valor={r.unidadesPorBulto}
+        ocupado={ocupado}
+        etiqueta={`Unidades por bulto de ${r.nombre}`}
+        onListo={(v) => onRenglon({ unidadesPorBulto: v })}
+      />
+
+      <Plata
+        centavos={r.importeBultoCentavos}
+        ocupado={ocupado}
+        etiqueta={`Precio por bulto de ${r.nombre}`}
+        onListo={(c) => onRenglon({ importeBultoCentavos: c })}
+      />
+
+      <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+        {r.totalCentavos == null ? (
+          <span className="text-falta">—</span>
+        ) : (
+          <>
+            {formatearCentavos(r.totalCentavos)}
+            {subio && <span className="ml-1 text-alerta">▲</span>}
+          </>
+        )}
+      </td>
+
+      <td className="px-2 py-1.5 text-right font-mono tabular-nums text-tinta-suave">
+        {r.costoUnitarioCentavos == null
+          ? "—"
+          : formatearCentavos(r.costoUnitarioCentavos)}
+      </td>
+
+      {/* El sugerido se aplica con un toque: es el 90% de los casos. */}
+      <td className="px-2 py-1.5 text-right">
+        {r.sugeridoCentavos == null ? (
+          <span className="text-falta">—</span>
+        ) : (
+          <button
+            type="button"
+            disabled={ocupado || r.precioVentaCentavos === r.sugeridoCentavos}
+            onClick={() => onPrecio(r.sugeridoCentavos)}
+            title="Poner este precio de venta"
+            className="rounded-md bg-acento-tenue px-2 py-1 font-mono text-xs font-semibold tabular-nums text-acento enabled:hover:brightness-95 disabled:opacity-50"
+          >
+            {formatearCentavos(r.sugeridoCentavos)}
+          </button>
+        )}
+      </td>
+
+      <Plata
+        centavos={r.precioVentaCentavos}
+        ocupado={ocupado}
+        etiqueta={`Precio de venta de ${r.nombre}`}
+        resaltado
+        onListo={onPrecio}
+      />
+
+      <td
+        className={`px-2 py-1.5 text-right font-mono tabular-nums ${
+          flojo ? "font-semibold text-deuda" : "text-tinta-suave"
+        }`}
+      >
+        {r.margenRealPorciento == null ? "—" : `${r.margenRealPorciento}%`}
+      </td>
+
+      <td className="px-2 py-1.5 text-right">
         <button
           type="button"
           onClick={onSacar}
           disabled={ocupado}
           aria-label={`Sacar ${r.nombre} del pedido`}
-          className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-tinta-suave hover:bg-papel-hondo"
+          className="rounded px-1.5 py-0.5 text-tinta-suave hover:bg-linea"
         >
-          Sacar
+          ×
         </button>
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-end gap-2">
-        <Campo
-          etiqueta="Bultos"
-          defecto={String(r.cantidad)}
-          onListo={(v) => onGuardar({ cantidad: Number(v) || 1, unidadesPorBulto: r.unidadesPorBulto, importeBultoCentavos: r.importeBultoCentavos })}
-          ocupado={ocupado}
-        />
-        <Campo
-          etiqueta="Un/bulto"
-          defecto={String(r.unidadesPorBulto)}
-          onListo={(v) => onGuardar({ cantidad: r.cantidad, unidadesPorBulto: Number(v) || 1, importeBultoCentavos: r.importeBultoCentavos })}
-          ocupado={ocupado}
-        />
-        <span className="flex flex-col gap-0.5">
-          <label
-            htmlFor={`imp-${r.id}`}
-            className="text-[10px] font-semibold uppercase tracking-wider text-tinta-suave"
-          >
-            $ por bulto
-          </label>
-          <input
-            id={`imp-${r.id}`}
-            ref={importe}
-            type="text"
-            inputMode="decimal"
-            disabled={ocupado}
-            defaultValue={
-              r.importeBultoCentavos == null
-                ? ""
-                : String(r.importeBultoCentavos / 100)
-            }
-            placeholder="—"
-            onBlur={(e) => {
-              const texto = e.target.value.trim();
-              const centavos = texto ? parsearMonto(texto) : null;
-              onGuardar({
-                cantidad: r.cantidad,
-                unidadesPorBulto: r.unidadesPorBulto,
-                importeBultoCentavos: centavos,
-              });
-            }}
-            className="w-28 rounded-lg border border-linea bg-papel px-2.5 py-2 font-mono text-sm tabular-nums"
-          />
-        </span>
-      </div>
-
-      <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-        {r.totalCentavos == null ? (
-          <span className="rounded-md border border-dashed border-linea px-2 py-1 text-tinta-suave">
-            {r.cantidad * r.unidadesPorBulto} unidades · falta el precio
-          </span>
-        ) : (
-          <>
-            <span className="rounded-md bg-papel-hondo px-2 py-1 font-medium">
-              Renglón{" "}
-              <b className="tabular-nums">
-                {formatearCentavos(r.totalCentavos)}
-              </b>
-              {subio && <span className="ml-1 text-alerta">▲</span>}
-            </span>
-            <span className="rounded-md bg-papel-hondo px-2 py-1 font-medium">
-              {r.cantidad * r.unidadesPorBulto} un · costo{" "}
-              <b className="tabular-nums">
-                {formatearCentavos(r.costoUnitarioCentavos ?? 0)}
-              </b>
-            </span>
-            <span className="rounded-md bg-acento-tenue px-2 py-1 font-semibold text-acento">
-              Vender a{" "}
-              <b className="tabular-nums">
-                {formatearCentavos(r.sugeridoCentavos ?? 0)}
-              </b>
-            </span>
-            {r.precioVentaCentavos != null && (
-              <span
-                className={`rounded-md px-2 py-1 font-medium ${
-                  (r.margenRealPorciento ?? 0) < 15
-                    ? "bg-deuda-tenue text-deuda"
-                    : "bg-papel-hondo"
-                }`}
-              >
-                hoy {formatearCentavos(r.precioVentaCentavos)} ·{" "}
-                <b>{r.margenRealPorciento}%</b>
-              </span>
-            )}
-          </>
-        )}
-      </div>
-    </li>
+      </td>
+    </tr>
   );
 }
 
-/** Un número chico que se guarda al salir del campo. */
-function Campo({
-  etiqueta,
-  defecto,
-  onListo,
+/** Una celda con un número entero chico. */
+function Numero({
+  valor,
   ocupado,
+  etiqueta,
+  onListo,
 }: {
-  etiqueta: string;
-  defecto: string;
-  onListo: (valor: string) => void;
+  valor: number;
   ocupado: boolean;
+  etiqueta: string;
+  onListo: (v: number) => void;
 }) {
-  // `useId` y no un random: el id tiene que ser el mismo en el servidor y en
-  // el navegador, si no React se queja de que el HTML no coincide.
-  const id = useId();
   return (
-    <span className="flex flex-col gap-0.5">
-      <label
-        htmlFor={id}
-        className="text-[10px] font-semibold uppercase tracking-wider text-tinta-suave"
-      >
-        {etiqueta}
-      </label>
+    <td className="px-2 py-1.5 text-right">
       <input
-        id={id}
         type="number"
         min="1"
         step="1"
         inputMode="numeric"
         disabled={ocupado}
-        defaultValue={defecto}
-        onBlur={(e) => {
-          if (e.target.value !== defecto) onListo(e.target.value);
+        defaultValue={valor}
+        aria-label={etiqueta}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
         }}
-        className="w-20 rounded-lg border border-linea bg-papel px-2.5 py-2 font-mono text-sm tabular-nums"
+        onBlur={(e) => {
+          const n = Number(e.target.value);
+          if (Number.isFinite(n) && n >= 1 && n !== valor) onListo(n);
+        }}
+        className="w-16 rounded-md border border-linea bg-papel px-2 py-1 text-right font-mono tabular-nums"
       />
-    </span>
+    </td>
+  );
+}
+
+/**
+ * Una celda con plata.
+ *
+ * Guarda al salir del campo Y con Enter. Lo segundo no es un lujo: con el
+ * proveedor cantando precios uno atrás de otro, Enter es lo que sale solo, y
+ * si sólo guardara al salir, el último precio tecleado se perdería al cerrar
+ * la pantalla sin que nada avise.
+ */
+function Plata({
+  centavos,
+  ocupado,
+  etiqueta,
+  resaltado,
+  onListo,
+}: {
+  centavos: number | null;
+  ocupado: boolean;
+  etiqueta: string;
+  resaltado?: boolean;
+  onListo: (centavos: number | null) => void;
+}) {
+  return (
+    <td className="px-2 py-1.5 text-right">
+      <input
+        type="text"
+        inputMode="decimal"
+        disabled={ocupado}
+        defaultValue={centavos == null ? "" : String(centavos / 100)}
+        placeholder="—"
+        aria-label={etiqueta}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+        }}
+        onBlur={(e) => {
+          const texto = e.target.value.trim();
+          const nuevo = texto ? parsearMonto(texto) : null;
+          if (nuevo !== centavos) onListo(nuevo);
+        }}
+        className={`w-24 rounded-md border px-2 py-1 text-right font-mono tabular-nums ${
+          resaltado
+            ? "border-acento/40 bg-acento-tenue/40 font-semibold"
+            : "border-linea bg-papel"
+        }`}
+      />
+    </td>
   );
 }

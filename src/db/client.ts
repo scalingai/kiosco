@@ -24,7 +24,13 @@ const cache = globalThis as unknown as { __kioscoDb?: Cache };
 cache.__kioscoDb ??= {};
 
 async function conectar(): Promise<DB> {
-  const url = process.env.DATABASE_URL;
+  /*
+   * `?.trim() || undefined`: una `DATABASE_URL` definida pero VACÍA tiene que
+   * contar como ausente. Si no, `new Pool({connectionString: ""})` se conecta
+   * a lo que haya por default y el error que sale no menciona la variable.
+   * Quién la deja vacía y por qué está explicado en `scripts/dev.mjs`.
+   */
+  const url = process.env.DATABASE_URL?.trim() || undefined;
 
   if (!url && process.env.NODE_ENV === "production") {
     // PGlite es sólo para desarrollo y ni siquiera arranca dentro de un build
@@ -70,7 +76,12 @@ async function conectar(): Promise<DB> {
   const cliente = new PGlite(DIRECTORIO_LOCAL);
   const db = drizzle(cliente, { schema });
   await migrate(db, { migrationsFolder: CARPETA_MIGRACIONES });
-  anunciar(`PGlite local (${DIRECTORIO_LOCAL})`);
+  anunciar(
+    `PGlite local (${DIRECTORIO_LOCAL}) — no hay DATABASE_URL en el entorno. ` +
+      `Claves parecidas que sí llegaron: ${
+        Object.keys(process.env).filter((k) => /DATA|PG|POSTGRES/i.test(k)).join(", ") || "ninguna"
+      }`,
+  );
   return db as unknown as DB;
 }
 
