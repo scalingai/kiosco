@@ -332,6 +332,35 @@ export function costoConIva(centavos: number, enBlanco: boolean): number {
 }
 
 /**
+ * La cuenta al revés: sé lo que quiero que salga la unidad, ¿cuánto es el
+ * bulto?
+ *
+ * Existe porque el mayorista no siempre canta el bulto. A veces dice "te la
+ * dejo a tres mil la unidad" y el que anota tendría que dividir de cabeza para
+ * llenar la planilla — justo la cuenta que la app está para hacer.
+ *
+ * Lo que se GUARDA sigue siendo el importe del bulto, no este costo. El
+ * renglón tiene que seguir coincidiendo con la factura del proveedor, que es
+ * contra lo que se controla (ver CLAUDE.md). Esto es una forma de entrar el
+ * dato, no un segundo lugar donde vive la verdad.
+ *
+ * No depende de cuántos bultos se pidan: el costo por unidad sale de dividir
+ * el bulto entre lo que trae, y la cantidad se simplifica. Por eso pedir 3
+ * cajones o 30 no cambia este número.
+ */
+export function importeBultoDesdeCosto(
+  costoUnitarioCentavos: number,
+  unidadesPorBulto: number,
+  enBlanco: boolean,
+): number {
+  if (unidadesPorBulto <= 0 || costoUnitarioCentavos <= 0) return 0;
+  const bultoConIva = costoUnitarioCentavos * unidadesPorBulto;
+  // En blanco el costo YA trae el IVA, así que para volver al importe de la
+  // factura hay que sacárselo.
+  return Math.round(enBlanco ? bultoConIva / IVA : bultoConIva);
+}
+
+/**
  * El multiplicador se guarda en milésimas: 1400 es 1,4.
  *
  * Entero a propósito, igual que la plata. Un `numeric` leído como float de JS

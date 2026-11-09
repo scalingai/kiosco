@@ -10,6 +10,7 @@ import {
   traerLoDeSiempre,
 } from "@/app/acciones";
 import SelectorNombre from "@/components/SelectorNombre";
+import { importeBultoDesdeCosto } from "@/lib/negocio";
 import { formatearCentavos, parsearMonto } from "@/lib/plata";
 import type { PedidoDeReposicion, RenglonDePedido } from "@/lib/reposicion";
 
@@ -154,7 +155,7 @@ export default function PlanillaPedido({
                   $ bulto
                 </th>
                 <th className="w-[13%] px-1.5 py-2 text-right font-semibold escritorio:w-[11%]">
-                  Renglón
+                  Total
                 </th>
                 <th className="hidden px-1.5 py-2 text-right font-semibold escritorio:table-cell escritorio:w-[10%]">
                   Costo/un
@@ -176,6 +177,7 @@ export default function PlanillaPedido({
                 <Fila
                   key={r.id}
                   r={r}
+                  enBlanco={pedido.enBlanco}
                   ocupado={guardando}
                   onRenglon={(c) => guardarRenglon(r, c)}
                   onPrecio={(c) => guardarPrecio(r.productoId, c)}
@@ -252,12 +254,14 @@ export default function PlanillaPedido({
 
 function Fila({
   r,
+  enBlanco,
   ocupado,
   onRenglon,
   onPrecio,
   onSacar,
 }: {
   r: RenglonDePedido;
+  enBlanco: boolean;
   ocupado: boolean;
   onRenglon: (c: {
     cantidad?: number;
@@ -317,11 +321,30 @@ function Fila({
         )}
       </td>
 
-      <td className="hidden px-1.5 py-1.5 text-right font-mono tabular-nums text-tinta-suave escritorio:table-cell">
-        {r.costoUnitarioCentavos == null
-          ? "—"
-          : formatearCentavos(r.costoUnitarioCentavos)}
-      </td>
+      {/*
+        El costo por unidad se puede escribir, y acomoda el precio del bulto
+        solo. El mayorista no siempre canta el bulto: a veces dice "te la dejo
+        a tres mil la unidad", y dividir de cabeza para llenar la otra columna
+        es justo la cuenta que la app está para hacer.
+
+        Lo que se guarda sigue siendo el importe del BULTO: el renglón tiene
+        que coincidir con la factura. Esto es otra forma de entrar el dato, no
+        un segundo lugar donde vive la verdad.
+      */}
+      <Plata
+        centavos={r.costoUnitarioCentavos}
+        ocupado={ocupado}
+        etiqueta={`Costo por unidad de ${r.nombre}`}
+        soloEnGrande
+        onListo={(costo) =>
+          onRenglon({
+            importeBultoCentavos:
+              costo == null
+                ? null
+                : importeBultoDesdeCosto(costo, r.unidadesPorBulto, enBlanco),
+          })
+        }
+      />
 
       {/* El sugerido se aplica con un toque: es el 90% de los casos. */}
       <td className="px-1.5 py-1.5 text-right">
@@ -423,16 +446,20 @@ function Plata({
   ocupado,
   etiqueta,
   resaltado,
+  soloEnGrande,
   onListo,
 }: {
   centavos: number | null;
   ocupado: boolean;
   etiqueta: string;
   resaltado?: boolean;
+  soloEnGrande?: boolean;
   onListo: (centavos: number | null) => void;
 }) {
   return (
-    <td className="px-1.5 py-1.5 text-right">
+    <td
+      className={`px-1.5 py-1.5 text-right ${soloEnGrande ? "hidden escritorio:table-cell" : ""}`}
+    >
       <input
         type="text"
         inputMode="decimal"
