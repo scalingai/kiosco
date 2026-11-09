@@ -14,12 +14,17 @@ import { formatearCentavos, parsearMonto } from "@/lib/plata";
 import type { PedidoDeReposicion, RenglonDePedido } from "@/lib/reposicion";
 
 /**
- * La planilla del pedido, en formato tabla.
+ * La planilla del pedido, en tabla.
  *
  * Es una planilla y se usa como tal: el proveedor canta precios uno atrás de
- * otro y hay que ir anotando sin levantar la vista. En tarjetas apiladas cada
- * renglón ocupaba media pantalla y había que scrollear para comparar dos
- * precios — que es justo lo que uno quiere hacer.
+ * otro y hay que ir anotando sin levantar la vista.
+ *
+ * La tabla ocupa EXACTAMENTE el ancho de la hoja y no scrollea adentro. Tuvo
+ * un `min-w` y estaba mal: una planilla que hay que arrastrar para ver el
+ * margen no sirve, porque el margen es justo para lo que uno la mira. Cuando
+ * no entra, no se achican todas las columnas hasta volverlas ilegibles — se
+ * esconden las dos que se pueden rehacer de cabeza (un/bulto y costo por
+ * unidad) y las que deciden quedan siempre.
  *
  * Todo lo calculado —costo por unidad, sugerido, margen— lo hace el SERVIDOR
  * al leer (`leerPedido`). Acá no se recalcula nada: la pantalla escribe el
@@ -130,22 +135,40 @@ export default function PlanillaPedido({
           le compraste a este proveedor, o agregá productos abajo.
         </p>
       ) : (
-        /* La tabla es más ancha que un celular: scrollea sola adentro de su
-           caja, sin que la página entera se mueva para los costados. */
-        <div className="overflow-x-auto rounded-xl border border-linea bg-tarjeta">
-          <table className="w-full min-w-[56rem] border-collapse text-sm">
+        <div className="rounded-xl border border-linea bg-tarjeta">
+          <table className="w-full table-fixed border-collapse text-sm">
             <thead>
               <tr className="border-b border-linea text-[10px] uppercase tracking-wider text-tinta-suave">
-                <th className="px-3 py-2 text-left font-semibold">Producto</th>
-                <th className="px-2 py-2 text-right font-semibold">Bultos</th>
-                <th className="px-2 py-2 text-right font-semibold">Un/bulto</th>
-                <th className="px-2 py-2 text-right font-semibold">$ bulto</th>
-                <th className="px-2 py-2 text-right font-semibold">Renglón</th>
-                <th className="px-2 py-2 text-right font-semibold">Costo/un</th>
-                <th className="px-2 py-2 text-right font-semibold">Sugerido</th>
-                <th className="px-2 py-2 text-right font-semibold">Precio</th>
-                <th className="px-2 py-2 text-right font-semibold">Margen</th>
-                <th className="w-8 px-2 py-2" />
+                {/* Los anchos suman 100 en cada corte. Si no, la última
+                    columna queda pegada al borde. */}
+                <th className="w-[24%] px-3 py-2 text-left font-semibold escritorio:w-[19%]">
+                  Producto
+                </th>
+                <th className="w-[10%] px-1.5 py-2 text-right font-semibold">
+                  Bultos
+                </th>
+                <th className="hidden px-1.5 py-2 text-right font-semibold escritorio:table-cell escritorio:w-[9%]">
+                  Un/bulto
+                </th>
+                <th className="w-[13%] px-1.5 py-2 text-right font-semibold escritorio:w-[11%]">
+                  $ bulto
+                </th>
+                <th className="w-[13%] px-1.5 py-2 text-right font-semibold escritorio:w-[11%]">
+                  Renglón
+                </th>
+                <th className="hidden px-1.5 py-2 text-right font-semibold escritorio:table-cell escritorio:w-[10%]">
+                  Costo/un
+                </th>
+                <th className="w-[13%] px-1.5 py-2 text-right font-semibold escritorio:w-[10%]">
+                  Sugerido
+                </th>
+                <th className="w-[14%] px-1.5 py-2 text-right font-semibold escritorio:w-[11%]">
+                  Precio
+                </th>
+                <th className="w-[9%] px-1.5 py-2 text-right font-semibold escritorio:w-[6%]">
+                  Margen
+                </th>
+                <th className="w-[4%] px-1.5 py-2 escritorio:w-[3%]" />
               </tr>
             </thead>
             <tbody>
@@ -167,14 +190,24 @@ export default function PlanillaPedido({
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-linea-fuerte font-semibold">
-                <td className="px-3 py-2.5 text-xs uppercase tracking-wider text-tinta-suave">
+                {/* El colSpan cambia con las columnas que están escondidas. */}
+                <td
+                  colSpan={3}
+                  className="px-3 py-2.5 text-xs uppercase tracking-wider text-tinta-suave escritorio:hidden"
+                >
                   Lo que sale el pedido
                 </td>
-                <td colSpan={3} />
-                <td className="px-2 py-2.5 text-right font-mono text-base tabular-nums">
+                <td
+                  colSpan={4}
+                  className="hidden px-3 py-2.5 text-xs uppercase tracking-wider text-tinta-suave escritorio:table-cell"
+                >
+                  Lo que sale el pedido
+                </td>
+                <td className="px-1.5 py-2.5 text-right font-mono text-base tabular-nums">
                   {formatearCentavos(pedido.totalCentavos)}
                 </td>
-                <td colSpan={5} />
+                <td colSpan={3} className="escritorio:hidden" />
+                <td colSpan={4} className="hidden escritorio:table-cell" />
               </tr>
             </tfoot>
           </table>
@@ -243,11 +276,11 @@ function Fila({
 
   return (
     <tr className="border-b border-linea last:border-0 hover:bg-papel-hondo/50">
-      <td className="min-w-[14rem] px-3 py-1.5">
+      <td className="px-3 py-1.5 align-middle">
         <span className="block leading-tight">{r.nombre}</span>
         {r.importeBultoAnteriorCentavos != null && (
           <span className="block text-[10px] text-tinta-suave">
-            antes {formatearCentavos(r.importeBultoAnteriorCentavos)} el bulto
+            antes {formatearCentavos(r.importeBultoAnteriorCentavos)}
           </span>
         )}
       </td>
@@ -262,6 +295,7 @@ function Fila({
         valor={r.unidadesPorBulto}
         ocupado={ocupado}
         etiqueta={`Unidades por bulto de ${r.nombre}`}
+        soloEnGrande
         onListo={(v) => onRenglon({ unidadesPorBulto: v })}
       />
 
@@ -272,25 +306,25 @@ function Fila({
         onListo={(c) => onRenglon({ importeBultoCentavos: c })}
       />
 
-      <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+      <td className="px-1.5 py-1.5 text-right font-mono tabular-nums">
         {r.totalCentavos == null ? (
           <span className="text-falta">—</span>
         ) : (
           <>
             {formatearCentavos(r.totalCentavos)}
-            {subio && <span className="ml-1 text-alerta">▲</span>}
+            {subio && <span className="ml-0.5 text-alerta">▲</span>}
           </>
         )}
       </td>
 
-      <td className="px-2 py-1.5 text-right font-mono tabular-nums text-tinta-suave">
+      <td className="hidden px-1.5 py-1.5 text-right font-mono tabular-nums text-tinta-suave escritorio:table-cell">
         {r.costoUnitarioCentavos == null
           ? "—"
           : formatearCentavos(r.costoUnitarioCentavos)}
       </td>
 
       {/* El sugerido se aplica con un toque: es el 90% de los casos. */}
-      <td className="px-2 py-1.5 text-right">
+      <td className="px-1.5 py-1.5 text-right">
         {r.sugeridoCentavos == null ? (
           <span className="text-falta">—</span>
         ) : (
@@ -299,7 +333,7 @@ function Fila({
             disabled={ocupado || r.precioVentaCentavos === r.sugeridoCentavos}
             onClick={() => onPrecio(r.sugeridoCentavos)}
             title="Poner este precio de venta"
-            className="rounded-md bg-acento-tenue px-2 py-1 font-mono text-xs font-semibold tabular-nums text-acento enabled:hover:brightness-95 disabled:opacity-50"
+            className="w-full rounded-md bg-acento-tenue px-1 py-1 font-mono text-xs font-semibold tabular-nums text-acento enabled:hover:brightness-95 disabled:opacity-50"
           >
             {formatearCentavos(r.sugeridoCentavos)}
           </button>
@@ -315,20 +349,20 @@ function Fila({
       />
 
       <td
-        className={`px-2 py-1.5 text-right font-mono tabular-nums ${
+        className={`px-1.5 py-1.5 text-right font-mono tabular-nums ${
           flojo ? "font-semibold text-deuda" : "text-tinta-suave"
         }`}
       >
         {r.margenRealPorciento == null ? "—" : `${r.margenRealPorciento}%`}
       </td>
 
-      <td className="px-2 py-1.5 text-right">
+      <td className="px-1.5 py-1.5 text-right">
         <button
           type="button"
           onClick={onSacar}
           disabled={ocupado}
           aria-label={`Sacar ${r.nombre} del pedido`}
-          className="rounded px-1.5 py-0.5 text-tinta-suave hover:bg-linea"
+          className="rounded px-1 py-0.5 text-tinta-suave hover:bg-linea"
         >
           ×
         </button>
@@ -342,15 +376,19 @@ function Numero({
   valor,
   ocupado,
   etiqueta,
+  soloEnGrande,
   onListo,
 }: {
   valor: number;
   ocupado: boolean;
   etiqueta: string;
+  soloEnGrande?: boolean;
   onListo: (v: number) => void;
 }) {
   return (
-    <td className="px-2 py-1.5 text-right">
+    <td
+      className={`px-1.5 py-1.5 text-right ${soloEnGrande ? "hidden escritorio:table-cell" : ""}`}
+    >
       <input
         type="number"
         min="1"
@@ -366,7 +404,7 @@ function Numero({
           const n = Number(e.target.value);
           if (Number.isFinite(n) && n >= 1 && n !== valor) onListo(n);
         }}
-        className="w-16 rounded-md border border-linea bg-papel px-2 py-1 text-right font-mono tabular-nums"
+        className="w-full rounded-md border border-linea bg-papel px-1.5 py-1 text-right font-mono tabular-nums"
       />
     </td>
   );
@@ -394,7 +432,7 @@ function Plata({
   onListo: (centavos: number | null) => void;
 }) {
   return (
-    <td className="px-2 py-1.5 text-right">
+    <td className="px-1.5 py-1.5 text-right">
       <input
         type="text"
         inputMode="decimal"
@@ -410,7 +448,7 @@ function Plata({
           const nuevo = texto ? parsearMonto(texto) : null;
           if (nuevo !== centavos) onListo(nuevo);
         }}
-        className={`w-24 rounded-md border px-2 py-1 text-right font-mono tabular-nums ${
+        className={`w-full rounded-md border px-1.5 py-1 text-right font-mono tabular-nums ${
           resaltado
             ? "border-acento/40 bg-acento-tenue/40 font-semibold"
             : "border-linea bg-papel"
