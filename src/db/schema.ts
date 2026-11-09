@@ -861,3 +861,84 @@ export const productos = pgTable(
 export type Categoria = typeof categorias.$inferSelect;
 export type Marca = typeof marcas.$inferSelect;
 export type Producto = typeof productos.$inferSelect;
+
+/**
+ * ── Reposiciones: el pedido que se le canta al proveedor ──────────────────
+ *
+ * Lo que se anota ANTES de que la mercadería llegue: cuántos bultos de qué, y
+ * a cuánto cada uno si el proveedor ya cantó el precio.
+ *
+ * Tabla aparte de `compras` a propósito, y la razón es el costo. El costo de
+ * referencia de un producto sale de su última compra (`costoDeReferencia()`),
+ * así que meter acá un pedido con precios ESTIMADOS —o sin precio— haría que
+ * el catálogo entero empiece a calcular márgenes contra números que nadie
+ * pagó todavía. Y no avisaría: los precios sugeridos saldrían mal y la pantalla
+ * se vería igual.
+ *
+ * Cuando la mercadería llega, la reposición se cierra y se carga la compra con
+ * los importes del papel. `cerradaEn` guarda cuándo pasó eso para que no
+ * aparezca dos veces en la lista de pendientes.
+ */
+export const reposiciones = pgTable(
+  "reposiciones",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    proveedorId: uuid("proveedor_id")
+      .notNull()
+      .references(() => proveedores.id, { onDelete: "restrict" }),
+    /**
+     * Si se va a comprar en blanco. Se decide ACÁ y no al cargar la compra
+     * porque cambia el precio sugerido que se mira mientras se arma el pedido:
+     * en blanco el costo real es el importe por 1,21.
+     */
+    enBlanco: boolean("en_blanco").notNull().default(false),
+    nota: text("nota"),
+    /** cuándo se convirtió en compra; null = todavía es un pedido abierto */
+    cerradaEn: timestamp("cerrada_en", { withTimezone: true }),
+    /** igual que todo acá: no se borra, se archiva */
+    archivadaEn: timestamp("archivada_en", { withTimezone: true }),
+    creadaEn: timestamp("creada_en", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("reposiciones_proveedor_idx").on(t.proveedorId)],
+);
+
+export const reposicionesItems = pgTable(
+  "reposiciones_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    reposicionId: uuid("reposicion_id")
+      .notNull()
+      .references(() => reposiciones.id, { onDelete: "cascade" }),
+    /**
+     * Acá el producto es OBLIGATORIO, al revés que en `compras_items`. Un
+     * renglón de compra sin producto igual vale como plata que salió de la
+     * caja; un renglón de pedido sin producto no se le puede pedir a nadie.
+     */
+    productoId: uuid("producto_id")
+      .notNull()
+      .references(() => productos.id, { onDelete: "cascade" }),
+    /** cuántos bultos se piden */
+    cantidad: integer("cantidad").notNull().default(1),
+    /** cuánto trae cada bulto. Siempre unidades: ver CLAUDE.md */
+    unidadesPorBulto: integer("unidades_por_bulto").notNull().default(1),
+    /**
+     * Lo que sale UN BULTO, en centavos. Nullable y sin default a propósito:
+     * mientras el proveedor no cantó el precio, esto es *todavía no sabemos*,
+     * que no es lo mismo que cero. La pantalla lo muestra como "falta el
+     * precio" y no lo suma al total.
+     */
+    importeBultoCentavos: bigint("importe_bulto_centavos", { mode: "number" }),
+    posicion: integer("posicion").notNull().default(0),
+  },
+  (t) => [
+    index("reposiciones_items_reposicion_idx").on(t.reposicionId),
+    // Un producto una sola vez por pedido: dos renglones del mismo producto
+    // son un error de carga, no un pedido de dos tandas.
+    uniqueIndex("reposiciones_items_unico").on(t.reposicionId, t.productoId),
+  ],
+);
+
+export type Reposicion = typeof reposiciones.$inferSelect;
+export type ReposicionItem = typeof reposicionesItems.$inferSelect;

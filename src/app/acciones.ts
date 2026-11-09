@@ -34,6 +34,14 @@ import {
   type CandidatoEan,
   type Parecido,
 } from "@/lib/buscar-ean";
+import {
+  abrirPedido,
+  archivarPedido,
+  cambiarEnBlanco,
+  llenarConLoDeSiempre,
+  ponerRenglon,
+  sacarRenglon,
+} from "@/lib/reposicion";
 import type {
   CompraAGuardar,
   GastoAGuardar,
@@ -465,6 +473,86 @@ export async function moverPedido(
   try {
     await cambiarEstadoDePedido(id, estado);
     revalidatePath("/", "layout");
+    return { ok: true, datos: null };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+/* ── Pedidos de reposición ─────────────────────────────────────────────── */
+
+export async function abrirPedidoDeReposicion(
+  proveedorId: string,
+  enBlanco: boolean,
+): Promise<Resultado<{ id: string }>> {
+  try {
+    const fila = await abrirPedido(proveedorId, enBlanco);
+    revalidatePath("/reponer");
+    return { ok: true, datos: { id: fila.id } };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+export async function traerLoDeSiempre(
+  reposicionId: string,
+): Promise<Resultado<{ agregados: number }>> {
+  try {
+    const agregados = await llenarConLoDeSiempre(reposicionId);
+    revalidatePath("/reponer");
+    return { ok: true, datos: { agregados } };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+export async function guardarRenglonDePedido(
+  reposicionId: string,
+  productoId: string,
+  datos: {
+    cantidad?: number;
+    unidadesPorBulto?: number;
+    importeBultoCentavos?: number | null;
+  },
+): Promise<Resultado> {
+  try {
+    await ponerRenglon(reposicionId, productoId, datos);
+    revalidatePath("/reponer");
+    return { ok: true, datos: null };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+export async function sacarRenglonDePedido(id: string): Promise<Resultado> {
+  try {
+    await sacarRenglon(id);
+    revalidatePath("/reponer");
+    return { ok: true, datos: null };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+export async function cambiarEnBlancoDelPedido(
+  id: string,
+  enBlanco: boolean,
+): Promise<Resultado> {
+  try {
+    await cambiarEnBlanco(id, enBlanco);
+    revalidatePath("/reponer");
+    return { ok: true, datos: null };
+  } catch (error) {
+    return { ok: false, error: mensaje(error) };
+  }
+}
+
+export async function archivarPedidoDeReposicion(
+  id: string,
+): Promise<Resultado> {
+  try {
+    await archivarPedido(id);
+    revalidatePath("/reponer");
     return { ok: true, datos: null };
   } catch (error) {
     return { ok: false, error: mensaje(error) };

@@ -14,8 +14,8 @@
    * siguen significando lo mismo, así que cambiar los VALORES acá repinta la
    * app entera sin tocar un solo componente.
    *
-   * El marco es verde con lava y el contenido es una tarjeta blanca encima:
-   * por eso `papel` es blanco —la superficie donde se lee— y el verde vive
+   * El marco es rojo con lava y el contenido es una tarjeta blanca encima:
+   * por eso `papel` es blanco —la superficie donde se lee— y el rojo vive
    * aparte, en `marca`.
    */
 
@@ -35,17 +35,24 @@
   --color-tinta-suave: #444746;
 
   /*
-   * El verde de la marca. `marca` es el del marco (el mismo `#14663c` que usa
-   * el panel debajo de la lava) y `acento` es el de los botones.
+   * El rojo de la marca. `marca` es el del marco (el mismo valor que
+   * `COLOR_MARCA` en Lava.tsx, que pinta debajo del humo) y `acento` es el de
+   * los botones.
    *
-   * Son distintos a propósito: el primario de AppGenda (`#10B981`) con texto
-   * blanco encima da 2,5:1 y no se lee. Para algo que hay que apretar a las
-   * seis de la tarde con el sol de frente, el verde baja a `#047857`, que da
-   * 5,2:1 y sigue siendo el mismo verde de la familia.
+   * Son distintos a propósito, y acá el motivo es doble. Uno es el de siempre:
+   * un rojo claro con texto blanco encima no se lee a las seis de la tarde con
+   * el sol de frente — `#b91c1c` da 5,9:1.
+   *
+   * El otro es nuevo y es el que importa: `deuda` TAMBIÉN es rojo. Lo que
+   * separa "el chrome de la marca" de "ojo, esto se debe" ya no puede ser el
+   * tono, así que es el brillo y el rol: la marca es oscura y va en áreas
+   * llenas (la lava, un botón); la deuda es brillante y va como número sobre
+   * blanco. Si alguna vez quedan uno al lado del otro y se confunden, lo que
+   * hay que mover es `deuda` a un ámbar, no aclarar la marca.
    */
-  --color-marca: #14663c;
-  --color-acento: #047857;
-  --color-acento-tenue: #d1fae5;
+  --color-marca: #8f1212;
+  --color-acento: #b91c1c;
+  --color-acento-tenue: #fde8e8;
 
   /* Plata que entra y plata que se debe */
   --color-pago: #047857;
@@ -69,7 +76,7 @@
   }
 
   body {
-    /* El verde de base: lo que se ve bajo la lava mientras carga, y en los
+    /* El rojo de base: lo que se ve bajo la lava mientras carga, y en los
        equipos sin WebGL, donde la lava no dibuja nada a propósito. */
     background-color: var(--color-marca);
     color: var(--color-tinta);

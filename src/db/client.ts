@@ -58,6 +58,7 @@ async function conectar(): Promise<DB> {
     });
     const db = drizzle(pool, { schema });
     await migrate(db, { migrationsFolder: CARPETA_MIGRACIONES });
+    anunciar(`Postgres ${new URL(url).host}${new URL(url).pathname}`);
     return db;
   }
 
@@ -69,7 +70,25 @@ async function conectar(): Promise<DB> {
   const cliente = new PGlite(DIRECTORIO_LOCAL);
   const db = drizzle(cliente, { schema });
   await migrate(db, { migrationsFolder: CARPETA_MIGRACIONES });
+  anunciar(`PGlite local (${DIRECTORIO_LOCAL})`);
   return db as unknown as DB;
+}
+
+/**
+ * Deja dicho en el log a qué base se conectó la app, una sola vez.
+ *
+ * Esto existe por un accidente concreto del 2026-11-09: el túnel a producción
+ * se cortó solo y la app siguió andando contra PGlite, mostrando números que
+ * parecían de producción. No hubo ningún error — y esa es justamente la
+ * trampa: las dos bases tienen el mismo schema, así que todo FUNCIONA, sólo
+ * que con los datos equivocados.
+ *
+ * `scripts/lib/base.ts` ya imprime esto mismo para los scripts ("Base: …").
+ * La app no lo hacía, y era el único lugar donde la pregunta importa de
+ * verdad: es la que se usa para decidir.
+ */
+function anunciar(aDonde: string) {
+  console.log(`[base] conectado a ${aDonde}`);
 }
 
 export function getDb(): Promise<DB> {

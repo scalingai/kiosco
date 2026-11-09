@@ -209,6 +209,7 @@ const PAGINAS = [
   { href: "/caja", etiqueta: "Caja", Icono: IconoDia },
   { href: "/ventas", etiqueta: "Ventas", Icono: IconoVentas },
   { href: "/compras", etiqueta: "Compras", Icono: IconoCompras },
+  { href: "/reponer", etiqueta: "Reponer", Icono: IconoCompras },
   { href: "/stock", etiqueta: "Stock", Icono: IconoStock },
   { href: "/historial", etiqueta: "Historial", Icono: IconoHistorial },
   { href: "/pedidos", etiqueta: "Pedidos", Icono: IconoPedidos },

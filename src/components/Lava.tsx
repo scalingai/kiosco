@@ -18,7 +18,7 @@ import { useEffect, useRef } from "react";
  *  - Con `prefers-reduced-motion` dibuja UN cuadro y para. No desaparece: el
  *    fondo sigue ahí, quieto.
  *
- * Si no hay WebGL2 no pinta nada y queda el verde plano de abajo. Es
+ * Si no hay WebGL2 no pinta nada y queda el rojo plano de abajo. Es
  * degradación a propósito: la lava es decorativa, y el menú se tiene que poder
  * usar igual.
  */
@@ -92,26 +92,35 @@ void main(){
   float ref = lum * 255.0 + bayer(gl_FragCoord.xy);
   float gris = grisCercano(clamp(ref, 0.0, 255.0)) / 255.0;
   // La luminancia NO se pinta como gris: se usa de interpolador entre dos
-  // colores de la paleta, así el humo sale ya dentro del verde de la marca.
+  // colores de la paleta, así el humo sale ya dentro del rojo de la marca.
   // La curva es lo que le da VOLUMEN en vez de un lavado parejo.
   float g = pow(gris, uCurva);
   vec3 col = mix(uBajo, uAlto, g) * uBrillo;
-  // Premultiplicado: donde el humo es fino se ve el verde de abajo.
+  // Premultiplicado: donde el humo es fino se ve el rojo de abajo.
   o = vec4(col * uAlpha, uAlpha);
 }`;
 
 /**
- * El verde del ícono de AppGenda (tono «favigenda»): de `#0f5430` en las
- * sombras a `#64d485` en las luces. Es el mismo par que usa el panel.
+ * El rojo de la marca: de `#660508` en las sombras a `#eb2e24` en las luces.
+ *
+ * Es el mismo par que tenía el verde, espejado de canal: la estructura de
+ * luminancia no cambia, así que la lava se mueve igual y el texto blanco
+ * encima sigue leyéndose. Cambiar sólo el tono y no el brillo es lo que evita
+ * tener que reacomodar todo lo demás.
  */
-const BAJO = [0.06, 0.33, 0.19] as const;
-const ALTO = [0.392, 0.832, 0.522] as const;
+const BAJO = [0.40, 0.02, 0.03] as const;
+const ALTO = [0.92, 0.18, 0.14] as const;
 
 /** El tono general. Más abajo se ve lavado; más arriba se come el texto. */
 const BRILLO = 0.84;
 
-/** El verde plano de base, el que se ve el instante antes del primer cuadro. */
-export const VERDE_MARCA = "#14663c";
+/**
+ * El rojo plano de base, el que se ve el instante antes del primer cuadro y en
+ * los equipos sin WebGL. Tiene que ser el MISMO valor que `--color-marca` en
+ * `globals.css`: si se separan, la pantalla parpadea de un rojo al otro
+ * mientras carga la lava.
+ */
+export const COLOR_MARCA = "#8f1212";
 
 function Plasma() {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -261,7 +270,7 @@ function Plasma() {
 }
 
 /**
- * La superficie verde de la marca: la lava, un vidrio que la hunde para que el
+ * La superficie de la marca: la lava, un vidrio que la hunde para que el
  * texto blanco se lea, y un brillo arriba.
  *
  * `velo` "degradado" oscurece hacia abajo (alto de pantalla: el sidebar);
@@ -279,7 +288,7 @@ export default function FondoMarca({
     <div
       aria-hidden
       className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit] [-webkit-mask-image:-webkit-radial-gradient(white,black)] [mask-image:radial-gradient(white,black)]"
-      style={{ backgroundColor: VERDE_MARCA }}
+      style={{ backgroundColor: COLOR_MARCA }}
     >
       <Plasma />
       <div
