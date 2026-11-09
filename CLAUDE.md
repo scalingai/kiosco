@@ -208,6 +208,19 @@ inserten. Un solo lugar por donde entra todo.
   abierto, el script dice que hizo todo y la app sigue mostrando lo de antes.
   No falla, miente. Lo mismo al borrar `.data`: hay que reiniciar el server
   después.
+- **Se trabaja contra la base de PRODUCCIÓN, no contra una local de juguete**
+  (decisión de Agus, 2026-11-09). Es un kiosco con un solo usuario: los datos
+  que importan —el catálogo real, los precios, los pedidos— están en prod, y
+  armar algo contra datos inventados no sirve para decidir nada.
+
+  El camino es un túnel SSH: `npm run tunel` deja la base en `localhost:45432`
+  y `.env.local` apunta ahí. **No se abre el puerto a internet**: EasyPanel lo
+  publica con `sslmode=disable`, o sea la clave en texto plano, y un puerto de
+  Postgres abierto lo escanean bots todo el día. La clave del túnel está
+  restringida en el servidor a reenviar ese puerto y nada más: no abre shell.
+
+  Lo que esto implica y hay que tener presente SIEMPRE: con el túnel abierto,
+  `npm run dev` escribe en la base de verdad. Una venta de prueba es una venta.
 - **Los scripts de base van a donde apunte `DATABASE_URL`.** `scripts/lib/base.ts`
   usa la misma regla que la app: si la variable está definida (leyendo `.env.local`
   y `.env` a mano, porque un script lanzado con `node` no pasa por Next), conecta

@@ -15,7 +15,8 @@
     "db:importar": "node --experimental-strip-types scripts/importar.ts",
     "db:completar": "node --experimental-strip-types scripts/importar.ts --completar",
     "db:limpiar": "node --experimental-strip-types scripts/limpiar.ts",
-    "db:sincronizar": "node --experimental-strip-types scripts/sincronizar.ts"
+    "db:sincronizar": "node --experimental-strip-types scripts/sincronizar.ts",
+    "tunel": "node scripts/tunel.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
