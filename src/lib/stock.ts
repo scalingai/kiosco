@@ -108,6 +108,10 @@ export type ProductoVendible = {
   codigoBarras: string | null;
   /** la foto del envase; es lo que se reconoce de un vistazo */
   imagenUrl: string | null;
+  /** de dónde salió; respaldo si la nuestra todavía no se deployó */
+  imagenOrigenUrl: string | null;
+  /** la del rubro, para los que no tienen la suya */
+  imagenRubroUrl: string | null;
   /** null si nadie le puso precio todavía; se pide al vender */
   precioVentaCentavos: number | null;
   /** null si el producto nunca se compró por la app */
@@ -126,6 +130,8 @@ export async function listarParaVender(): Promise<ProductoVendible[]> {
     marca: f.marca,
     codigoBarras: f.codigoBarras,
     imagenUrl: f.imagenUrl,
+    imagenOrigenUrl: f.imagenOrigenUrl,
+    imagenRubroUrl: f.imagenRubroUrl,
     precioVentaCentavos: f.precioVentaCentavos,
     costoRealCentavos: f.costoRealCentavos,
     multiplicadorMilesimas: f.multiplicadorMilesimas,
@@ -149,6 +155,19 @@ export type FilaStock = {
   envase: Envase | null;
   codigoBarras: string | null;
   imagenUrl: string | null;
+  /** de dónde salió la foto; sirve de respaldo si la nuestra no está */
+  imagenOrigenUrl: string | null;
+  /**
+   * La foto del RUBRO, para cuando el producto no tiene la suya.
+   *
+   * No es un adorno: la foto de producto sale del catálogo de un supermercado
+   * y hay cosas que ahí no están nunca —los cigarrillos no se pueden exhibir
+   * por ley, y lo que se vende suelto no tiene envase—. Sin esto esos quedan
+   * como un cuadrado gris con una letra adentro, y media góndola gris no se
+   * mira. Inventarles una foto de producto sería peor: saldría un paquete con
+   * un logo que no existe.
+   */
+  imagenRubroUrl: string | null;
   /** cuánto trae una unidad de venta: 2250 (ml) para la Coca grande */
   contenido: number | null;
   contenidoUnidad: Unidad | null;
@@ -200,9 +219,12 @@ export async function listarStock(): Promise<FilaStock[]> {
         categoriaId: productos.categoriaId,
         subcategoria: categorias.nombre,
         categoria: padre.nombre,
+        imagenSub: categorias.imagenUrl,
+        imagenPadre: padre.imagenUrl,
         envase: productos.envase,
         codigoBarras: productos.codigoBarras,
         imagenUrl: productos.imagenUrl,
+        imagenOrigenUrl: productos.imagenOrigenUrl,
         contenido: productos.contenido,
         contenidoUnidad: productos.contenidoUnidad,
         precioVentaCentavos: productos.precioVentaCentavos,
@@ -265,6 +287,10 @@ export async function listarStock(): Promise<FilaStock[]> {
       envase: producto.envase,
       codigoBarras: producto.codigoBarras,
       imagenUrl: producto.imagenUrl,
+      imagenOrigenUrl: producto.imagenOrigenUrl,
+      // La del rubro chico gana sobre la del grande: "Gomitas" dice más que
+      // "Golosinas". La del padre es la red por si la subcategoría no tiene.
+      imagenRubroUrl: producto.imagenSub ?? producto.imagenPadre ?? null,
       contenido: producto.contenido,
       contenidoUnidad: producto.contenidoUnidad,
       enBlanco,
@@ -530,10 +556,21 @@ export async function actualizarProducto(id: string, ficha: FichaProducto) {
 
   if (ficha.imagenUrl !== undefined) {
     const limpio = ficha.imagenUrl?.trim() ?? "";
-    // Sólo http(s). Un `javascript:` o un `data:` acá terminaría en el `src`
-    // de un <img> de la tienda pública.
-    if (limpio && !/^https?:\/\//i.test(limpio)) {
-      throw new Error("La imagen tiene que ser un link http o https");
+    /*
+     * http(s), o una de las nuestras.
+     *
+     * El filtro no es prolijidad: este valor termina en el `src` de un <img>
+     * de la tienda PÚBLICA, así que un `javascript:` o un `data:` acá es un
+     * agujero. `/productos/…` es seguro porque es una ruta relativa a nuestro
+     * propio dominio —no puede apuntar a otro lado— y es donde deja las fotos
+     * `npm run db:fotos`. El `//` del principio queda prohibido a propósito:
+     * `//otro.com/x.jpg` es un link a otro dominio disfrazado de ruta.
+     */
+    const esNuestra = /^\/[^/]/.test(limpio);
+    if (limpio && !esNuestra && !/^https?:\/\//i.test(limpio)) {
+      throw new Error(
+        "La imagen tiene que ser un link http/https o una foto nuestra (/productos/…)",
+      );
     }
     cambios.imagenUrl = limpio || null;
   }

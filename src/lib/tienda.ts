@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { getDb } from "@/db/client";
 import { categorias, marcas, productos } from "@/db/schema";
@@ -25,6 +25,10 @@ export type ProductoEnVidriera = {
   rubro: string | null;
   precioCentavos: number;
   imagenUrl: string | null;
+  /** de dónde salió; respaldo si la nuestra todavía no se deployó */
+  imagenOrigenUrl: string | null;
+  /** la foto del rubro, para los que no tienen la suya */
+  imagenRubroUrl: string | null;
 };
 
 /**
@@ -79,6 +83,9 @@ export async function listarVidriera(): Promise<ProductoEnVidriera[]> {
       rubro: padre.nombre,
       precioCentavos: productos.precioVentaCentavos,
       imagenUrl: productos.imagenUrl,
+      imagenOrigenUrl: productos.imagenOrigenUrl,
+      // La del rubro chico gana: "Gomitas" dice más que "Golosinas".
+      imagenRubroUrl: sql<string | null>`coalesce(${categorias.imagenUrl}, ${padre.imagenUrl})`,
     })
     .from(productos)
     .leftJoin(marcas, eq(marcas.id, productos.marcaId))

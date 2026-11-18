@@ -10,6 +10,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  ne,
   or,
   sql,
 } from "drizzle-orm";
@@ -24,6 +25,7 @@ import {
   movimientos,
   productos,
   proveedores,
+  socios,
   sucursales,
   ventas,
   ventasItems,
@@ -34,6 +36,7 @@ import { consultarOrden, estaPagada } from "@/lib/mercadopago";
 import { buscarOCrearClienteConTelefono } from "@/lib/consultas";
 import {
   costoDeReferencia,
+  esGastoOperativo,
   repartirPago,
   restarPorMedio,
   sumarPorMedio,
@@ -272,6 +275,7 @@ export async function registrarGasto(entrada: GastoAGuardar) {
       descripcion: entrada.descripcion?.trim() || null,
       fecha: validarFecha(entrada.fecha),
       medio: entrada.medio,
+      socioId: entrada.socioId || null,
     })
     .returning();
   return fila;
@@ -516,6 +520,8 @@ export type FilaGasto = {
   montoCentavos: number;
   descripcion: string | null;
   medio: MedioPago;
+  /** el nombre del socio que la puso, si la puso un socio */
+  socio: string | null;
 };
 
 export type RenglonCompra = {
@@ -571,6 +577,11 @@ export type BalanceDia = {
   ventasCentavos: number;
   cobrosCentavos: number;
   gastosCentavos: number;
+  /**
+   * La inversión inicial cargada ese día. Va aparte de `gastosCentavos` y NO
+   * entra en el resultado: es plata del bolsillo de un socio, no de la caja.
+   */
+  inversionCentavos: number;
   /** Sólo lo que se pagó ESE día, sin importar cuándo llegó la mercadería. */
   pagosProveedoresCentavos: number;
   entroCentavos: number;
@@ -626,8 +637,10 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
           montoCentavos: gastos.montoCentavos,
           descripcion: gastos.descripcion,
           medio: gastos.medio,
+          socio: socios.nombre,
         })
         .from(gastos)
+        .leftJoin(socios, eq(socios.id, gastos.socioId))
         .where(and(eq(gastos.fecha, fecha), isNull(gastos.anuladoEn)))
         .orderBy(asc(gastos.creadoEn)),
 
@@ -725,7 +738,18 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
 
   const ventasCentavos = sumar(filasVentas, (v) => v.montoCentavos);
   const cobrosCentavos = sumar(cobros, (c) => c.montoCentavos);
-  const gastosCentavos = sumar(filasGastos, (g) => g.montoCentavos);
+  /*
+   * La inversión inicial se anota como gasto pero NO es plata de la caja del
+   * kiosco: la puso un socio de su bolsillo y fue derecho al que cobró. Si
+   * entrara acá, el día que se carga el cartel o la reserva se leería como un
+   * día catastrófico y taparía lo único que el balance tiene que contestar:
+   * cómo le fue al negocio. Va aparte, en `inversionCentavos`, y se ve entera
+   * en /inversion.
+   */
+  const operativos = filasGastos.filter((g) => esGastoOperativo(g.categoria));
+  const deInversion = filasGastos.filter((g) => !esGastoOperativo(g.categoria));
+  const gastosCentavos = sumar(operativos, (g) => g.montoCentavos);
+  const inversionCentavos = sumar(deInversion, (g) => g.montoCentavos);
   // Sólo las pagadas ESE día mueven plata. Las que llegaron y siguen impagas
   // aparecen en la lista pero no tocan el resultado.
   const pagosProveedoresCentavos = sumar(
@@ -835,7 +859,7 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
   );
   const salioPorMedio = sumarPorMedio(
     [
-      ...filasGastos.map((g) => ({ medio: g.medio, monto: g.montoCentavos })),
+      ...operativos.map((g) => ({ medio: g.medio, monto: g.montoCentavos })),
       ...salidasDeCompras,
     ],
     (f) => f.medio,
@@ -851,6 +875,7 @@ export async function balanceDelDia(fecha: string): Promise<BalanceDia> {
     ventasCentavos,
     cobrosCentavos,
     gastosCentavos,
+    inversionCentavos,
     pagosProveedoresCentavos,
     entroCentavos,
     salioCentavos,
@@ -988,7 +1013,15 @@ export async function resumenDelMes(fecha: string): Promise<ResumenMes> {
     db
       .select({ total })
       .from(gastos)
-      .where(and(enElMes(gastos.fecha), isNull(gastos.anuladoEn))),
+      // La inversión inicial queda afuera por lo mismo que en el día: es plata
+      // del bolsillo de los socios y no del mes del kiosco.
+      .where(
+        and(
+          enElMes(gastos.fecha),
+          isNull(gastos.anuladoEn),
+          ne(gastos.categoria, "inversion"),
+        ),
+      ),
     db
       .select({ total })
       .from(compras)

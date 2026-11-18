@@ -1,5 +1,6 @@
 "use client";
 
+import Foto from "@/components/Foto";
 import { useState } from "react";
 import { BotonArchivar, BotonFalta } from "@/components/AccionesStock";
 import FichaProducto from "@/components/FichaProducto";
@@ -51,22 +52,17 @@ export default function TablaStock({
       celda: (f) => (
         <span className="flex items-start gap-2">
           {/*
-            <img> a secas y no next/image: las fotos viven en la CDN del
-            supermercado, y optimizarlas obligaría a declarar cada dominio y a
-            sumar sharp al contenedor para nada. Si el link se rompe, queda el
-            hueco y la fila se sigue leyendo igual.
+            Sólo la foto del PRODUCTO. La del rubro no va acá: la tabla ya está
+            agrupada por rubro, así que repetir la misma miniatura en las
+            treinta filas de "Gaseosas" no agrega nada y ensucia la columna. Esa
+            foto vive una sola vez, en el encabezado del grupo.
           */}
-          {f.imagenUrl && (
-            // eslint-disable-next-line @next/next/no-img-element -- ver arriba
-            <img
-              src={f.imagenUrl}
-              alt=""
-              loading="lazy"
-              width={28}
-              height={28}
-              className="mt-0.5 h-7 w-7 shrink-0 rounded object-contain"
-            />
-          )}
+          <Foto
+            fuentes={[f.imagenUrl, f.imagenOrigenUrl]}
+            width={28}
+            height={28}
+            className="mt-0.5 h-7 w-7 shrink-0 rounded object-contain"
+          />
           <span className="min-w-0">
             <span className="font-medium">{f.nombre}</span>
             {f.falta && (

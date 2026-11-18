@@ -16,7 +16,11 @@
     "db:completar": "node --experimental-strip-types scripts/importar.ts --completar",
     "db:limpiar": "node --experimental-strip-types scripts/limpiar.ts",
     "db:sincronizar": "node --experimental-strip-types scripts/sincronizar.ts",
-    "tunel": "node scripts/tunel.mjs"
+    "tunel": "node scripts/tunel.mjs",
+    "db:fotos": "node --experimental-strip-types scripts/fotos-kiosco.ts",
+    "db:buscar-fotos": "node --experimental-strip-types scripts/buscar-fotos.ts",
+    "db:rubros": "node --experimental-strip-types scripts/rubros-imagenes.ts",
+    "db:fotos-carteles": "node --experimental-strip-types scripts/fotos-carteles.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",

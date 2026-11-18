@@ -19,6 +19,7 @@ import {
   MEDIO_CORTO,
 } from "@/lib/negocio";
 import { formatearCentavos } from "@/lib/plata";
+import { listarSocios } from "@/lib/inversion";
 import { listarNombresDeProductos } from "@/lib/stock";
 
 export const dynamic = "force-dynamic";
@@ -60,13 +61,15 @@ export default async function Caja({ searchParams }: PageProps<"/caja">) {
   const fecha = pedida && FECHA.test(pedida) ? pedida : hoyLocal();
   const esHoy = fecha === hoyLocal();
 
-  const [balance, mes, proveedores, productos, deudas] = await Promise.all([
-    balanceDelDia(fecha),
-    resumenDelMes(fecha),
-    listarProveedores(),
-    listarNombresDeProductos(),
-    deudaProveedores(),
-  ]);
+  const [balance, mes, proveedores, productos, deudas, listaSocios] =
+    await Promise.all([
+      balanceDelDia(fecha),
+      resumenDelMes(fecha),
+      listarProveedores(),
+      listarNombresDeProductos(),
+      deudaProveedores(),
+      listarSocios(),
+    ]);
 
   const positivo = balance.resultadoCentavos >= 0;
   const deudaTotal = deudas.reduce((t, d) => t + d.totalCentavos, 0);
@@ -167,6 +170,7 @@ export default async function Caja({ searchParams }: PageProps<"/caja">) {
         fecha={fecha}
         proveedores={proveedores}
         productos={productos}
+        socios={listaSocios}
       />
 
       <Seccion
@@ -318,6 +322,7 @@ export default async function Caja({ searchParams }: PageProps<"/caja">) {
                   </span>
                   <span className="text-xs text-tinta-suave">
                     {g.descripcion && ETIQUETA_GASTO[g.categoria] + " · "}
+                    {g.socio && g.socio + " · "}
                     {MEDIO_CORTO[g.medio]}
                   </span>
                 </span>
@@ -330,6 +335,26 @@ export default async function Caja({ searchParams }: PageProps<"/caja">) {
               </li>
             ))}
           </ul>
+        )}
+
+        {/*
+          El total del encabezado no cuenta la inversión inicial —no es plata
+          de la caja— pero los renglones de arriba sí se ven. Sin esta línea el
+          total no cerraría con la lista y parecería un error de suma.
+        */}
+        {balance.inversionCentavos > 0 && (
+          <p className="mt-3 rounded-lg bg-papel-hondo px-3 py-2 text-xs text-tinta-suave">
+            De eso,{" "}
+            <span className="cifra">
+              {formatearCentavos(balance.inversionCentavos)}
+            </span>{" "}
+            es inversión inicial y no entra en el resultado del día: la pusieron
+            los socios.{" "}
+            <Link href="/inversion" className="underline">
+              Ver la inversión
+            </Link>
+            .
+          </p>
         )}
       </Seccion>
 

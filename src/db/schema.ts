@@ -187,6 +187,7 @@ export const tipoEnvase = pgEnum("tipo_envase", [
 ]);
 
 export const categoriaGasto = pgEnum("categoria_gasto", [
+  "inversion",
   "alquiler",
   "servicios",
   "sueldos",
@@ -531,11 +532,58 @@ export const comprasItems = pgTable(
   (t) => [index("compras_items_compra_idx").on(t.compraId)],
 );
 
+/**
+ * Los socios que pusieron la plata para abrir.
+ *
+ * Existe por una razón que la descripción de un gasto no puede cubrir: la
+ * inversión inicial se reparte entre dos, cada uno comprometió un monto, y lo
+ * que hay que poder contestar de un vistazo es **cuánto le falta a cada uno**.
+ * Con el nombre escrito dentro del texto del gasto eso no se puede sumar: "Agus
+ * D", "Agustín D" y "agustin d" son tres personas distintas para una query.
+ *
+ * El objetivo es un dato y no una constante en el código a propósito: los dos
+ * pusieron 4.000.000 al arrancar, pero ese número lo deciden ellos y va a
+ * cambiar. Un socio sin ningún gasto todavía TIENE que aparecer en la pantalla
+ * —con cero puesto y todo por poner—, y por eso la lista sale de esta tabla y
+ * no de los gastos cargados.
+ */
+export const socios = pgTable(
+  "socios",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nombre: text("nombre").notNull(),
+    nombreNormalizado: text("nombre_normalizado").notNull(),
+    /** cuánto se comprometió a poner, en centavos */
+    objetivoCentavos: bigint("objetivo_centavos", { mode: "number" })
+      .notNull()
+      .default(0),
+    /** para ordenarlos siempre igual en pantalla */
+    posicion: integer("posicion").notNull().default(0),
+    archivadoEn: timestamp("archivado_en", { withTimezone: true }),
+    creadoEn: timestamp("creado_en", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("socios_nombre_normalizado_key").on(t.nombreNormalizado)],
+);
+
 export const gastos = pgTable(
   "gastos",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     categoria: categoriaGasto("categoria").notNull().default("otros"),
+    /**
+     * Quién puso la plata. Nullable, y la mayoría de los gastos lo dejan en
+     * null: la luz la paga el kiosco, no un socio. Se completa cuando el gasto
+     * sale del bolsillo de uno de los dos, que es el caso de la inversión
+     * inicial.
+     *
+     * `set null` y no `cascade`: borrar un socio no puede hacer desaparecer la
+     * plata que salió. El gasto queda, sin dueño.
+     */
+    socioId: uuid("socio_id").references(() => socios.id, {
+      onDelete: "set null",
+    }),
     montoCentavos: bigint("monto_centavos", { mode: "number" }).notNull(),
     descripcion: text("descripcion"),
     fecha: date("fecha").notNull(),
@@ -545,7 +593,10 @@ export const gastos = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("gastos_fecha_idx").on(t.fecha)],
+  (t) => [
+    index("gastos_fecha_idx").on(t.fecha),
+    index("gastos_socio_idx").on(t.socioId),
+  ],
 );
 
 /**
@@ -702,6 +753,7 @@ export type Proveedor = typeof proveedores.$inferSelect;
 export type Compra = typeof compras.$inferSelect;
 export type CompraItem = typeof comprasItems.$inferSelect;
 export type Gasto = typeof gastos.$inferSelect;
+export type Socio = typeof socios.$inferSelect;
 export type Venta = typeof ventas.$inferSelect;
 export type CategoriaGasto = (typeof categoriaGasto.enumValues)[number];
 export type MedioPago = (typeof medioPago.enumValues)[number];
@@ -720,6 +772,20 @@ export const categorias = pgTable(
     nombreNormalizado: text("nombre_normalizado").notNull(),
     /** null = es una categoría de primer nivel */
     padreId: uuid("padre_id"),
+    /**
+     * La imagen del rubro. A diferencia de `productos.imagen_url` —que es un
+     * link a la CDN del super de donde salió el producto— ésta es NUESTRA y
+     * vive en `public/rubros`: una foto de estudio del rubro, sin marcas.
+     *
+     * Para qué: un kiosco tiene cientos de productos y el supermercado no
+     * tiene foto de todos —los cigarrillos, por ley, no están en ningún
+     * catálogo—. Sin esto, la vidriera dibuja la inicial del nombre en un
+     * cuadrado gris, y una góndola llena de cuadrados grises no se mira.
+     * Inventar la foto del producto sería peor: saldría un paquete con un
+     * logo que no existe. La del rubro es honesta —dice de qué se trata sin
+     * mentir cuál es— y se ve pareja en toda la pantalla.
+     */
+    imagenUrl: text("imagen_url"),
     creadoEn: timestamp("creado_en", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -797,6 +863,20 @@ export const productos = pgTable(
      * depende de esto para funcionar.
      */
     imagenUrl: text("imagen_url"),
+    /**
+     * De dónde salió la foto original, cuando `imagen_url` ya no es ella.
+     *
+     * Las fotos del catálogo del super son recortes sobre fondo blanco: sirven
+     * para reconocer el envase y se ven como lo que son, el archivo de prensa
+     * de la marca. Las de `/productos` son esas MISMAS fotos re-fotografiadas
+     * adentro del kiosco (ver `scripts/fotos-kiosco.ts`), y ahí el link de
+     * origen deja de estar en `imagen_url`.
+     *
+     * Guardarlo no es nostalgia: es lo que permite volver a generar la foto el
+     * día que el prompt mejore, o volver atrás, sin salir a buscar de nuevo el
+     * producto en cuatro supermercados.
+     */
+    imagenOrigenUrl: text("imagen_origen_url"),
     /**
      * Cuánto trae UNA unidad de venta: la botella de Coca son 2250 ml, el
      * paquete de papas 120 gr.

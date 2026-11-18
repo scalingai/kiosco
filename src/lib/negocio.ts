@@ -25,6 +25,7 @@ export const MEDIO_CORTO: Record<MedioPago, string> = {
 };
 
 export const CATEGORIAS_GASTO = [
+  "inversion",
   "alquiler",
   "servicios",
   "sueldos",
@@ -39,6 +40,7 @@ export type CategoriaGasto = (typeof CATEGORIAS_GASTO)[number];
 
 /** Cómo se llama cada categoría en pantalla. */
 export const ETIQUETA_GASTO: Record<CategoriaGasto, string> = {
+  inversion: "Inversión inicial",
   alquiler: "Alquiler",
   servicios: "Luz, gas, internet",
   sueldos: "Sueldos",
@@ -56,6 +58,24 @@ export const ETIQUETA_GASTO: Record<CategoriaGasto, string> = {
  */
 export function esRetiro(categoria: CategoriaGasto): boolean {
   return categoria === "retiro";
+}
+
+/**
+ * La inversión inicial tampoco es un gasto de tener el kiosco abierto: es la
+ * plata que los socios pusieron para abrirlo. Se anota como gasto porque salió
+ * de un bolsillo de verdad, pero mezclarla con la luz y el alquiler haría que
+ * el mes de apertura se lea como una catástrofe.
+ *
+ * Misma razón que `esRetiro`, al revés: el retiro es plata que sale del
+ * negocio hacia un socio, la inversión es plata que entra desde un socio.
+ */
+export function esInversion(categoria: CategoriaGasto): boolean {
+  return categoria === "inversion";
+}
+
+/** Lo que de verdad cuesta tener el negocio abierto: ni retiros ni inversión. */
+export function esGastoOperativo(categoria: CategoriaGasto): boolean {
+  return !esRetiro(categoria) && !esInversion(categoria);
 }
 
 export type VentaAGuardar = {
@@ -95,7 +115,12 @@ export type GastoAGuardar = {
   descripcion?: string | null;
   fecha: string;
   medio: MedioPago;
+  /** quién puso la plata; null cuando la puso el kiosco */
+  socioId?: string | null;
 };
+
+/** El objetivo de aporte que arrancó la sociedad: 4.000.000 cada uno. */
+export const OBJETIVO_APORTE_CENTAVOS = 400_000_000;
 
 export const UNIDADES = ["un", "gr", "ml"] as const;
 
