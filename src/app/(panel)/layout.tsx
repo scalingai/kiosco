@@ -83,7 +83,7 @@ export default async function PanelLayout({
           viene de main). Con `lg` acá y `escritorio` allá, una tablet acostada
           mostraba la columna encima del contenido: el menú aparecía a los
           768px y el contenido recién se corría a los 1024. */}
-      <div className="relative z-10 escritorio:pl-56">
+      <div className="relative z-10 escritorio:pl-24">
         {/*
           La hoja de trabajo. Arranca debajo de la barra en el celular y al
           costado del menú en escritorio, con el filete verde alrededor: ese

@@ -4,7 +4,12 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { gastos, socios } from "@/db/schema";
 import { normalizarNombre } from "@/lib/nombres";
-import { type CategoriaGasto, OBJETIVO_APORTE_CENTAVOS } from "@/lib/negocio";
+import {
+  ETIQUETA_GASTO,
+  type CategoriaGasto,
+  type MedioPago,
+  OBJETIVO_APORTE_CENTAVOS,
+} from "@/lib/negocio";
 
 /**
  * ── La inversión inicial ───────────────────────────────────────────────────
@@ -29,6 +34,17 @@ export type RenglonAporte = {
   fecha: string;
 };
 
+/** Un aporte con el nombre de quien lo puso: una fila de la planilla. */
+export type FilaAporte = {
+  id: string;
+  fecha: string;
+  /** `null` cuando se cargó sin decir quién puso la plata */
+  socio: string | null;
+  concepto: string;
+  medio: MedioPago;
+  montoCentavos: number;
+};
+
 export type AporteDeSocio = {
   id: string;
   nombre: string;
@@ -43,6 +59,8 @@ export type AporteDeSocio = {
 
 export type Inversion = {
   socios: AporteDeSocio[];
+  /** todos los aportes juntos, del más nuevo al más viejo: la planilla */
+  aportes: FilaAporte[];
   /** lo puesto por alguien que no es ninguno de los socios cargados */
   sinSocioCentavos: number;
   objetivoCentavos: number;
@@ -119,6 +137,7 @@ export async function estadoDeLaInversion(): Promise<Inversion> {
         descripcion: gastos.descripcion,
         montoCentavos: gastos.montoCentavos,
         fecha: gastos.fecha,
+        medio: gastos.medio,
       })
       .from(gastos)
       .where(
@@ -167,8 +186,23 @@ export async function estadoDeLaInversion(): Promise<Inversion> {
   const puestoCentavos =
     detalle.reduce((t, s) => t + s.puestoCentavos, 0) + sinSocioCentavos;
 
+  const nombreDe = new Map(lista.map((s) => [s.id, s.nombre]));
+  const aportes: FilaAporte[] = renglones
+    .map((r) => ({
+      id: r.id,
+      fecha: r.fecha,
+      socio: r.socioId ? (nombreDe.get(r.socioId) ?? null) : null,
+      concepto: r.descripcion?.trim() || ETIQUETA_GASTO[r.categoria],
+      medio: r.medio,
+      montoCentavos: r.montoCentavos,
+    }))
+    // La consulta viene del más viejo al más nuevo (la barra de cada socio la
+    // necesita así); la planilla se lee al revés.
+    .reverse();
+
   return {
     socios: detalle,
+    aportes,
     sinSocioCentavos,
     objetivoCentavos,
     puestoCentavos,

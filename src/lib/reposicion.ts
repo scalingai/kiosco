@@ -228,18 +228,38 @@ export async function leerPedido(
   };
 }
 
-/** Los pedidos abiertos, para la lista. */
+/**
+ * Los pedidos, para la lista, con lo justo para juzgarlos sin abrirlos.
+ *
+ * `totalCentavos` es la suma de los renglones que YA tienen precio, y
+ * `sinPrecio` cuenta los que todavía no: los dos van juntos a propósito. Un
+ * total parcial sin el aviso de que es parcial se lee como el total, y un
+ * pedido con 299 renglones y 40 sin precio no vale lo que dice la suma.
+ */
 export async function listarPedidos() {
   const db = await getDb();
   return db
     .select({
       id: reposiciones.id,
+      proveedorId: reposiciones.proveedorId,
       proveedor: proveedores.nombre,
       enBlanco: reposiciones.enBlanco,
       cerradaEn: reposiciones.cerradaEn,
       creadaEn: reposiciones.creadaEn,
       renglones: sql<number>`(
         select count(*)::int from ${reposicionesItems}
+        where ${reposicionesItems.reposicionId} = ${reposiciones.id}
+      )`,
+      sinPrecio: sql<number>`(
+        select count(*)::int from ${reposicionesItems}
+        where ${reposicionesItems.reposicionId} = ${reposiciones.id}
+          and ${reposicionesItems.importeBultoCentavos} is null
+      )`,
+      totalCentavos: sql<number>`(
+        select coalesce(
+          sum(${reposicionesItems.cantidad} * ${reposicionesItems.importeBultoCentavos}),
+          0
+        )::float8 from ${reposicionesItems}
         where ${reposicionesItems.reposicionId} = ${reposiciones.id}
       )`,
     })
@@ -384,4 +404,19 @@ export async function archivarPedido(id: string) {
     .update(reposiciones)
     .set({ archivadaEn: new Date() })
     .where(eq(reposiciones.id, id));
+}
+
+/**
+ * Cuántos pedidos siguen esperando que entren o se les cante el precio.
+ *
+ * Es lo que va de globito en la solapa «Cargar compra»: una cuenta sola, sin
+ * traer los renglones, porque se pide en las tres solapas de Stock.
+ */
+export async function contarPedidosAbiertos(): Promise<number> {
+  const db = await getDb();
+  const [fila] = await db
+    .select({ cuantos: sql<number>`count(*)::int` })
+    .from(reposiciones)
+    .where(and(isNull(reposiciones.archivadaEn), isNull(reposiciones.cerradaEn)));
+  return fila?.cuantos ?? 0;
 }

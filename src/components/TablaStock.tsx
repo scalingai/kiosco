@@ -6,31 +6,60 @@ import { BotonArchivar, BotonFalta } from "@/components/AccionesStock";
 import FichaProducto from "@/components/FichaProducto";
 import Hoja from "@/components/Hoja";
 import { useSeleccion } from "@/components/SeleccionStock";
-import Tabla, { type Columna } from "@/components/Tabla";
+import Tabla, { Nada, type Columna } from "@/components/Tabla";
 import { fechaCorta } from "@/lib/fechas";
 import {
+  calcularMargen,
   formatearContenidoCorto,
   formatearMultiplicador,
 } from "@/lib/negocio";
 import { formatearCentavos } from "@/lib/plata";
-import type { FilaStock, OpcionCategoria } from "@/lib/stock";
+import type { Envase, FilaStock, OpcionCategoria } from "@/lib/stock";
 
 type Marca = { id: string; nombre: string };
 
-const SIN = <span className="text-tinta-suave">—</span>;
+/*
+ * El reparto del ancho, definido UNA vez para todos los rubros.
+ *
+ * Cada rubro es su propia <table>, y con `table-layout: auto` cada una repartía
+ * el ancho según SU contenido: el costo caía en un lugar en Aceites y en otro en
+ * Aderezos, y la planilla dejaba de leerse por costumbre. Con `table-fixed` el
+ * ancho sale de estas clases y no del contenido, así que todas caen en la misma x.
+ * En ese modo el ancho se pone con `w-*` (un `min-w-*` lo ignora).
+ *
+ * «Producto» no lleva ancho: se queda con lo que sobra.
+ */
+const ANCHO = {
+  envase: "w-20",
+  proveedor: "w-28",
+  costo: "w-24",
+  precio: "w-24",
+  margen: "w-40",
+  ultima: "w-28",
+} as const;
+
+const ETIQUETA_ENVASE: Record<Envase, string> = {
+  botella: "Botella",
+  retornable: "Retornable",
+  lata: "Lata",
+  tetra: "Tetra",
+  otro: "Otro",
+};
 
 /**
- * El catálogo como planilla.
+ * El catálogo como planilla, una tabla por rubro.
  *
- * El orden de las columnas es el del razonamiento: primero qué es —el nombre y
- * el tamaño juntos, porque "gaseosa" y "gaseosa de 2,25 L" no son la misma
- * cosa— después de dónde viene, después cómo viene, y recién al final la plata, que se lee de
- * izquierda a derecha como la cuenta que es —factura, costo, precio, margen—.
- * Los números no se explican solos: se explican porque están al lado del
- * anterior.
+ * Es la planilla que se mira de corrido: filas bajas, una sola línea por
+ * producto, la plata a la derecha y en columna. Lo que explica el número va al
+ * lado del número y no en un renglón de más: `+IVA` pegado al costo, `sug.`
+ * pegado al precio que todavía nadie cargó.
  *
- * El envase no tiene columna: ya está en el nombre ("lata 473 ml", "2 L
- * retornable") y repetirlo sería gastar ancho en un dato que ya se lee.
+ * **El margen real y el sugerido no se mezclan.** Con precio de venta cargado,
+ * el margen sale de ESE precio contra el costo de verdad (`calcularMargen`).
+ * Sin precio, lo único honesto es el margen que daría el precio sugerido, y se
+ * dibuja gris y con "sug." para que no se lea como una ganancia que ya existe.
+ * Un margen inventado con la misma pinta que uno real es peor que una celda
+ * vacía.
  */
 export default function TablaStock({
   filas,
@@ -48,123 +77,98 @@ export default function TablaStock({
     {
       clave: "nombre",
       titulo: "Producto",
-      ancho: "min-w-36",
+      // Sin ancho a propósito: es la que se queda con lo que sobra.
       celda: (f) => (
-        <span className="flex items-start gap-2">
+        <span className="flex items-center gap-2">
           {/*
-            Sólo la foto del PRODUCTO. La del rubro no va acá: la tabla ya está
-            agrupada por rubro, así que repetir la misma miniatura en las
-            treinta filas de "Gaseosas" no agrega nada y ensucia la columna. Esa
-            foto vive una sola vez, en el encabezado del grupo.
+            Sólo la foto del PRODUCTO. La del rubro vive una vez en el
+            encabezado del grupo: repetirla en treinta filas no agrega nada.
           */}
           <Foto
             fuentes={[f.imagenUrl, f.imagenOrigenUrl]}
-            width={28}
-            height={28}
-            className="mt-0.5 h-7 w-7 shrink-0 rounded object-contain"
-          />
-          <span className="min-w-0">
+            width={24}
+            height={24}
+            className="h-6 w-6 shrink-0 rounded object-contain"
+          >
+            <span className="block h-6 w-6 shrink-0 rounded bg-papel-hondo" />
+          </Foto>
+          <span className="min-w-0 truncate">
             <span className="font-medium">{f.nombre}</span>
+            {(f.marca || f.contenido != null) && (
+              <span className="ml-1.5 text-[0.7rem] text-tinta-suave">
+                {[
+                  f.marca,
+                  f.contenido != null && f.contenidoUnidad != null
+                    ? formatearContenidoCorto(f.contenido, f.contenidoUnidad)
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            )}
             {f.falta && (
-              <span className="ml-2 rounded-full bg-deuda-tenue px-1.5 py-0.5 text-[0.65rem] text-deuda">
+              <span className="ml-1.5 rounded bg-deuda-tenue px-1 py-px text-[0.6rem] font-medium text-deuda">
                 falta
               </span>
             )}
           </span>
         </span>
       ),
+      total: (filas) => (
+        <span className="text-xs font-normal text-tinta-suave">
+          {filas.length === 1 ? "1 producto" : `${filas.length} productos`}
+        </span>
+      ),
     },
     {
-      clave: "contenido",
-      titulo: "Contenido",
-      ayuda: "por unidad",
-      numerica: true,
+      clave: "envase",
+      titulo: "Envase",
+      ancho: ANCHO.envase,
       celda: (f) =>
-        f.contenido != null && f.contenidoUnidad != null
-          ? formatearContenidoCorto(f.contenido, f.contenidoUnidad)
-          : SIN,
-    },
-    {
-      // Vuelve como columna: la lista se agrupa por rubro, no por marca, así
-      // que el título de la sección ya no la dice.
-      clave: "marca",
-      titulo: "Marca",
-      ancho: "min-w-24",
-      celda: (f) => f.marca ?? SIN,
+        f.envase ? (
+          <span className="text-tinta-suave">{ETIQUETA_ENVASE[f.envase]}</span>
+        ) : (
+          <Nada />
+        ),
     },
     {
       clave: "proveedor",
       titulo: "Proveedor",
-      ancho: "min-w-24",
-      celda: (f) => f.proveedor ?? SIN,
-    },
-    {
-      clave: "bulto",
-      titulo: "Bulto",
-      ayuda: "última compra",
-      ancho: "min-w-24",
+      ancho: ANCHO.proveedor,
       celda: (f) =>
-        f.cantidad != null && f.unidadesPorBulto != null && f.unidad != null ? (
-          <span className="cifra">
-            {f.cantidad} × {formatearContenidoCorto(f.unidadesPorBulto, f.unidad)}
-          </span>
+        f.proveedor ? (
+          <span className="block truncate">{f.proveedor}</span>
         ) : (
-          SIN
+          <Nada />
         ),
     },
     {
-      // Acá NO va un número de unidades en existencia: la app no las cuenta.
-      // Lo que sí dice es de cuándo es el costo, que es lo que decide si el
-      // número de al lado todavía sirve.
-      clave: "cuando",
-      titulo: "Comprado",
-      numerica: true,
-      celda: (f) => (f.ultimaCompra ? fechaCorta(f.ultimaCompra) : SIN),
-    },
-    {
-      // El IVA va acá abajo y no en su propia columna: es un dato de la
-      // factura, no un número que se compare en columna, y una columna menos
-      // es el ancho que necesitan los nombres para no partirse al medio.
-      clave: "factura",
-      titulo: "Factura",
-      ayuda: "sin IVA",
-      numerica: true,
-      celda: (f) => {
-        if (f.costoCentavos == null) return SIN;
-        const iva =
-          f.costoRealCentavos != null && f.enBlanco
-            ? f.costoRealCentavos - f.costoCentavos
-            : null;
-        return (
-          <span className="block">
-            {formatearCentavos(f.costoCentavos)}
-            {iva != null && (
-              <span className="block text-[0.65rem] text-tinta-suave">
-                +{formatearCentavos(iva)} IVA
-              </span>
-            )}
-          </span>
-        );
-      },
-    },
-    {
+      // Lo que sale de verdad cada unidad: con el IVA ya sumado si la última
+      // compra fue en blanco. El importe de la factura NO es el costo.
       clave: "costo",
       titulo: "Costo",
-      ayuda: "lo que sale",
+      ancho: ANCHO.costo,
+      ayuda: "por unidad",
       numerica: true,
       celda: (f) =>
         f.costoRealCentavos != null ? (
-          <span className="font-medium">
-            {formatearCentavos(f.costoRealCentavos)}
-          </span>
+          <>
+            <span className="font-medium">
+              {formatearCentavos(f.costoRealCentavos)}
+            </span>
+            {f.enBlanco && (
+              <span className="ml-1 text-[0.65rem] text-tinta-suave">+IVA</span>
+            )}
+          </>
         ) : (
-          SIN
+          <Nada />
         ),
     },
     {
       clave: "precio",
       titulo: "Precio",
-      ayuda: "a cuánto vendés",
+      ancho: ANCHO.precio,
+      ayuda: "de venta",
       numerica: true,
       celda: (f) =>
         f.precioVentaCentavos != null ? (
@@ -174,36 +178,79 @@ export default function TablaStock({
         ) : f.sugeridoCentavos != null ? (
           <span className="text-tinta-suave">
             {formatearCentavos(f.sugeridoCentavos)}
-            <span className="block text-[0.65rem]">sugerido</span>
+            <span className="ml-1 text-[0.65rem]">sug.</span>
           </span>
         ) : (
-          SIN
+          <Nada />
         ),
     },
     {
       clave: "margen",
       titulo: "Margen",
-      ayuda: "de lo que cobrás",
+      ancho: ANCHO.margen,
+      ayuda: "sobre lo que cobrás",
       numerica: true,
-      celda: (f) =>
-        f.margen ? (
-          <span className="block text-pago">
-            {Math.round(f.margen.porcentaje)}%
-            {/* El porcentaje solo no alcanza: 19% de $4.500 son $870, y esa
-                es la plata que de verdad entra por cada unidad vendida. */}
-            <span className="block text-[0.65rem]">
-              {formatearCentavos(f.margen.gananciaCentavos)} ·{" "}
-              {formatearMultiplicador(f.margen.multiplicador)}
+      celda: (f) => {
+        // Con precio cargado: el margen real, ya calculado por el servidor.
+        if (f.margen) {
+          return (
+            <span className={f.margen.porcentaje < 0 ? "text-deuda" : "text-pago"}>
+              <span className="font-medium">
+                {Math.round(f.margen.porcentaje)}%
+              </span>
+              <span className="ml-1 text-[0.65rem] text-tinta-suave">
+                {formatearCentavos(f.margen.gananciaCentavos)} ·{" "}
+                {formatearMultiplicador(f.margen.multiplicador)}
+              </span>
             </span>
+          );
+        }
+        // Sin precio: el que daría el sugerido, apagado y rotulado.
+        const hipotetico =
+          f.costoRealCentavos != null && f.sugeridoCentavos != null
+            ? calcularMargen(f.costoRealCentavos, f.sugeridoCentavos)
+            : null;
+        return hipotetico ? (
+          <span className="text-tinta-suave">
+            {Math.round(hipotetico.porcentaje)}%
+            <span className="ml-1 text-[0.65rem]">sug.</span>
           </span>
         ) : (
-          SIN
-        ),
+          <Nada />
+        );
+      },
+      // El promedio sólo cuenta los márgenes REALES: mezclar los sugeridos
+      // sería promediar contra un precio que nadie cobra.
+      total: (filas) => {
+        const reales = filas.filter((f) => f.margen);
+        if (reales.length === 0) return null;
+        const promedio =
+          reales.reduce((t, f) => t + f.margen!.porcentaje, 0) / reales.length;
+        return (
+          <span className="text-xs font-normal text-tinta-suave">
+            prom. {Math.round(promedio)}%
+          </span>
+        );
+      },
+    },
+    {
+      clave: "cuando",
+      titulo: "Última compra",
+      ancho: ANCHO.ultima,
+      numerica: true,
+      celda: (f) => (f.ultimaCompra ? fechaCorta(f.ultimaCompra) : <Nada />),
     },
   ];
 
   return (
     <>
+      {/*
+        El contenedor fuerza `table-fixed` (Tabla es compartida y no se toca),
+        le da el MISMO ancho mínimo a todos los rubros —así el scroll de costado
+        aparece en todos o en ninguno— y fija la columna de casillas, que no
+        tiene `ancho` propio y si no se llevaría la mitad de lo que sobra.
+      */}
+      <div className="[&_table]:min-w-[58rem] [&_table]:table-fixed [&_thead_th:first-child]:w-9">
       <Tabla
         columnas={columnas}
         filas={filas}
@@ -212,6 +259,7 @@ export default function TablaStock({
         seleccion={seleccion}
         vacio="Todavía no hay productos. La lista se llena sola: cada renglón con nombre de una compra entra acá con su último costo."
       />
+      </div>
 
       <Hoja
         abierta={editando !== null}

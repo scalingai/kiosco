@@ -38,15 +38,19 @@ export default function NuevoPedido({
   }
 
   return (
-    <div className="rounded-xl border border-linea bg-tarjeta p-4">
-      <p className="text-sm font-semibold">Armar un pedido</p>
+    <div className="rounded-xl border border-linea bg-tarjeta px-4 py-3">
+      <p className="text-sm font-semibold">Empezar una compra sin precios</p>
+      <p className="mt-0.5 text-xs text-tinta-suave">
+        La misma planilla de una compra, armada antes de que venga el proveedor:
+        las cantidades ahora y los importes cuando los cante.
+      </p>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
         <SelectorNombre
           queEs="proveedor"
           valor={nombre}
           opciones={proveedores}
-          placeholder="¿A quién se lo pedís?"
+          placeholder="¿A qué proveedor le comprás?"
           etiquetaAria="Proveedor del pedido"
           permitirCrear={false}
           alCambiar={(texto, id) => {

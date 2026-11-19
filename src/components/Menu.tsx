@@ -10,177 +10,36 @@ import FondoMarca from "@/components/Lava";
 type Props = {
   /** Sin PIN configurado no hay sesión que cerrar, así que no se ofrece salir. */
   conSalir: boolean;
-  grabando: boolean;
-  procesando: boolean;
-  segundos: number;
-  onGrabar: () => void;
-  onFrenar: () => void;
   onNuevaVenta: () => void;
-  onNuevaCompra: () => void;
 };
 
-function IconoCasa() {
+/*
+ * Los íconos van en 24×24 y se dibujan a 26 px adentro del cuadrado de vidrio.
+ * Trazo 1.6: a este tamaño, 1.7 empastaba los que tienen líneas juntas.
+ */
+const traza = {
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.6,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  className: "h-6 w-6",
+  "aria-hidden": true,
+} as const;
+
+function IconoInicio() {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-5 w-5 shrink-0"
-      aria-hidden="true"
-    >
+    <svg {...traza}>
       <path d="M3.5 10.5 12 4l8.5 6.5" />
       <path d="M5.5 9.5V19a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.5" />
     </svg>
   );
 }
 
-function IconoDia() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-5 w-5 shrink-0"
-      aria-hidden="true"
-    >
-      <rect x="3" y="5" width="18" height="16" rx="2.5" />
-      <path d="M3 10h18M8 3v4M16 3v4" />
-      <path d="M8.5 15.5h7" />
-    </svg>
-  );
-}
-
-function IconoPedidos() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-5 w-5 shrink-0"
-      aria-hidden="true"
-    >
-      <path d="M5 8h14l-1 11.2a1 1 0 0 1-1 .8H7a1 1 0 0 1-1-.8Z" />
-      <path d="M9 8V6a3 3 0 0 1 6 0v2" />
-    </svg>
-  );
-}
-
-function IconoInversion() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-5 w-5 shrink-0"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="8.5" />
-      <path d="M14.5 9.2a2.7 2.7 0 0 0-2.5-1.4c-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.6.8 2.6 2.1-1.1 2.1-2.6 2.1a2.8 2.8 0 0 1-2.6-1.5" />
-      <path d="M12 6v12" />
-    </svg>
-  );
-}
-
-function IconoLocal() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-5 w-5 shrink-0"
-      aria-hidden="true"
-    >
-      <path d="M4 10v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9" />
-      <path d="M3 10 4.8 4.6A1 1 0 0 1 5.75 4h12.5a1 1 0 0 1 .95.6L21 10a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0Z" />
-      <path d="M9.5 20v-5h5v5" />
-    </svg>
-  );
-}
-
-function IconoHistorial() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-5 w-5 shrink-0"
-      aria-hidden="true"
-    >
-      <path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1" />
-      <path d="M3.5 4v4h4" />
-      <path d="M12 7.5V12l3 1.8" />
-    </svg>
-  );
-}
-
-function IconoFiado() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-5 w-5 shrink-0"
-      aria-hidden="true"
-    >
-      <path d="M4 6.5h16v11H4z" />
-      <path d="M8 6.5v11M4 10h4M4 14h4" />
-      <path d="M12 11h5M12 14h3" />
-    </svg>
-  );
-}
-
-function IconoCompras() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-5 w-5 shrink-0"
-      aria-hidden="true"
-    >
-      <path d="M3.5 6.5h2l1.6 9.2a1.5 1.5 0 0 0 1.5 1.3h8.3a1.5 1.5 0 0 0 1.5-1.2l1.1-6.3H6" />
-      <circle cx="9.5" cy="20" r="1" />
-      <circle cx="17" cy="20" r="1" />
-    </svg>
-  );
-}
-
 function IconoVentas() {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-5 w-5 shrink-0"
-      aria-hidden="true"
-    >
+    <svg {...traza}>
       <path d="M4 19V9.5M10 19V5M16 19v-6.5M4 19h16" />
     </svg>
   );
@@ -188,85 +47,103 @@ function IconoVentas() {
 
 function IconoStock() {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-5 w-5 shrink-0"
-      aria-hidden="true"
-    >
+    <svg {...traza}>
       <path d="M3.5 7.5 12 3.5l8.5 4v9L12 20.5l-8.5-4z" />
       <path d="m3.5 7.5 8.5 4 8.5-4M12 11.5v9" />
     </svg>
   );
 }
 
-function IconoMicrofono({ grande }: { grande?: boolean }) {
+function IconoPedidos() {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      className={(grande ? "h-5 w-5" : "h-4 w-4") + " shrink-0"}
-      aria-hidden="true"
-    >
-      <rect x="9" y="2.5" width="6" height="11" rx="3" />
-      <path d="M5.5 11a6.5 6.5 0 0 0 13 0" />
-      <path d="M12 17.5V21" />
+    <svg {...traza}>
+      <path d="M5 8h14l-1 11.2a1 1 0 0 1-1 .8H7a1 1 0 0 1-1-.8Z" />
+      <path d="M9 8V6a3 3 0 0 1 6 0v2" />
     </svg>
   );
 }
 
-const PAGINAS = [
-  { href: "/", etiqueta: "Inicio", Icono: IconoCasa },
-  { href: "/fiado", etiqueta: "Fiado", Icono: IconoFiado },
-  { href: "/caja", etiqueta: "Caja", Icono: IconoDia },
-  { href: "/ventas", etiqueta: "Ventas", Icono: IconoVentas },
-  { href: "/compras", etiqueta: "Compras", Icono: IconoCompras },
-  { href: "/reponer", etiqueta: "Reponer", Icono: IconoCompras },
-  { href: "/stock", etiqueta: "Stock", Icono: IconoStock },
-  { href: "/historial", etiqueta: "Historial", Icono: IconoHistorial },
-  { href: "/inversion", etiqueta: "Inversión", Icono: IconoInversion },
-  { href: "/pedidos", etiqueta: "Pedidos", Icono: IconoPedidos },
-  { href: "/sucursales", etiqueta: "Sucursales", Icono: IconoLocal },
-] as const;
+function IconoFinanzas() {
+  return (
+    <svg {...traza}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M14.6 9.1a2.7 2.7 0 0 0-2.6-1.4c-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.6.8 2.6 2.1-1.1 2.1-2.6 2.1a2.8 2.8 0 0 1-2.6-1.5" />
+      <path d="M12 6v12" />
+    </svg>
+  );
+}
 
-/**
- * Cómo se llama la pantalla que estás mirando. En el celular la barra de arriba
- * es lo único que queda, así que decir dónde estás es lo que tiene que hacer:
- * un botón solo, sin texto, no te ubica cuando volvés a la app al rato.
- */
-function tituloDe(ruta: string): string {
-  const pagina = PAGINAS.find((p) => p.href === ruta);
-  if (pagina) return pagina.etiqueta;
-  if (ruta.startsWith("/cliente/")) return "Cuenta del cliente";
-  // Las subpáginas de compras (proveedor, día) siguen siendo compras.
-  if (ruta.startsWith("/compras")) return "Compras";
-  return "El Osito";
+function IconoNuevaVenta() {
+  return (
+    <svg {...traza}>
+      <path d="M12 6v12M6 12h12" />
+    </svg>
+  );
 }
 
 /**
- * El menú de la app: una columna fija en pantalla grande y un cajón que se
- * despliega en el celular. Antes esto era una barra abajo; con la caja diaria
- * adentro son más pantallas de las que entran en una fila.
+ * Las cinco secciones.
+ *
+ * Eran once. Lo que se juntó no se juntó por prolijidad: Fiado es una venta que
+ * todavía no se cobró, Historial es la misma venta mirada en orden, y Compras
+ * es de dónde salió lo que hay en Stock. Como entradas sueltas, el menú te
+ * obligaba a saber de antemano en qué pantalla vive el dato que buscás. Ahora
+ * cada una es una solapa adentro de la sección donde uno la iría a buscar.
+ *
+ * `raices` es qué rutas pintan esta sección como activa: sin eso, entrar a la
+ * solapa de Fiado apagaba Ventas y el menú dejaba de decirte dónde estás.
  */
-export default function Menu({
-  conSalir,
-  grabando,
-  procesando,
-  segundos,
-  onGrabar,
-  onFrenar,
-  onNuevaVenta,
-  onNuevaCompra,
-}: Props) {
+const SECCIONES = [
+  { href: "/", etiqueta: "Inicio", Icono: IconoInicio, raices: ["/"] },
+  {
+    href: "/ventas",
+    etiqueta: "Ventas",
+    Icono: IconoVentas,
+    raices: ["/ventas", "/fiado", "/historial", "/cliente"],
+  },
+  {
+    href: "/stock",
+    etiqueta: "Stock",
+    Icono: IconoStock,
+    raices: ["/stock", "/compras", "/reponer"],
+  },
+  { href: "/pedidos", etiqueta: "Pedidos", Icono: IconoPedidos, raices: ["/pedidos"] },
+  {
+    href: "/finanzas",
+    etiqueta: "Finanzas",
+    Icono: IconoFinanzas,
+    raices: ["/finanzas", "/caja", "/inversion"],
+  },
+] as const;
+
+function seccionDe(ruta: string) {
+  return SECCIONES.find((s) =>
+    s.raices.some((r) => (r === "/" ? ruta === "/" : ruta.startsWith(r))),
+  );
+}
+
+/** Cómo se llama la pantalla, para la barra del celular. */
+function tituloDe(ruta: string): string {
+  if (ruta.startsWith("/cliente/")) return "Cuenta del cliente";
+  return seccionDe(ruta)?.etiqueta ?? "El Osito";
+}
+
+/**
+ * El menú: una columna angosta en pantalla grande, un cajón en el celular.
+ *
+ * El ícono es grande y adentro de un cuadrado de vidrio, con la etiqueta
+ * ABAJO en vez de al costado. Eso es lo que permite que la columna pase de 224
+ * a 96 px: el ancho dejó de depender de la palabra más larga. Los ~130 px que
+ * se recuperan van a la planilla, que es lo que se mira todo el día.
+ *
+ * El cuadrado de vidrio no es un adorno: el menú va sobre la lava roja, donde
+ * un fondo de color no se distingue del fondo. Un vidrio blanco funciona igual
+ * sobre la parte clara y sobre la oscura del humo, y es lo que marca el activo.
+ */
+export default function Menu({ conSalir, onNuevaVenta }: Props) {
   const ruta = usePathname();
   const [abierto, setAbierto] = useState(false);
+  const activa = seccionDe(ruta);
 
   useEffect(() => {
     if (!abierto) return;
@@ -285,118 +162,87 @@ export default function Menu({
   // En el portón no hay nada que navegar.
   if (ruta === "/entrar") return null;
 
-  const enlace = (activo: boolean) =>
-    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors " +
-    /*
-     * El menú va sobre el verde, así que el activo no se puede marcar con un
-     * fondo de color: encima de la lava, un tinte verde no se distingue del
-     * fondo. Lo marca un vidrio blanco, que funciona igual sobre la parte
-     * clara y sobre la oscura del humo.
-     */
+  const cuadrado = (activo: boolean) =>
+    "flex h-12 w-12 items-center justify-center rounded-2xl border backdrop-blur transition-colors " +
     (activo
-      ? "bg-white/20 font-medium text-white shadow-sm"
-      : "text-emerald-50/75 hover:bg-white/10 hover:text-white");
+      ? "border-white/25 bg-white/20 text-white shadow-sm"
+      : "border-white/10 bg-white/[0.07] text-emerald-50/80 group-hover:bg-white/15 group-hover:text-white");
+
+  const item = (
+    { href, etiqueta, Icono }: (typeof SECCIONES)[number],
+    activo: boolean,
+  ) => (
+    <Link
+      key={href}
+      href={href}
+      onClick={() => setAbierto(false)}
+      aria-current={activo ? "page" : undefined}
+      className="group flex flex-col items-center gap-1 rounded-2xl py-1.5"
+    >
+      <span className={cuadrado(activo)}>
+        <Icono />
+      </span>
+      <span
+        className={
+          "text-[0.7rem] leading-none transition-colors " +
+          (activo ? "font-medium text-white" : "text-emerald-50/70 group-hover:text-white")
+        }
+      >
+        {etiqueta}
+      </span>
+    </Link>
+  );
 
   const panel = (
-    <div className="flex h-full flex-col gap-1 px-3 py-4">
+    <div className="flex h-full flex-col items-center gap-1 px-2 py-4">
       <Link
         href="/"
-        className="mb-3 flex items-center gap-2.5 px-2"
+        className="mb-3 block"
         onClick={() => setAbierto(false)}
+        aria-label="El Osito, inicio"
       >
+        {/* El logo solo, sin el texto al lado: el dibujo ya dice cómo se llama,
+            y el nombre repetido era lo que obligaba a la columna a ser ancha. */}
         <Image
           src="/oso.png"
-          alt=""
-          width={36}
-          height={36}
+          alt="El Osito"
+          width={52}
+          height={52}
           priority
-          className="h-9 w-9 object-contain"
+          className="h-13 w-13 object-contain drop-shadow"
         />
-        <span className="font-display text-2xl font-semibold leading-none tracking-tight text-white">
-          El Osito
-        </span>
       </Link>
 
-      <nav aria-label="Navegación" className="space-y-1">
-        {PAGINAS.map(({ href, etiqueta, Icono }) => (
-          <Link
-            key={href}
-            href={href}
-            // Al navegar, el cajón se cierra: si no, tapa lo que fuiste a ver.
-            onClick={() => setAbierto(false)}
-            className={enlace(ruta === href)}
-          >
-            <Icono />
-            {etiqueta}
-          </Link>
-        ))}
+      <nav aria-label="Navegación" className="flex w-full flex-col gap-0.5">
+        {SECCIONES.map((s) => item(s, activa?.href === s.href))}
       </nav>
 
       {/*
-        Las dos cosas que se hacen todo el día: cobrar y recibir mercadería.
-        Viven acá arriba de todo y no adentro de su pantalla porque se arrancan
-        desde donde uno esté — llega un cliente al mostrador y no importa qué
-        estabas mirando.
+        Cobrar es lo único que se hace todo el día y desde donde sea: llega un
+        cliente al mostrador y no importa qué pantalla tenías abierta. Por eso
+        es lo único que quedó como botón, y las otras dos acciones se fueron:
+        una compra se carga desde Stock, que es donde se está mirando qué falta.
       */}
-      <div className="mt-4 space-y-2 border-t border-white/15 pt-4">
+      <div className="mt-4 w-full border-t border-white/15 pt-4">
         <button
           type="button"
           onClick={() => {
             setAbierto(false);
             onNuevaVenta();
           }}
-          className="flex w-full items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-sm font-medium text-marca shadow-sm transition-colors hover:bg-emerald-50"
+          className="group flex w-full flex-col items-center gap-1 rounded-2xl py-1.5"
         >
-          <IconoVentas />
-          Nueva venta
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setAbierto(false);
-            onNuevaCompra();
-          }}
-          className="flex w-full items-center gap-3 rounded-xl border border-white/25 px-3 py-2.5 text-sm text-emerald-50 transition-colors hover:bg-white/10 hover:text-white"
-        >
-          <IconoCompras />
-          Nueva compra
-        </button>
-
-        {/*
-          El audio quedó como ícono: dejó de ser una de las dos acciones
-          principales, pero sacarle la puerta del todo lo volvería código
-          muerto — y es la forma más rápida de anotar un fiado con las manos
-          ocupadas, que es para lo que se hizo.
-        */}
-        <button
-          type="button"
-          onClick={grabando ? onFrenar : onGrabar}
-          disabled={procesando}
-          aria-label={grabando ? "Frenar la grabación" : "Grabar un audio"}
-          className={
-            "flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs transition-colors disabled:opacity-60 " +
-            (grabando
-              ? "bg-deuda text-white"
-              : "text-emerald-50/70 hover:bg-white/10 hover:text-white")
-          }
-        >
-          {grabando ? (
-            <>
-              <span className="grabando block h-3.5 w-3.5 shrink-0 rounded-sm bg-white" />
-              <span className="cifra">Frenar · {segundos}s</span>
-            </>
-          ) : (
-            <>
-              <IconoMicrofono />
-              {procesando ? "Escuchando…" : "Anotar por audio"}
-            </>
-          )}
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-marca shadow-sm transition-colors group-hover:bg-emerald-50">
+            <IconoNuevaVenta />
+          </span>
+          <span className="text-[0.7rem] font-medium leading-none text-white">
+            Vender
+          </span>
         </button>
       </div>
 
       {conSalir && (
-        <div className="mt-auto px-2 pt-4">
+        <div className="mt-auto pt-4">
           <BotonSalir />
         </div>
       )}
@@ -405,15 +251,14 @@ export default function Menu({
 
   return (
     <>
-      {/* Pantalla grande: la columna vive siempre, no se despliega. */}
       {/* Pantalla grande: la columna vive siempre sobre la lava del marco, sin
           fondo propio — el verde que se ve es el del layout, y por eso el humo
           sigue de largo por detrás del menú sin cortarse.
 
-          El corte es "escritorio" y no "lg": eso viene de main y es mejor que
-          lo que yo tenía. Una tablet acostada muestra la planilla y parada
-          muestra la navegación del celular, que es como se usa de verdad. */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-56 escritorio:block">
+          El corte es "escritorio" y no "lg": una tablet acostada muestra la
+          planilla y parada muestra la navegación del celular, que es como se
+          usa de verdad. */}
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-24 escritorio:block">
         {panel}
       </aside>
 
@@ -442,32 +287,6 @@ export default function Menu({
         <span className="min-w-0 flex-1 truncate font-display text-xl font-semibold leading-none">
           {tituloDe(ruta)}
         </span>
-
-        {/*
-          Mientras graba, el botón de frenar tiene que estar a la vista sí o sí:
-          si viviera sólo adentro del cajón, quedaría un micrófono abierto que
-          no se puede cortar sin abrir el menú.
-        */}
-        {(grabando || procesando) && (
-          <button
-            type="button"
-            onClick={grabando ? onFrenar : undefined}
-            disabled={procesando}
-            className={
-              "flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium disabled:opacity-70 " +
-              (grabando ? "bg-deuda text-white" : "bg-white text-marca")
-            }
-          >
-            {grabando ? (
-              <>
-                <span className="grabando block h-3.5 w-3.5 rounded-sm bg-white" />
-                <span className="cifra">{segundos}s</span>
-              </>
-            ) : (
-              <span className="grabando">Escuchando…</span>
-            )}
-          </button>
-        )}
       </header>
 
       {abierto && (
@@ -480,7 +299,7 @@ export default function Menu({
           />
           {/* El cajón es la MISMA superficie que la columna de escritorio: si
               fuera una hoja blanca, abrir el menú cambiaría de app. */}
-          <div className="absolute inset-y-0 left-0 w-72 max-w-[85vw] overflow-hidden shadow-2xl">
+          <div className="absolute inset-y-0 left-0 w-28 overflow-hidden shadow-2xl">
             <FondoMarca velo="parejo" />
             <div className="relative h-full">{panel}</div>
           </div>

@@ -1,20 +1,26 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import BotonCompra from "@/components/BotonCompra";
-import SelectorMes from "@/components/SelectorMes";
-import { listarProveedores } from "@/lib/caja";
+import CabeceraStock, {
+  colaDelPeriodo,
+  rangoDeLaUrl,
+} from "@/components/CabeceraStock";
+import Pastilla from "@/components/Pastilla";
+import Planilla, { Corte } from "@/components/Planilla";
+import Tabla, { Nada, type Columna } from "@/components/Tabla";
+import Tira from "@/components/Tira";
 import {
   agruparPorFecha,
   agruparPorMedio,
   agruparPorProducto,
   agruparPorProveedor,
   historialDeCompras,
-  rangoDelMes,
   totalDesglosado,
+  type GrupoDeCompras,
+  type GrupoDeProducto,
 } from "@/lib/compras";
-import { fechaLarga, hoyLocal } from "@/lib/fechas";
+import { fechaCorta } from "@/lib/fechas";
 import { formatearCentavos } from "@/lib/plata";
-import { listarNombresDeProductos } from "@/lib/stock";
+import { contarPedidosAbiertos } from "@/lib/reposicion";
 
 export const dynamic = "force-dynamic";
 
@@ -29,77 +35,23 @@ const CORTES = [
 
 type Corte = (typeof CORTES)[number]["clave"];
 
-const MES = /^\d{4}-\d{2}$/;
-
-function Chip({
-  href,
-  activo,
-  children,
-}: {
-  href: string;
-  activo: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className={
-        "shrink-0 rounded-full border px-3 py-1.5 text-xs " +
-        (activo
-          ? "border-acento bg-acento text-white"
-          : "border-linea bg-tarjeta text-tinta")
-      }
-    >
-      {children}
-    </Link>
+/** Lo que se le debe, en rojo; si no se debe nada, el guión. */
+function Debe({ centavos }: { centavos: number }) {
+  return centavos > 0 ? (
+    <span className="text-deuda">{formatearCentavos(centavos)}</span>
+  ) : (
+    <Nada />
   );
 }
 
-/** Una tarjeta que lleva a otro nivel: proveedor o día. */
-function Puerta({
-  href,
-  titulo,
-  detalle,
-  monto,
-  impago,
-  aviso,
-}: {
-  href: string;
-  titulo: string;
-  detalle: string;
-  monto: number;
-  impago: number;
-  aviso?: boolean;
-}) {
+/** Qué parte del total es esta fila, en por ciento. */
+function Parte({ centavos, total }: { centavos: number; total: number }) {
+  if (total <= 0) return <Nada />;
+  const porciento = (centavos / total) * 100;
   return (
-    <Link
-      href={href}
-      className="flex items-center justify-between gap-3 rounded-2xl border border-linea bg-tarjeta px-4 py-3.5 transition-colors hover:bg-white"
-    >
-      <span className="min-w-0">
-        <span className="block truncate font-display text-xl leading-none">
-          {titulo}
-        </span>
-        <span className="mt-1 block text-xs text-tinta-suave">
-          {detalle}
-          {impago > 0 && (
-            <span className="text-deuda">
-              {" · "}
-              {formatearCentavos(impago)} sin pagar
-            </span>
-          )}
-          {aviso && <span className="text-deuda"> · faltan precios</span>}
-        </span>
-      </span>
-      <span className="flex shrink-0 items-center gap-2">
-        <span className="cifra text-sm font-medium">
-          {formatearCentavos(monto)}
-        </span>
-        <span aria-hidden="true" className="text-tinta-suave">
-          ›
-        </span>
-      </span>
-    </Link>
+    <span className="text-tinta-suave">
+      {porciento < 1 ? "<1" : Math.round(porciento)}%
+    </span>
   );
 }
 
@@ -110,21 +62,24 @@ export default async function Compras({ searchParams }: PageProps<"/compras">) {
     return Array.isArray(valor) ? valor[0] : valor;
   };
 
-  const hoy = hoyLocal();
-  const mesActual = hoy.slice(0, 7);
-  const pedidoMes = leer("mes");
-  const mes = pedidoMes && MES.test(pedidoMes) ? pedidoMes : mesActual;
+  // `impagas=1` viene de un link del inicio: «lo que se debe» no tiene fecha,
+  // una factura sin pagar de hace tres meses sigue debiéndose. Por eso sin
+  // período explícito mira TODO y no sólo el mes.
+  const soloImpagas = leer("impagas") === "1";
+  const rango = rangoDeLaUrl(params, soloImpagas ? "todo" : "mes");
 
   const pedido = leer("por");
   const corte: Corte = CORTES.some((c) => c.clave === pedido)
     ? (pedido as Corte)
     : "proveedor";
 
-  const { desde, hasta } = rangoDelMes(mes);
-  const [lista, proveedores, productos] = await Promise.all([
-    historialDeCompras({ desde, hasta }),
-    listarProveedores(),
-    listarNombresDeProductos(),
+  const [lista, pedidosAbiertos] = await Promise.all([
+    historialDeCompras({
+      desde: rango.desde ?? undefined,
+      hasta: rango.hasta ?? undefined,
+      soloImpagas,
+    }),
+    contarPedidosAbiertos(),
   ]);
 
   const total = lista.reduce((t, c) => t + c.montoCentavos, 0);
@@ -132,114 +87,309 @@ export default async function Compras({ searchParams }: PageProps<"/compras">) {
     (t, c) => t + (c.pagadoEn ? 0 : c.montoCentavos),
     0,
   );
+  const proveedoresDistintos = new Set(lista.map((c) => c.proveedorId)).size;
+  const sinPrecios = lista.filter((c) => c.faltanPrecios).length;
 
+  const cola = colaDelPeriodo(rango);
   const enlace = (c: Corte) =>
-    `/compras?mes=${mes}${c === "proveedor" ? "" : `&por=${c}`}`;
+    `/compras?${cola}${c === "proveedor" ? "" : `&por=${c}`}${soloImpagas ? "&impagas=1" : ""}`;
 
-  const porProducto = corte === "producto" ? agruparPorProducto(lista) : [];
+  /* ── Las planillas de cada corte ─────────────────────────────────────── */
+
+  const sumar = (grupos: GrupoDeCompras[], f: (g: GrupoDeCompras) => number) =>
+    grupos.reduce((t, g) => t + f(g), 0);
+
+  /** Las columnas que todos los cortes que agrupan COMPRAS comparten. */
+  const columnasComunes = (): Columna<GrupoDeCompras>[] => [
+    {
+      clave: "compras",
+      titulo: "Compras",
+      numerica: true,
+      celda: (g) => g.compras.length,
+      total: (gs) => sumar(gs, (g) => g.compras.length),
+    },
+    {
+      clave: "impago",
+      titulo: "Sin pagar",
+      numerica: true,
+      celda: (g) => <Debe centavos={g.impagoCentavos} />,
+      total: (gs) => <Debe centavos={sumar(gs, (g) => g.impagoCentavos)} />,
+    },
+    {
+      clave: "total",
+      titulo: "Total",
+      numerica: true,
+      celda: (g) => (
+        <span className="font-medium">{formatearCentavos(g.totalCentavos)}</span>
+      ),
+      total: (gs) => formatearCentavos(sumar(gs, (g) => g.totalCentavos)),
+    },
+    {
+      clave: "parte",
+      titulo: "Parte",
+      numerica: true,
+      celda: (g) => <Parte centavos={g.totalCentavos} total={total} />,
+    },
+  ];
+
+  const avisoPrecios = (g: GrupoDeCompras) =>
+    g.faltanPrecios ? (
+      <span className="ml-2">
+        <Pastilla tono="espera">faltan precios</Pastilla>
+      </span>
+    ) : null;
+
+  const porProveedor: Columna<GrupoDeCompras>[] = [
+    {
+      clave: "proveedor",
+      titulo: "Proveedor",
+      ancho: "min-w-44",
+      celda: (g) => (
+        <>
+          <Link
+            href={`/compras/proveedor/${g.clave}?${cola}`}
+            className="font-medium underline-offset-4 hover:underline"
+          >
+            {g.titulo}
+          </Link>
+          {avisoPrecios(g)}
+        </>
+      ),
+      total: (gs) => (
+        <span className="text-xs font-normal text-tinta-suave">
+          {gs.length === 1 ? "1 proveedor" : `${gs.length} proveedores`}
+        </span>
+      ),
+    },
+    {
+      clave: "ultima",
+      titulo: "Última",
+      numerica: true,
+      celda: (g) => fechaCorta(g.ultimaFecha),
+    },
+    ...columnasComunes(),
+  ];
+
+  const porDia: Columna<GrupoDeCompras>[] = [
+    {
+      clave: "dia",
+      titulo: "Día",
+      ancho: "min-w-32",
+      celda: (g) => (
+        <>
+          <Link
+            href={`/compras/dia/${g.clave}`}
+            className="font-medium underline-offset-4 hover:underline"
+          >
+            {fechaCorta(g.clave)}
+          </Link>
+          {avisoPrecios(g)}
+        </>
+      ),
+      total: (gs) => (
+        <span className="text-xs font-normal text-tinta-suave">
+          {gs.length === 1 ? "1 día" : `${gs.length} días`}
+        </span>
+      ),
+    },
+    {
+      clave: "quien",
+      titulo: "Proveedores",
+      celda: (g) => g.detalle,
+    },
+    ...columnasComunes(),
+  ];
+
+  const porMedio: Columna<GrupoDeCompras>[] = [
+    {
+      clave: "medio",
+      titulo: "Medio",
+      ancho: "min-w-32",
+      celda: (g) =>
+        g.clave === "sin-pagar" ? (
+          <Pastilla tono="deuda">Sin pagar</Pastilla>
+        ) : (
+          <span className="font-medium">{g.titulo}</span>
+        ),
+      total: (gs) => (
+        <span className="text-xs font-normal text-tinta-suave">
+          {gs.length === 1 ? "1 medio" : `${gs.length} medios`}
+        </span>
+      ),
+    },
+    // «Sin pagar» acá sería la misma cifra que el total del grupo impago, y en
+    // las filas pagadas siempre cero: la columna no dice nada, se la saca.
+    ...columnasComunes().filter((c) => c.clave !== "impago"),
+  ];
+
+  const gruposProducto: GrupoDeProducto[] =
+    corte === "producto" ? agruparPorProducto(lista) : [];
   const desglosado = corte === "producto" ? totalDesglosado(lista) : 0;
 
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-3xl leading-none">Compras</h1>
-        <SelectorMes
-          mes={mes}
-          base="/compras"
-          tope={mesActual}
-          extra={corte === "proveedor" ? undefined : { por: corte }}
-        />
-      </div>
-
-      <section className="rounded-2xl border border-linea bg-papel-hondo px-5 py-5">
-        <p className="text-xs uppercase tracking-[0.18em] text-tinta-suave">
-          Comprado en el mes
-        </p>
-        <p className="cifra mt-1 text-3xl font-medium sm:text-4xl">
-          {formatearCentavos(total)}
-        </p>
-        <p className="mt-1 text-sm text-tinta-suave">
-          {lista.length === 0
-            ? "No entró mercadería este mes."
-            : lista.length === 1
-              ? "1 compra"
-              : `${lista.length} compras`}
-          {impago > 0 && (
-            <span className="text-deuda">
-              {" · "}
-              {formatearCentavos(impago)} todavía sin pagar
+  const porProducto: Columna<GrupoDeProducto>[] = [
+    {
+      clave: "producto",
+      titulo: "Producto",
+      ancho: "min-w-44",
+      celda: (p) => <span className="font-medium">{p.nombre}</span>,
+      total: (ps) => (
+        <span className="text-xs font-normal text-tinta-suave">
+          {ps.length === 1 ? "1 producto" : `${ps.length} productos`}
+        </span>
+      ),
+    },
+    {
+      clave: "veces",
+      titulo: "Compras",
+      numerica: true,
+      celda: (p) => p.veces,
+      total: (ps) => ps.reduce((t, p) => t + p.veces, 0),
+    },
+    {
+      // El importe de la factura dividido por las unidades: ES el costo por
+      // unidad de esa compra, sin IVA. El IVA se suma recién en el catálogo.
+      clave: "ultimo",
+      titulo: "Último costo",
+      ayuda: "de factura",
+      numerica: true,
+      celda: (p) =>
+        p.ultimoCosto?.costoCentavos != null ? (
+          <>
+            {formatearCentavos(p.ultimoCosto.costoCentavos)}
+            <span className="ml-1 text-[0.65rem] text-tinta-suave">
+              {p.ultimoCosto.porCada}
             </span>
-          )}
-        </p>
-      </section>
+          </>
+        ) : (
+          <Nada />
+        ),
+    },
+    {
+      clave: "variacion",
+      titulo: "Variación",
+      ayuda: "en el período",
+      numerica: true,
+      celda: (p) =>
+        p.variacion != null && p.variacion !== 0 ? (
+          <span className={p.variacion > 0 ? "text-deuda" : "text-pago"}>
+            {p.variacion > 0 ? "+" : ""}
+            {p.variacion}%
+          </span>
+        ) : (
+          <Nada />
+        ),
+    },
+    {
+      clave: "total",
+      titulo: "Total",
+      numerica: true,
+      celda: (p) => (
+        <span className="font-medium">{formatearCentavos(p.totalCentavos)}</span>
+      ),
+      total: (ps) => formatearCentavos(ps.reduce((t, p) => t + p.totalCentavos, 0)),
+    },
+  ];
 
-      <BotonCompra fecha={hoy} proveedores={proveedores} productos={productos} />
+  const vacio = (
+    <>
+      No hay compras en {rango.titulo.toLowerCase()}. Se cargan desde{" "}
+      <Link
+        href="/reponer?nueva=compra"
+        className="underline underline-offset-4"
+      >
+        Cargar compra
+      </Link>
+      .
+    </>
+  );
+
+  return (
+    <div className="space-y-3">
+      <CabeceraStock
+        activa="compras"
+        rango={rango}
+        base="/compras"
+        extra={{
+          por: corte === "proveedor" ? undefined : corte,
+          impagas: soloImpagas ? "1" : undefined,
+        }}
+        pedidosAbiertos={pedidosAbiertos}
+      />
+
+      <Tira
+        datos={[
+          { etiqueta: "Compras", valor: lista.length },
+          { etiqueta: "Proveedores", valor: proveedoresDistintos },
+          {
+            etiqueta: "Pagado",
+            valor: formatearCentavos(total - impago),
+            tono: "pago",
+          },
+          {
+            etiqueta: "Sin pagar",
+            valor: formatearCentavos(impago),
+            tono: impago > 0 ? "deuda" : "suave",
+          },
+          {
+            etiqueta: "Faltan precios",
+            valor: sinPrecios,
+            tono: sinPrecios > 0 ? "deuda" : "suave",
+            pie: sinPrecios > 0 ? "compras con el total incompleto" : undefined,
+          },
+        ]}
+        destacado={{
+          etiqueta: soloImpagas ? "Lo que se debe" : "Comprado",
+          valor: formatearCentavos(soloImpagas ? impago : total),
+          tono: "normal",
+          pie: soloImpagas ? "facturas sin pagar" : rango.titulo,
+        }}
+      />
 
       <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-        <div className="flex gap-2">
+        <div className="flex items-center gap-1.5">
           {CORTES.map((c) => (
-            <Chip key={c.clave} href={enlace(c.clave)} activo={c.clave === corte}>
+            <Corte key={c.clave} href={enlace(c.clave)} activo={c.clave === corte}>
               {c.etiqueta}
-            </Chip>
+            </Corte>
           ))}
+          {soloImpagas && (
+            <Link
+              href={`/compras?${cola}${corte === "proveedor" ? "" : `&por=${corte}`}`}
+              className="ml-1 shrink-0 text-xs text-tinta-suave underline underline-offset-4"
+            >
+              ver también las pagadas
+            </Link>
+          )}
         </div>
       </div>
 
-      {lista.length === 0 ? (
-        <p className="text-sm text-tinta-suave">
-          Las compras se cargan desde{" "}
-          <Link href="/caja" className="underline underline-offset-4">
-            la caja del día
-          </Link>
-          .
-        </p>
-      ) : corte === "proveedor" ? (
-        /* El nivel de arriba: a quién le compré este mes. Cada uno abre su
-           ficha, con sus productos y su historial. */
-        <div className="space-y-3">
-          {agruparPorProveedor(lista).map((g) => (
-            <Puerta
-              key={g.clave}
-              href={`/compras/proveedor/${g.clave}?mes=${mes}`}
-              titulo={g.titulo}
-              detalle={g.detalle}
-              monto={g.totalCentavos}
-              impago={g.impagoCentavos}
-              aviso={g.faltanPrecios}
-            />
-          ))}
-        </div>
+      {corte === "proveedor" ? (
+        <Planilla>
+          <Tabla
+            columnas={porProveedor}
+            filas={agruparPorProveedor(lista)}
+            claveDe={(g) => g.clave}
+            vacio={vacio}
+          />
+        </Planilla>
       ) : corte === "fecha" ? (
-        <div className="space-y-3">
-          {agruparPorFecha(lista).map((g) => (
-            <Puerta
-              key={g.clave}
-              href={`/compras/dia/${g.clave}`}
-              titulo={fechaLarga(g.clave)}
-              detalle={g.detalle}
-              monto={g.totalCentavos}
-              impago={g.impagoCentavos}
-              aviso={g.faltanPrecios}
-            />
-          ))}
-        </div>
+        <Planilla>
+          <Tabla
+            columnas={porDia}
+            filas={agruparPorFecha(lista)}
+            claveDe={(g) => g.clave}
+            vacio={vacio}
+          />
+        </Planilla>
       ) : corte === "medio" ? (
-        <div className="space-y-3">
-          {agruparPorMedio(lista).map((g) => (
-            <section
-              key={g.clave}
-              className="rounded-2xl border border-linea bg-tarjeta px-4 py-3.5"
-            >
-              <div className="flex items-baseline justify-between gap-3">
-                <h2 className="font-display text-xl leading-none">{g.titulo}</h2>
-                <span className="cifra text-sm font-medium">
-                  {formatearCentavos(g.totalCentavos)}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-tinta-suave">{g.detalle}</p>
-            </section>
-          ))}
-        </div>
+        <Planilla>
+          <Tabla
+            columnas={porMedio}
+            filas={agruparPorMedio(lista)}
+            claveDe={(g) => g.clave}
+            vacio={vacio}
+          />
+        </Planilla>
       ) : (
         <>
           {/*
@@ -247,50 +397,23 @@ export default async function Compras({ searchParams }: PageProps<"/compras">) {
             grupos NO da el total de arriba. Decirlo es la diferencia entre una
             pantalla que se entiende y una que parece tener un error de cuentas.
           */}
-          <p className="rounded-xl bg-papel-hondo px-3 py-2 text-xs text-tinta-suave">
-            Este corte suma renglones, no facturas. De{" "}
-            <span className="cifra">{formatearCentavos(total)}</span> comprados,{" "}
-            <span className="cifra">{formatearCentavos(desglosado)}</span> están
-            detallados por producto; el resto entró como total de factura sin
-            desglose.
-          </p>
-
-          <div className="space-y-3">
-            {porProducto.map((p) => (
-              <section
-                key={p.clave}
-                className="rounded-2xl border border-linea bg-tarjeta px-4 py-3.5"
-              >
-                <div className="flex items-baseline justify-between gap-3">
-                  <h2 className="min-w-0 truncate font-display text-xl leading-none">
-                    {p.nombre}
-                  </h2>
-                  <span className="cifra shrink-0 text-sm font-medium">
-                    {formatearCentavos(p.totalCentavos)}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-tinta-suave">
-                  {p.veces === 1 ? "1 compra" : `${p.veces} compras`}
-                  {p.ultimoCosto?.costoCentavos != null && (
-                    <>
-                      {" · última a "}
-                      <span className="cifra text-tinta">
-                        {formatearCentavos(p.ultimoCosto.costoCentavos)}
-                      </span>{" "}
-                      {p.ultimoCosto.porCada}
-                    </>
-                  )}
-                  {p.variacion != null && p.variacion !== 0 && (
-                    <span className={p.variacion > 0 ? "text-deuda" : "text-pago"}>
-                      {" · "}
-                      {p.variacion > 0 ? "+" : ""}
-                      {p.variacion}% en el mes
-                    </span>
-                  )}
-                </p>
-              </section>
-            ))}
-          </div>
+          {lista.length > 0 && (
+            <p className="rounded-lg bg-papel-hondo px-3 py-1.5 text-xs text-tinta-suave">
+              Este corte suma renglones, no facturas. De{" "}
+              <span className="cifra">{formatearCentavos(total)}</span> comprados,{" "}
+              <span className="cifra">{formatearCentavos(desglosado)}</span> están
+              detallados por producto; el resto entró como total de factura sin
+              desglose.
+            </p>
+          )}
+          <Planilla>
+            <Tabla
+              columnas={porProducto}
+              filas={gruposProducto}
+              claveDe={(p) => p.clave}
+              vacio={vacio}
+            />
+          </Planilla>
         </>
       )}
     </div>
