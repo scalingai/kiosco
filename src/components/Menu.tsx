@@ -74,6 +74,25 @@ function IconoPedidos() {
   );
 }
 
+function IconoInversion() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5 shrink-0"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M14.5 9.2a2.7 2.7 0 0 0-2.5-1.4c-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.6.8 2.6 2.1-1.1 2.1-2.6 2.1a2.8 2.8 0 0 1-2.6-1.5" />
+      <path d="M12 6v12" />
+    </svg>
+  );
+}
+
 function IconoLocal() {
   return (
     <svg
@@ -212,6 +231,7 @@ const PAGINAS = [
   { href: "/reponer", etiqueta: "Reponer", Icono: IconoCompras },
   { href: "/stock", etiqueta: "Stock", Icono: IconoStock },
   { href: "/historial", etiqueta: "Historial", Icono: IconoHistorial },
+  { href: "/inversion", etiqueta: "Inversión", Icono: IconoInversion },
   { href: "/pedidos", etiqueta: "Pedidos", Icono: IconoPedidos },
   { href: "/sucursales", etiqueta: "Sucursales", Icono: IconoLocal },
 ] as const;

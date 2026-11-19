@@ -47,3 +47,6 @@ _legacy-vite/node_modules/
 # journal transitorio de la base vieja
 _legacy-vite/kiosco.db-shm
 _legacy-vite/kiosco.db-wal
+
+# hojas de contacto y pruebas de imagen, no van al repo
+.pruebas/

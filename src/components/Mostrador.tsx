@@ -358,6 +358,10 @@ export default function Mostrador({
       nombre: candidato.nombre,
       marca: candidato.marca,
       codigoBarras: candidato.codigo,
+      // Recién dado de alta: todavía no tiene rubro ni foto propia, así que
+      // no hay nada de respaldo que mostrarle.
+      imagenOrigenUrl: null,
+      imagenRubroUrl: null,
       imagenUrl: candidato.imagenUrl,
       precioVentaCentavos: null,
       costoRealCentavos: null,

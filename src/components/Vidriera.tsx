@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Foto from "@/components/Foto";
 import { useCarrito } from "@/components/TiendaCarrito";
 import { normalizarNombre } from "@/lib/nombres";
 import { formatearCentavos } from "@/lib/plata";
@@ -46,22 +47,29 @@ function Tarjeta({ producto }: { producto: ProductoEnVidriera }) {
   const { agregar, cuantos } = useCarrito();
   const enCarrito = cuantos(producto.id);
 
+
   return (
     <article className="group relative flex flex-col overflow-hidden rounded-2xl bg-tarjeta shadow-[0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.07] transition-shadow hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)]">
       <div className="relative aspect-square w-full overflow-hidden bg-papel-hondo">
-        {producto.imagenUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={producto.imagenUrl}
-            alt=""
-            loading="lazy"
-            className="absolute inset-0 h-full w-full object-contain p-3 transition-transform duration-500 motion-safe:group-hover:scale-[1.04]"
-          />
-        ) : (
+        {/*
+          La foto del producto, con respaldo: primero la nuestra —la sacada
+          adentro del kiosco—, después el link del catálogo de donde salió, y
+          por último la del rubro. La del rubro va a sangre y con un velo para
+          que se lea como "esto es una golosina" y no como "éste es el envase".
+        */}
+        <Foto
+          fuentes={[
+            producto.imagenUrl,
+            producto.imagenOrigenUrl,
+            producto.imagenRubroUrl,
+          ]}
+          className="absolute inset-0 h-full w-full object-contain p-3 transition-transform duration-500 motion-safe:group-hover:scale-[1.04]"
+          claseFinal="absolute inset-0 h-full w-full object-cover opacity-85 transition-transform duration-500 motion-safe:group-hover:scale-[1.04]"
+        >
           <span className="absolute inset-0 flex items-center justify-center text-3xl font-medium text-tinta-suave">
             {producto.nombre.trim().charAt(0).toUpperCase()}
           </span>
-        )}
+        </Foto>
 
         {/* El "+" suma una unidad sin entrar a ningún lado. Con el número
             cuando ya hay: es la forma de saber qué llevás sin abrir el cajón. */}

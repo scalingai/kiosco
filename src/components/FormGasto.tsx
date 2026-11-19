@@ -20,9 +20,12 @@ import { parsearMonto } from "@/lib/plata";
  */
 export default function FormGasto({
   fecha,
+  socios = [],
   alGuardar,
 }: {
   fecha: string;
+  /** los socios, para poder decir quién puso la plata de la inversión */
+  socios?: { id: string; nombre: string }[];
   alGuardar?: () => void;
 }) {
   const router = useRouter();
@@ -30,6 +33,7 @@ export default function FormGasto({
   const [monto, setMonto] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [medio, setMedio] = useState<MedioPago>("efectivo");
+  const [socioId, setSocioId] = useState("");
   const [cuando, setCuando] = useState(fecha);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -52,6 +56,8 @@ export default function FormGasto({
         descripcion,
         fecha: cuando,
         medio,
+        // Sólo la inversión tiene dueño: la luz la paga el kiosco.
+        socioId: categoria === "inversion" ? socioId || null : null,
       }),
     );
     setGuardando(false);
@@ -112,6 +118,24 @@ export default function FormGasto({
         />
       </label>
 
+      {categoria === "inversion" && socios.length > 0 && (
+        <label className="block">
+          <span className="text-xs text-tinta-suave">Quién la puso</span>
+          <select
+            value={socioId}
+            onChange={(e) => setSocioId(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm"
+          >
+            <option value="">La puso el kiosco</option>
+            {socios.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.nombre}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
       <SelectorMedio valor={medio} onCambio={setMedio} etiqueta="Con qué se pagó" />
 
       <label className="block">
@@ -123,6 +147,14 @@ export default function FormGasto({
           className="cifra mt-1 w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm"
         />
       </label>
+
+      {categoria === "inversion" && (
+        <p className="rounded-lg bg-papel-hondo px-3 py-2 text-xs text-tinta-suave">
+          La inversión inicial no entra en el resultado del día: la puso un
+          socio de su bolsillo y nunca pasó por la caja. Se suma aparte, en
+          Inversión.
+        </p>
+      )}
 
       {categoria === "retiro" && (
         <p className="rounded-lg bg-papel-hondo px-3 py-2 text-xs text-tinta-suave">

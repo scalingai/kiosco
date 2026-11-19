@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Foto from "@/components/Foto";
 import { FormProducto } from "@/components/AccionesStock";
 import SeleccionStock from "@/components/SeleccionStock";
 import TablaStock from "@/components/TablaStock";
@@ -70,7 +71,13 @@ function armarArbol(filas: FilaStock[]) {
       categoria,
       subcategorias: [...subs.entries()]
         .sort(([a], [b]) => ordenar(a, b))
-        .map(([subcategoria, productos]) => ({ subcategoria, productos })),
+        .map(([subcategoria, productos]) => ({
+          subcategoria,
+          productos,
+          // Todas las filas del grupo comparten rubro, así que la foto es la
+          // misma para todas: alcanza con mirar la primera.
+          imagen: productos[0]?.imagenRubroUrl ?? null,
+        })),
     }));
 }
 
@@ -131,12 +138,26 @@ export default async function Stock() {
           >
             <h2 className="font-display text-2xl leading-none">{categoria}</h2>
 
-            {subcategorias.map(({ subcategoria, productos }) => (
+            {subcategorias.map(({ subcategoria, productos, imagen }) => (
               <div key={subcategoria} className="mt-4 first:mt-3">
                 {/* La subcategoría no se repite cuando es la única y se llama
                     igual que su categoría: sería un título arriba del otro. */}
                 {!(subcategorias.length === 1 && subcategoria === categoria) && (
-                  <h3 className="text-xs uppercase tracking-[0.16em] text-tinta-suave">
+                  <h3 className="flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-tinta-suave">
+                    {/*
+                      La foto del rubro, una sola vez por grupo. Es nuestra y
+                      vive en public/rubros; la del producto sale del catálogo
+                      del super y no la tienen todos — los cigarrillos, por
+                      ley, no están en ninguno.
+                    */}
+                    {imagen && (
+                      <Foto
+                        fuentes={[imagen]}
+                        width={24}
+                        height={24}
+                        className="h-6 w-6 shrink-0 rounded-full object-cover ring-1 ring-linea"
+                      />
+                    )}
                     {subcategoria}
                   </h3>
                 )}

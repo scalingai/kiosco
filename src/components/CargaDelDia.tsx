@@ -30,10 +30,12 @@ export default function CargaDelDia({
   fecha,
   proveedores,
   productos,
+  socios = [],
 }: {
   fecha: string;
   proveedores: Proveedor[];
   productos: Producto[];
+  socios?: { id: string; nombre: string }[];
 }) {
   const [abierta, setAbierta] = useState<Cual | null>(null);
   const cerrar = () => setAbierta(null);
@@ -71,7 +73,9 @@ export default function CargaDelDia({
             alGuardar={cerrar}
           />
         )}
-        {abierta === "gasto" && <FormGasto fecha={fecha} alGuardar={cerrar} />}
+        {abierta === "gasto" && (
+          <FormGasto fecha={fecha} socios={socios} alGuardar={cerrar} />
+        )}
       </Hoja>
     </>
   );
