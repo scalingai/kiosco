@@ -62,7 +62,12 @@ export const config = {
      *   eso tiene que ser pública. Lo que la hace segura no es el PIN sino la
      *   consulta: `listarVidriera()` NO selecciona costos, proveedores ni
      *   clientes, así que no hay nada sensible que se pueda filtrar de ahí.
+     * - /productos/ y /rubros/, que son las FOTOS que dibuja esa vidriera. Sin
+     *   esto la página es pública pero sus imágenes no: cada una redirige a
+     *   /entrar y el cliente ve una góndola de íconos rotos. Lo que se expone
+     *   es la foto de un paquete de galletitas, que es justo lo que la
+     *   vidriera existe para mostrar.
      */
-    "/((?!entrar|sin-conexion|tienda|api/mp/volver|api/mp/aviso|sw\\.js|manifest\\.webmanifest|icon\\.png|apple-icon\\.png|oso\\.png|iconos/|_next/).*)",
+    "/((?!entrar|sin-conexion|tienda|productos/|rubros/|api/mp/volver|api/mp/aviso|sw\\.js|manifest\\.webmanifest|icon\\.png|apple-icon\\.png|oso\\.png|iconos/|_next/).*)",
   ],
 };

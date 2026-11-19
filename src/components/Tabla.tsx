@@ -73,11 +73,11 @@ export default function Tabla<T>({
 
   return (
     <div className="-mx-4 overflow-x-auto sm:mx-0">
-      <table className="w-full border-collapse text-[0.8rem]">
+      <table className="w-full border-collapse text-[0.78rem]">
         <thead>
           <tr className="border-b border-linea">
             {seleccion && (
-              <th scope="col" className="sticky left-0 z-10 bg-papel px-2 py-2">
+              <th scope="col" className="sticky left-0 z-10 bg-tarjeta px-2 py-2">
                 <input
                   type="checkbox"
                   checked={todasMarcadas}
@@ -97,7 +97,7 @@ export default function Tabla<T>({
                   (columna.numerica ? "text-right " : "text-left ") +
                   (columna.ancho ?? "") +
                   // La primera se queda quieta mientras el resto se corre.
-                  (i === 0 && !seleccion ? " sticky left-0 z-10 bg-papel" : "")
+                  (i === 0 && !seleccion ? " sticky left-0 z-10 bg-tarjeta" : "")
                 }
               >
                 {columna.titulo}
@@ -118,12 +118,12 @@ export default function Tabla<T>({
               onClick={alClickearFila ? () => alClickearFila(fila) : undefined}
               className={
                 "border-b border-linea/70 last:border-0 " +
-                (alClickearFila ? "cursor-pointer hover:bg-white" : "")
+                (alClickearFila ? "cursor-pointer hover:bg-papel-hondo/60" : "")
               }
             >
               {seleccion && (
                 <td
-                  className="sticky left-0 z-10 bg-papel px-2 py-2.5 align-top"
+                  className="sticky left-0 z-10 bg-tarjeta px-2 py-2 align-top"
                   // El click de la fila abre la ficha; marcar no tiene que
                   // abrir nada.
                   onClick={(e) => e.stopPropagation()}
@@ -142,11 +142,11 @@ export default function Tabla<T>({
                 <td
                   key={columna.clave}
                   className={
-                    "px-2 py-2.5 align-top " +
+                    "px-2 py-2 align-top " +
                     // Un número partido en dos renglones deja de leerse como
                     // número, así que las columnas de plata no cortan.
                     (columna.numerica ? "cifra whitespace-nowrap text-right " : "") +
-                    (i === 0 && !seleccion ? "sticky left-0 z-10 bg-papel" : "")
+                    (i === 0 && !seleccion ? "sticky left-0 z-10 bg-tarjeta" : "")
                   }
                 >
                   {columna.celda(fila)}
@@ -166,7 +166,7 @@ export default function Tabla<T>({
                   className={
                     "px-2 py-2 text-sm font-medium " +
                     (columna.numerica ? "cifra whitespace-nowrap text-right " : "") +
-                    (i === 0 ? "sticky left-0 z-10 bg-papel" : "")
+                    (i === 0 ? "sticky left-0 z-10 bg-tarjeta" : "")
                   }
                 >
                   {columna.total?.(filas)}
@@ -177,5 +177,21 @@ export default function Tabla<T>({
         )}
       </table>
     </div>
+  );
+}
+
+/**
+ * El guión de "acá no hay nada".
+ *
+ * No es cosmético. Una celda vacía y una celda que no cargó se ven igual, y en
+ * una planilla de plata esa diferencia es la que te hace revisar el dato dos
+ * veces. Con el guión, el blanco pasa a significar "esto todavía no se dibujó"
+ * y deja de ser ambiguo.
+ */
+export function Nada() {
+  return (
+    <span className="text-tinta-suave/40" aria-label="sin dato">
+      —
+    </span>
   );
 }

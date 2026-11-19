@@ -224,6 +224,56 @@ marca cuando subió.
 **Toda escritura pasa por `src/app/acciones.ts`.** No agregar route handlers que
 inserten. Un solo lugar por donde entra todo.
 
+**El menú tiene cinco secciones y no se le agregan más.** Inicio, Ventas,
+Stock, Pedidos y Finanzas, más el botón de Vender. Llegó a tener once entradas
+planas y el problema no era el largo: Fiado es una venta que todavía no se
+cobró, Historial es la misma venta en orden, y Compras es de dónde salió lo que
+hay en Stock. Como entradas sueltas te obligaban a saber de antemano en qué
+pantalla vive el dato que buscás. Una pantalla nueva es una **solapa** adentro
+de la sección donde uno la iría a buscar (`Solapas.tsx`), no una entrada más.
+
+El ancho de la columna (96 px) depende de que la etiqueta vaya ABAJO del ícono
+y no al costado. Poner el texto al lado la vuelve a atar a la palabra más larga.
+
+**Las cuatro planillas comparten el mismo esqueleto**, en este orden:
+`BarraPeriodo` → `Solapas` → `Tira` de KPIs → `Tabla`. El período sale siempre
+de `src/lib/periodo.ts`, que es una función pura: le entra lo que dice la URL y
+sale el rango y el título. Antes cada pantalla resolvía su propio rango y "el
+mes" de una empezaba el día 1 mientras el de la otra hacía 30 días para atrás,
+así que dos pantallas que decían lo mismo no daban lo mismo.
+
+Reglas de la planilla, que son las que la hacen leerse como Excel:
+
+- **Una columna por medio de pago**, no una columna "medio": se ve la mezcla de
+  cobro de un vistazo. El dato ya está así en `ventas_pagos`.
+- **Un vacío se escribe `—`** (`<Nada/>` de `Tabla.tsx`), nunca en blanco. Una
+  celda vacía y una que no cargó se ven igual, y con plata esa diferencia es la
+  que te hace revisar el dato dos veces.
+- **Los totales van en el pie** (`tfoot`), no arriba: arriba va la `Tira`, que
+  es otra cosa. Y salen de consultas agregadas, no de sumar las filas dibujadas,
+  porque la planilla está recortada.
+- Las columnas tienen que caer en la misma `x` en todos los grupos. Si un rubro
+  pone el costo en un lado y otro en otro, hay que volver a leer los
+  encabezados en cada grupo y deja de ser una planilla.
+
+**La ganancia sale del costo congelado en la venta.** `ventas_items.
+costo_unitario_centavos` guarda lo que costaba esa unidad CUANDO se vendió. No
+reconstruyas el costo desde las compras ni leas el del producto: eso reescribe
+la historia cada vez que cambia un precio.
+
+Y lo que no se sabe se dice. Una venta cargada como total suelto no tiene ítems,
+así que no tiene costo: no suma como 100% de ganancia **ni como cero**. Finanzas
+muestra sobre qué porcentaje de las ventas está calculada. Es la misma regla que
+la de los ítems sin precio.
+
+**La inversión inicial no es un gasto del negocio.** Salió del bolsillo de los
+socios y nunca pasó por el mostrador; contarla hundiría el mes de apertura.
+`esGastoOperativo()` la excluye del balance y del resumen del mes — no lo rompas.
+
+**La ganancia se queda en el negocio hasta que alguien la retira, y lo que se
+divide en partes iguales es el RETIRO, no la ganancia.** No hace falta tabla
+nueva: un retiro es un `gasto` con `categoria = 'retiro'` y su `socio_id`.
+
 ## Cosas que ya mordieron
 
 - **PGlite no crea directorios anidados.** Hay que `mkdirSync(..., {recursive:true})`

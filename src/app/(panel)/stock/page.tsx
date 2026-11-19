@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
+import CabeceraStock, { rangoDeLaUrl } from "@/components/CabeceraStock";
 import Foto from "@/components/Foto";
 import { FormProducto } from "@/components/AccionesStock";
 import SeleccionStock from "@/components/SeleccionStock";
 import TablaStock from "@/components/TablaStock";
+import Tira from "@/components/Tira";
+import { formatearCentavos } from "@/lib/plata";
+import { contarPedidosAbiertos } from "@/lib/reposicion";
 import {
   listarMarcas,
   listarStock,
@@ -81,98 +85,171 @@ function armarArbol(filas: FilaStock[]) {
     }));
 }
 
-export default async function Stock() {
-  const [filas, marcas, categorias] = await Promise.all([
+export default async function Stock({ searchParams }: PageProps<"/stock">) {
+  const rango = rangoDeLaUrl(await searchParams);
+
+  const [filas, marcas, categorias, pedidosAbiertos] = await Promise.all([
     listarStock(),
     listarMarcas(),
     listarSubcategorias(),
+    contarPedidosAbiertos(),
   ]);
 
-  const faltantes = filas.filter((f) => f.falta);
   const arbol = armarArbol(filas);
+  const faltantes = filas.filter((f) => f.falta);
+
+  const conPrecio = filas.filter((f) => f.precioVentaCentavos != null).length;
+  const sinPrecio = filas.length - conPrecio;
+  const sinFoto = filas.filter((f) => !f.imagenUrl && !f.imagenOrigenUrl).length;
+  const sinCosto = filas.filter((f) => f.costoRealCentavos == null).length;
+
+  // Comprados en el período: la compra más reciente de cada producto cae
+  // adentro del rango. Con "todo" alcanza con haberse comprado alguna vez.
+  const compradosEnElPeriodo = filas.filter(
+    (f) =>
+      f.ultimaCompra != null &&
+      (rango.desde == null || f.ultimaCompra >= rango.desde) &&
+      (rango.hasta == null || f.ultimaCompra <= rango.hasta),
+  ).length;
+
+  /*
+   * El número grande es el margen real promedio y NO el valor del catálogo a
+   * costo. Ese valor sería costo × existencias, y la app no lleva existencias
+   * (ver CLAUDE.md: lo único que se marca a mano es lo que falta). Sumar el
+   * costo de una unidad de cada producto daría una cifra con pinta de
+   * inventario que no lo es.
+   *
+   * Es un promedio SIMPLE entre los productos que tienen precio y costo; no
+   * está ponderado por ventas y la pantalla lo dice.
+   */
+  const reales = filas.filter((f) => f.margen);
+  const margenPromedio =
+    reales.length > 0
+      ? reales.reduce((t, f) => t + f.margen!.porcentaje, 0) / reales.length
+      : null;
+  const gananciaMedia =
+    reales.length > 0
+      ? Math.round(
+          reales.reduce((t, f) => t + f.margen!.gananciaCentavos, 0) /
+            reales.length,
+        )
+      : null;
 
   return (
     <SeleccionStock>
-      <div className="space-y-4">
-      <div>
-        <h1 className="font-display text-3xl leading-none">Stock</h1>
-        <p className="mt-1 text-sm text-tinta-suave">
-          Qué se vende, a quién se le compra, a cuánto sale y cuánto deja. No
-          lleva la cuenta de cuántas unidades quedan: lo que se marca a mano es
-          lo que falta. Tocá una fila para editarla.
-        </p>
-      </div>
+      <div className="space-y-3">
+        <CabeceraStock
+          activa="catalogo"
+          rango={rango}
+          base="/stock"
+          pedidosAbiertos={pedidosAbiertos}
+        >
+          <div className="w-64">
+            <FormProducto />
+          </div>
+        </CabeceraStock>
 
-      <section className="rounded-2xl border border-linea bg-tarjeta px-4 py-3.5">
-        <FormProducto />
-      </section>
+        <Tira
+          datos={[
+            { etiqueta: "Productos", valor: filas.length, pie: "activos" },
+            { etiqueta: "Con precio", valor: conPrecio, tono: "pago" },
+            {
+              etiqueta: "Sin precio",
+              valor: sinPrecio,
+              tono: sinPrecio > 0 ? "deuda" : "suave",
+              pie: "no se pueden vender",
+            },
+            {
+              etiqueta: "Sin costo",
+              valor: sinCosto,
+              tono: sinCosto > 0 ? "deuda" : "suave",
+              pie: "nunca se compraron",
+            },
+            {
+              etiqueta: "Sin foto",
+              valor: sinFoto,
+              tono: sinFoto > 0 ? "deuda" : "suave",
+            },
+            {
+              etiqueta: "Comprados",
+              valor: compradosEnElPeriodo,
+              pie: rango.titulo.toLowerCase(),
+            },
+          ]}
+          destacado={
+            margenPromedio != null
+              ? {
+                  etiqueta: "Margen real promedio",
+                  valor: Math.round(margenPromedio) + "%",
+                  tono: "pago",
+                  pie:
+                    "deja " +
+                    formatearCentavos(gananciaMedia ?? 0) +
+                    " por unidad · promedio simple de " +
+                    reales.length +
+                    " productos con precio y costo",
+                }
+              : undefined
+          }
+        />
 
-      {faltantes.length > 0 && (
-        <section className="rounded-2xl border border-linea bg-deuda-tenue px-4 py-3.5">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="font-display text-xl leading-none text-deuda">
-              Falta comprar
-            </h2>
-            <span className="text-sm text-deuda">
-              {faltantes.length === 1
-                ? "1 producto"
-                : faltantes.length + " productos"}
+        {faltantes.length > 0 && (
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-xl border border-linea bg-deuda-tenue px-4 py-2.5 text-sm">
+            <span className="font-medium text-deuda">
+              Falta comprar ({faltantes.length})
+            </span>
+            <span className="min-w-0">
+              {faltantes.map((f) => f.nombre).join(" · ")}
             </span>
           </div>
-          <p className="mt-2 text-sm">
-            {faltantes.map((f) => f.nombre).join(" · ")}
+        )}
+
+        {filas.length === 0 ? (
+          <p className="rounded-xl border border-linea bg-tarjeta px-4 py-6 text-center text-sm text-tinta-suave">
+            Todavía no hay productos. La lista se llena sola: cada renglón con
+            nombre de una compra entra acá con su último costo.
           </p>
-        </section>
-      )}
-
-      {filas.length === 0 ? (
-        <p className="text-sm text-tinta-suave">
-          Todavía no hay productos. La lista se llena sola: cada renglón con
-          nombre de una compra entra acá con su último costo.
-        </p>
-      ) : (
-        arbol.map(({ categoria, subcategorias }) => (
-          <section
-            key={categoria}
-            className="rounded-2xl border border-linea bg-tarjeta px-4 py-3.5"
-          >
-            <h2 className="font-display text-2xl leading-none">{categoria}</h2>
-
-            {subcategorias.map(({ subcategoria, productos, imagen }) => (
-              <div key={subcategoria} className="mt-4 first:mt-3">
-                {/* La subcategoría no se repite cuando es la única y se llama
-                    igual que su categoría: sería un título arriba del otro. */}
-                {!(subcategorias.length === 1 && subcategoria === categoria) && (
-                  <h3 className="flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-tinta-suave">
-                    {/*
-                      La foto del rubro, una sola vez por grupo. Es nuestra y
-                      vive en public/rubros; la del producto sale del catálogo
-                      del super y no la tienen todos — los cigarrillos, por
-                      ley, no están en ninguno.
-                    */}
-                    {imagen && (
-                      <Foto
-                        fuentes={[imagen]}
-                        width={24}
-                        height={24}
-                        className="h-6 w-6 shrink-0 rounded-full object-cover ring-1 ring-linea"
-                      />
-                    )}
-                    {subcategoria}
-                  </h3>
-                )}
-                <div className="mt-1">
+        ) : (
+          arbol.flatMap(({ categoria, subcategorias }) =>
+            subcategorias.map(({ subcategoria, productos, imagen }) => (
+              <section
+                key={categoria + "/" + subcategoria}
+                className="overflow-hidden rounded-xl border border-linea bg-tarjeta"
+              >
+                {/*
+                  El encabezado del grupo: foto del rubro una sola vez, y
+                  "Bebidas › Gaseosas" cuando la subcategoría no se llama igual
+                  que su categoría.
+                */}
+                <h2 className="flex items-center gap-2 border-b border-linea bg-papel-hondo/50 px-4 py-1.5 text-xs uppercase tracking-[0.14em] text-tinta-suave">
+                  {imagen && (
+                    <Foto
+                      fuentes={[imagen]}
+                      width={20}
+                      height={20}
+                      className="h-5 w-5 shrink-0 rounded-full object-cover ring-1 ring-linea"
+                    />
+                  )}
+                  <span className="font-medium text-tinta">
+                    {subcategoria === categoria
+                      ? categoria
+                      : categoria + " › " + subcategoria}
+                  </span>
+                  <span className="cifra normal-case tracking-normal">
+                    {productos.length}
+                  </span>
+                </h2>
+                <div className="px-4 pb-1">
                   <TablaStock
                     filas={productos}
                     marcas={marcas}
                     categorias={categorias}
                   />
                 </div>
-              </div>
-            ))}
-          </section>
-        ))
-      )}
+              </section>
+            )),
+          )
+        )}
       </div>
     </SeleccionStock>
   );

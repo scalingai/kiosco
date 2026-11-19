@@ -3,6 +3,7 @@ import "server-only";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { pedidos, pedidosItems, productos } from "@/db/schema";
+import type { Rango } from "@/lib/periodo";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -204,6 +205,30 @@ export async function listarPedidos(limite = 60): Promise<FilaPedido[]> {
     creadoEn: p.creadoEn,
     renglones: porPedido.get(p.id) ?? [],
   }));
+}
+
+/** Los estados en los que hay alguien esperando: el pedido sigue abierto. */
+const ABIERTOS: EstadoPedido[] = ["nuevo", "preparando", "listo"];
+
+/**
+ * Los pedidos de un período, MÁS todo lo que sigue abierto aunque sea de otro
+ * día. Un pedido nuevo de ayer que nadie miró es más urgente que uno entregado
+ * hoy: si el selector de período lo escondiera, mirar "Hoy" dejaría a un
+ * cliente esperando sin que se note.
+ *
+ * El día se compara en fecha local, la misma forma en que se arma el rango, y
+ * el filtro va en memoria porque los pedidos de un kiosco son pocos.
+ */
+export async function listarPedidosDelPeriodo(
+  rango: Rango,
+): Promise<FilaPedido[]> {
+  const todos = await listarPedidos(1000);
+  return todos.filter((p) => {
+    if (ABIERTOS.includes(p.estado)) return true;
+    if (!rango.desde || !rango.hasta) return true;
+    const dia = p.creadoEn.toLocaleDateString("sv-SE");
+    return dia >= rango.desde && dia <= rango.hasta;
+  });
 }
 
 /** Cuántos pedidos están esperando que alguien los mire. */

@@ -38,6 +38,8 @@ export default function FormGasto({
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
+  const tieneSocio = categoria === "inversion" || categoria === "retiro";
+
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();
     setError(null);
@@ -45,6 +47,13 @@ export default function FormGasto({
     const montoCentavos = parsearMonto(monto);
     if (montoCentavos == null || montoCentavos <= 0) {
       setError("Poné cuánto fue el gasto.");
+      return;
+    }
+
+    // Un retiro sin decir quién lo hizo no se puede repartir: el Reparto de
+    // Finanzas compara lo que se llevó cada socio.
+    if (categoria === "retiro" && socios.length > 0 && !socioId) {
+      setError("Elegí quién retiró la plata.");
       return;
     }
 
@@ -56,8 +65,8 @@ export default function FormGasto({
         descripcion,
         fecha: cuando,
         medio,
-        // Sólo la inversión tiene dueño: la luz la paga el kiosco.
-        socioId: categoria === "inversion" ? socioId || null : null,
+        // Sólo la inversión y el retiro tienen dueño: la luz la paga el kiosco.
+        socioId: tieneSocio ? socioId || null : null,
       }),
     );
     setGuardando(false);
@@ -118,15 +127,19 @@ export default function FormGasto({
         />
       </label>
 
-      {categoria === "inversion" && socios.length > 0 && (
+      {tieneSocio && socios.length > 0 && (
         <label className="block">
-          <span className="text-xs text-tinta-suave">Quién la puso</span>
+          <span className="text-xs text-tinta-suave">
+            {categoria === "retiro" ? "Quién retiró" : "Quién la puso"}
+          </span>
           <select
             value={socioId}
             onChange={(e) => setSocioId(e.target.value)}
             className="mt-1 w-full rounded-lg border border-linea bg-white px-3 py-2 text-sm"
           >
-            <option value="">La puso el kiosco</option>
+            <option value="">
+              {categoria === "retiro" ? "Elegí un socio" : "La puso el kiosco"}
+            </option>
             {socios.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.nombre}
@@ -159,7 +172,8 @@ export default function FormGasto({
       {categoria === "retiro" && (
         <p className="rounded-lg bg-papel-hondo px-3 py-2 text-xs text-tinta-suave">
           El retiro sale de la caja pero no es un costo del kiosco. Se muestra
-          aparte para que no ensucie lo que de verdad cuesta tener abierto.
+          aparte para que no ensucie lo que de verdad cuesta tener abierto, y
+          se reparte en partes iguales entre los socios en Finanzas.
         </p>
       )}
 

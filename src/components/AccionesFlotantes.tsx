@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import FormCompra from "@/components/FormCompra";
 import Menu from "@/components/Menu";
 import Mostrador from "@/components/Mostrador";
@@ -139,7 +139,25 @@ export default function AccionesFlotantes({
   const [segundos, setSegundos] = useState(0);
   const [manualAbierto, setManualAbierto] = useState(false);
   const [ventaAbierta, setVentaAbierta] = useState(false);
-  const [compraAbierta, setCompraAbierta] = useState(false);
+  /*
+   * La compra se abre desde la URL (`?nueva=compra`) y no desde un botón del
+   * menú, porque dejó de ser una acción global: se carga desde Stock, que es
+   * donde estás mirando qué falta. Como el disparador es un parámetro, el que
+   * la abre puede ser un `<Link>` común de servidor —no hace falta volver
+   * cliente a media pantalla para poner un botón— y además queda un link que
+   * se puede guardar.
+   */
+  const parametros = useSearchParams();
+  const compraAbierta = parametros.get("nueva") === "compra";
+
+  function cerrarCompra() {
+    const p = new URLSearchParams(parametros);
+    p.delete("nueva");
+    const cola = p.toString();
+    // `replace` y no `push`: si apilara, el botón de atrás del celular
+    // reabriría la hoja que acabás de cerrar.
+    router.replace(cola ? `${ruta}?${cola}` : ruta, { scroll: false });
+  }
 
   const grabadorRef = useRef<MediaRecorder | null>(null);
   const trozosRef = useRef<Blob[]>([]);
@@ -386,16 +404,55 @@ export default function AccionesFlotantes({
         )}
       </div>
 
-      <Menu
-        conSalir={conSalir}
-        grabando={grabando}
-        procesando={procesando}
-        segundos={segundos}
-        onGrabar={arrancar}
-        onFrenar={parar}
-        onNuevaVenta={() => setVentaAbierta(true)}
-        onNuevaCompra={() => setCompraAbierta(true)}
-      />
+      <Menu conSalir={conSalir} onNuevaVenta={() => setVentaAbierta(true)} />
+
+      {/*
+        El micrófono salió del menú. No se borró: es la forma más rápida de
+        anotar un fiado con las manos ocupadas, que es para lo que se hizo. Pero
+        dejó de ser una de las acciones principales, así que vive acá abajo como
+        un botón chico.
+
+        Mientras graba se agranda y se pone rojo, y eso NO es decoración: si el
+        botón de frenar no estuviera siempre a la vista, quedaría un micrófono
+        abierto que no se puede cortar sin ir a buscarlo.
+      */}
+      <button
+        type="button"
+        onClick={grabando ? parar : arrancar}
+        disabled={procesando}
+        aria-label={grabando ? "Frenar la grabación" : "Anotar por audio"}
+        className={
+          "fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full shadow-lg transition-all disabled:opacity-70 " +
+          (grabando
+            ? "bg-deuda px-4 py-3 text-white"
+            : procesando
+              ? "bg-tarjeta px-4 py-3 text-tinta"
+              : "h-12 w-12 justify-center bg-tarjeta text-tinta-suave hover:text-tinta")
+        }
+      >
+        {grabando ? (
+          <>
+            <span className="grabando block h-3.5 w-3.5 shrink-0 rounded-sm bg-white" />
+            <span className="cifra text-sm">Frenar · {segundos}s</span>
+          </>
+        ) : procesando ? (
+          <span className="grabando text-sm">Escuchando…</span>
+        ) : (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            className="h-5 w-5"
+            aria-hidden="true"
+          >
+            <rect x="9" y="2.5" width="6" height="11" rx="3" />
+            <path d="M5.5 11a6.5 6.5 0 0 0 13 0" />
+            <path d="M12 17.5V21" />
+          </svg>
+        )}
+      </button>
 
       <Hoja
         abierta={ventaAbierta}
@@ -418,14 +475,14 @@ export default function AccionesFlotantes({
       <Hoja
         abierta={compraAbierta}
         titulo="Nueva compra"
-        onCerrar={() => setCompraAbierta(false)}
+        onCerrar={cerrarCompra}
       >
         <FormCompra
           fecha={hoyLocal()}
           proveedores={proveedores}
           productos={productos}
           alGuardar={() => {
-            setCompraAbierta(false);
+            cerrarCompra();
             setAviso("Compra anotada.");
           }}
         />
